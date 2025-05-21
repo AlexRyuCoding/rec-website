@@ -34,3 +34,18 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+RAC Website Template
+https://webflow.com/templates/html/healingpath-therapy-website-template?ref=land-book.com%3Futm_medium%3Daffiliate&utm_source=4778439&pscd=try.webflow.com&ps_partner_key=NDc3ODQzOQ&ps_xid=CyCtq9h9Cixppw&gsxid=CyCtq9h9Cixppw&gspk=NDc3ODQzOQ
+
+Other Templates:
+https://land-book.com/design/template?industry=health-and-fitness
+
+Current RAC Website
+https://www.ryuacupuncture.com/
+
+NextJs/Vercel Build
+https://nextjs.org/learn/dashboard-app/creating-layouts-and-pages
+
+Lucide Icons Library
+https://lucide.dev/icons/
