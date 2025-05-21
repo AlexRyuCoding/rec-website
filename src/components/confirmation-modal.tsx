@@ -73,7 +73,7 @@ export default function ConfirmationModal({
         <div className="text-center m-6">
           {showSuccess ? (
             <p className="text-4xl gap-8">
-              Welcom,
+              Welcome,
               <br />
               <br />
               <strong>{name}</strong>
