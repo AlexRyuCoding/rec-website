@@ -12,13 +12,10 @@ export default function ThemeToggle() {
   // Avoid hydration mismatch by only rendering after mount
   useEffect(() => {
     setMounted(true);
-    console.log("Initial theme:", theme);
   }, []);
 
   // Log theme changes
-  useEffect(() => {
-    console.log("Theme changed to:", theme);
-  }, [theme]);
+  useEffect(() => {}, [theme]);
 
   if (!mounted) {
     return (
@@ -36,7 +33,6 @@ export default function ThemeToggle() {
     <button
       onClick={() => {
         const newTheme = theme === "dark" ? "light" : "dark";
-        console.log("Switching theme to:", newTheme);
         setTheme(newTheme);
       }}
       className="p-2 rounded-md hover:bg-gray-200 border border-gray-400 dark:hover:bg-gray-800"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -28,19 +28,19 @@ export default function Testimonials() {
   const [direction, setDirection] = useState(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const startAutoAdvance = () => {
+  const startAutoAdvance = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
     intervalRef.current = setInterval(() => {
       paginate(1);
     }, 8000);
-  };
+  }, []);
 
   useEffect(() => {
     startAutoAdvance();
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, []);
+  }, [startAutoAdvance]);
 
   const paginate = (newDirection: number) => {
     setDirection(newDirection);
