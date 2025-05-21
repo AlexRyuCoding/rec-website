@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import ConfirmationModal from "./confirmation-modal";
-import useSound from "use-sound";
 import { motion, AnimatePresence } from "motion/react";
 
 export default function SignInKeypad() {
