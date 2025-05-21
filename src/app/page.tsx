@@ -5,7 +5,7 @@ import Testimonials from "@/components/testimonials";
 
 export default function Home() {
   return (
-    <section className="max-w-6xl mx-auto mt-40 px-6 pb-16 space-y-12 text-gray-900 dark:text-gray-100">
+    <section className="max-w-6xl mx-auto mt-40 px-6 pb-16 space-y-12">
       {/* Hero Section */}
       <div className="text-center space-y-4">
         <h1 className="text-4xl sm:text-5xl font-bold leading-tight">

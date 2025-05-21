@@ -1,7 +1,5 @@
 import { google } from "googleapis";
 import { NextResponse } from "next/server";
-import path from "path";
-import fs from "fs/promises";
 
 export async function POST(req: Request) {
   const { pin, confirmed } = await req.json();
@@ -14,13 +12,8 @@ export async function POST(req: Request) {
       timeZone: "America/Los_Angeles",
     });
 
-    // Load service account credentials
-    const credentialsPath = path.join(
-      process.cwd(),
-      process.env.GOOGLE_SHEETS_CREDENTIALS_PATH!
-    );
-
-    const credentials = JSON.parse(await fs.readFile(credentialsPath, "utf-8"));
+    // Use credentials from environment variable
+    const credentials = JSON.parse(process.env.GOOGLE_SHEETS_CREDENTIALS!);
 
     const auth = new google.auth.GoogleAuth({
       credentials,
@@ -78,7 +71,30 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ name: displayName });
-  } catch {
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  } catch (error) {
+    console.error("Pin signin error:", error);
+
+    // Check for specific error types
+    if (error instanceof Error) {
+      if (error.message.includes("credentials")) {
+        return NextResponse.json(
+          { error: "Authentication error - please check credentials" },
+          { status: 500 }
+        );
+      }
+      if (error.message.includes("spreadsheet")) {
+        return NextResponse.json(
+          {
+            error: "Error accessing spreadsheet - please check spreadsheet ID",
+          },
+          { status: 500 }
+        );
+      }
+    }
+
+    return NextResponse.json(
+      { error: "Server error - please try again later" },
+      { status: 500 }
+    );
   }
 }

@@ -4,7 +4,7 @@ import Link from "next/link";
 
 export default function RequestAnAppointment() {
   return (
-    <div className="min-h-screen sm:p-10 mt-32">
+    <div className="max-w-6xl mx-auto mt-40 px-6 pb-16 space-y-12">
       <main className="flex flex-col gap-4 max-w-4xl mx-auto">
         <section className="max-w-4xl mx-auto pb-10 space-y-10 text-gray-800 dark:text-gray-100">
           <p className="text-3xl font-semibold">
