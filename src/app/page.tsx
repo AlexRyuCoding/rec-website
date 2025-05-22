@@ -18,7 +18,7 @@ export default function Home() {
         </p>
         <Link
           href="/request-an-appointment"
-          className="mt-4 inline-block px-8 py-3 bg-emerald-600 text-white text-lg font-semibold rounded-lg hover:bg-emerald-700 transition"
+          className="mt-4 inline-block px-8 py-3 bg-brand-primary text-white text-lg font-semibold rounded-lg hover:bg-brand-secondary transition"
         >
           Request an Appointment
         </Link>
@@ -43,7 +43,7 @@ export default function Home() {
           </p>
           <Link
             href="/about"
-            className="text-emerald-600 font-medium hover:underline"
+            className="text-brand-primary font-medium hover:underline"
           >
             Learn more about our clinic →
           </Link>
@@ -68,7 +68,7 @@ export default function Home() {
           natural harmony.
         </p>
         <div className="grid sm:grid-cols-3 gap-6 text-left">
-          <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-xl shadow">
+          <div className="bg-brand-muted dark:bg-brand-gray-500 p-6 rounded-xl shadow">
             <h3 className="font-semibold text-lg">
               Acupuncture & Electroacupuncture
             </h3>
@@ -76,7 +76,7 @@ export default function Home() {
               Stimulate healing, reduce inflammation, and ease pain naturally.
             </p>
           </div>
-          <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-xl shadow">
+          <div className="bg-brand-muted dark:bg-brand-gray-500 p-6 rounded-xl shadow">
             <h3 className="font-semibold text-lg">
               Herbal Medicine & Supplements
             </h3>
@@ -85,7 +85,7 @@ export default function Home() {
               health.
             </p>
           </div>
-          <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-xl shadow">
+          <div className="bg-brand-muted dark:bg-brand-gray-500 p-6 rounded-xl shadow">
             <h3 className="font-semibold text-lg">
               Fertility & Women&apos;s Health
             </h3>
@@ -97,7 +97,7 @@ export default function Home() {
         </div>
         <Link
           href="/services"
-          className="mt-4 inline-block px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition"
+          className="mt-4 inline-block px-6 py-2 bg-brand-secondary text-white font-semibold rounded-lg hover:bg-brand-primary transition"
         >
           Explore All Services
         </Link>
@@ -115,7 +115,7 @@ export default function Home() {
         </p>
         <Link
           href="/request-an-appointment"
-          className="mt-4 inline-block px-8 py-3 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition"
+          className="mt-4 inline-block px-8 py-3 bg-brand-primary text-white font-semibold rounded-lg hover:bg-brand-secondary transition"
         >
           Request Your Appointment Today
         </Link>

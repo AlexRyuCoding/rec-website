@@ -88,9 +88,9 @@ export default function SignInKeypad() {
       <div className="text-2xl">
         Enter your 4-digit PIN here to sign in for your appointment.
       </div>
-      <div className="w-full max-w-[280px] sm:max-w-[380px] p-4 rounded-lg shadow-lg dark:bg-[var(--background)] border border dark:border-white self-center">
+      <div className="w-full max-w-[280px] sm:max-w-[380px] p-4 rounded-lg shadow-lg bg-brand-background dark:bg-[var(--background)] border border-brand-foreground dark:border-white self-center">
         {/* Display */}
-        <div className="mb-4 p-3 text-xl sm:text-4xl text-right border rounded-lg bg-gray-100 dark:bg-[var(--background)]">
+        <div className="mb-4 p-3 text-xl sm:text-4xl text-right border rounded-lg bg-brand-background dark:bg-[var(--background)]">
           {value || "ENTER YOUR PIN"}
         </div>
 
@@ -119,7 +119,7 @@ export default function SignInKeypad() {
             <button
               key={num}
               onClick={() => handleClick(num)}
-              className="py-3 text-xl sm:text-4xl bg-gray-100 dark:bg-[var(--background)] hover:bg-gray-200 dark:hover:bg-gray-600 border border dark:border-white rounded-full disabled:opacity-50"
+              className="py-3 text-xl sm:text-4xl bg-brand-background dark:bg-[var(--background)] hover:bg-brand-muted dark:hover:bg-gray-600 border border-brand-foreground dark:border-brand-foreground rounded-full disabled:opacity-50"
               disabled={value.length >= 4 || isLoading}
             >
               {num}

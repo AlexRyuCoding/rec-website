@@ -10,10 +10,11 @@ const config: Config = {
         brand: {
           background: "#ffffff",
           foreground: "#22404b",
-          tertiary: "#e9c46a",
-          primary: "#2a9d8f",
-          secondary: "#264653",
-          accent: "#f4a261",
+          primary: "#2a9e8f",
+          secondary: "#238b7e",
+          accent: "#e9c46a",
+          tertiary: "#f4a261",
+          muted: "#e5e7eb",
           highlight: "#fefae0",
           danger: "#e76f51",
 
@@ -25,8 +26,6 @@ const config: Config = {
             400: "#9ca3af",
             500: "#6b7280",
           },
-
-          muted: "#cbd5e1",
         },
       },
     },

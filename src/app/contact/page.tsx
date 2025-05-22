@@ -27,7 +27,7 @@ export default function Contact() {
               href="https://patient.unifiedpractice.com/ryu-acupuncture"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-block mt-4 px-6 py-3 max-w-fit text-[var(--background)] hover:bg-gray-300 bg-[var(--foreground)] rounded-md p-2 transition"
+              className="inline-block mt-4 px-6 py-3 max-w-fit text-brand-background hover:bg-brand-gray-300 bg-brand-foreground rounded-md p-2 transition"
             >
               Book an Appointment With Us!
             </a>

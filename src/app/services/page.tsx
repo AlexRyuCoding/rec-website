@@ -25,8 +25,8 @@ export default function Services() {
             🌀 Acupuncture: Restoring Balance Through the Needle
           </h2>
           <div className="space-y-4">
-            <p>
-              <strong className="text-lg">What is Acupuncture?</strong> <br />
+            <p className="text-lg">
+              <strong className="text-xl">What is Acupuncture?</strong> <br />
               Acupuncture is the practice of inserting very thin, sterile
               needles into specific points along the body&apos;s energy pathways
               (called <em>meridians</em>). This stimulates the body&apos;s
@@ -45,7 +45,7 @@ export default function Services() {
             <p>
               <strong className="text-lg">What Can Acupuncture Treat?</strong>
             </p>
-            <ul className="list-disc list-inside space-y-1">
+            <ul className="text-lg list-disc list-inside space-y-1">
               <li>Back, neck, joint pain, migraines, arthritis</li>
               <li>Anxiety, depression, insomnia, stress</li>
               <li>Fertility, menstrual pain, PMS, menopause</li>
@@ -55,8 +55,8 @@ export default function Services() {
               <li>Injury rehab, post-surgery recovery</li>
             </ul>
 
-            <p>
-              <strong className="text-lg">What Does It Feel Like?</strong>{" "}
+            <p className="text-lg">
+              <strong className="text-xl">What Does It Feel Like?</strong>{" "}
               <br />
               Most people feel minimal to no pain. Sensations are often
               described as tingling, warmth, or a calming heaviness. Many
@@ -65,14 +65,31 @@ export default function Services() {
           </div>
         </section>
 
+        {/* Call to Action */}
+        <section className="space-y-4 text-center pb-10">
+          <p className="text-3xl font-medium">
+            Meet with our one of our Acupuncturists
+          </p>
+          <p className="text-lg">
+            The best way for us to get to know you and what you are coming for
+            is through a comprehensive consultation and treatment.
+          </p>
+          <Link
+            href="/request-an-appointment"
+            className="inline-block mt-4 px-6 py-3 bg-brand-primary text-white font-semibold rounded-lg hover:bg-brand-secondary transition"
+          >
+            Set Up Your Appointment Today
+          </Link>
+        </section>
+
         {/* Herbal Medicine Section */}
         <section className="space-y-6 pb-10">
           <h2 className="text-3xl font-semibold">
             🌱 Chinese Herbal Medicine: Custom Formulas for Deep Healing
           </h2>
           <div className="space-y-4">
-            <p>
-              <strong className="text-lg">
+            <p className="text-lg">
+              <strong className="text-xl">
                 What is Chinese Herbal Medicine?
               </strong>{" "}
               <br />
@@ -89,15 +106,15 @@ export default function Services() {
                 className="object-cover rounded-2xl"
               />
             </div>
-            <p>
-              <strong className="text-lg">How Is It Prescribed?</strong> <br />
+            <p className="text-lg">
+              <strong className="text-xl">How Is It Prescribed?</strong> <br />
               You&apos;ll receive a personalized herbal prescription — in
               powder, pill, or tea form — based on your body type, symptoms, and
               the root cause of imbalance.
             </p>
 
-            <p>
-              <strong className="text-lg">
+            <p className="text-lg">
+              <strong className="text-xl">
                 What Can Herbal Medicine Help With?
               </strong>
             </p>
@@ -110,8 +127,8 @@ export default function Services() {
               <li>Fibromyalgia, autoimmune support</li>
             </ul>
 
-            <p>
-              <strong className="text-lg">Are the Herbs Safe?</strong> <br />
+            <p className="text-lg">
+              <strong className="text-xl">Are the Herbs Safe?</strong> <br />
               Yes. We source only from third-party-tested, reputable suppliers.
               Formulas are custom-blended to be safe and effective.
             </p>
@@ -128,7 +145,7 @@ export default function Services() {
               <p className="font-semibold">
                 Q: How many acupuncture sessions do I need?
               </p>
-              <p>
+              <p className="text-lg">
                 A: Acute conditions may improve in 4–6 sessions. Chronic issues
                 often require a longer treatment plan.
               </p>
@@ -138,7 +155,7 @@ export default function Services() {
               <p className="font-semibold">
                 Q: Can I combine acupuncture with Western treatments?
               </p>
-              <p>
+              <p className="text-lg">
                 A: Absolutely. Acupuncture often complements conventional
                 medicine and may reduce medication dependency.
               </p>
@@ -146,7 +163,7 @@ export default function Services() {
 
             <div>
               <p className="font-semibold">Q: Are there side effects?</p>
-              <p>
+              <p className="text-lg">
                 A: Mild side effects are rare — typically light bruising or
                 soreness. Herbal prescriptions are personalized for safety.
               </p>
@@ -156,7 +173,7 @@ export default function Services() {
               <p className="font-semibold">
                 Q: What&apos;s included in a first visit?
               </p>
-              <p>
+              <p className="text-lg">
                 A: We&apos;ll perform a full health intake, check tongue and
                 pulse, then begin acupuncture or design your custom herbal plan.
               </p>
@@ -164,7 +181,7 @@ export default function Services() {
 
             <div>
               <p className="font-semibold">Q: Do you take insurance?</p>
-              <p>
+              <p className="text-lg">
                 A: Many PPO plans do cover acupuncture. We&apos;ll provide a
                 superbill or help verify your benefits.
               </p>
@@ -177,7 +194,7 @@ export default function Services() {
           <h2 className="text-2xl font-semibold">
             ✨ What Makes Our Clinic Unique?
           </h2>
-          <ul className="list-disc list-inside space-y-1">
+          <ul className="text-lg list-disc list-inside space-y-1">
             <li>✅ Over 25 years of clinical experience</li>
             <li>✅ Fully personalized treatment plans</li>
             <li>✅ Warm, clean, and peaceful clinic space</li>
@@ -190,7 +207,7 @@ export default function Services() {
           <p className="text-3xl font-medium">
             Ready to Begin Your Healing Journey?
           </p>
-          <p>
+          <p className="text-lg">
             Whether you&apos;re seeking pain relief, hormone balance, or overall
             well-being, acupuncture and herbal medicine offer time-tested
             solutions rooted in nature.
@@ -200,7 +217,7 @@ export default function Services() {
           </p>
           <Link
             href="/request-an-appointment"
-            className="inline-block mt-4 px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition"
+            className="inline-block mt-4 px-6 py-3 bg-brand-primary text-white font-semibold rounded-lg hover:bg-brand-secondary transition"
           >
             Book a Consultation
           </Link>

@@ -1,47 +1,49 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
   /* Base colors */
-  --background: #ffffff;
-  --foreground: #22404b;
+  --background: theme("colors.brand.background");
+  --foreground: theme("colors.brand.foreground");
 
   /* Brand colors */
-  --brand-primary: #2a9e8f;
-  --brand-secondary: #238b7e;
-  --brand-accent: #e9c46a;
-  --brand-tertiary: #f4a261;
-  --brand-muted: #e5e7eb;
+  --brand-primary: theme("colors.brand.primary");
+  --brand-secondary: theme("colors.brand.secondary");
+  --brand-accent: theme("colors.brand.accent");
+  --brand-tertiary: theme("colors.brand.tertiary");
+  --brand-muted: theme("colors.brand.muted");
 
   /* Text colors */
-  --text-primary: #22404b;
-  --text-secondary: #4b5563;
-  --text-muted: #6b7280;
+  --text-primary: theme("colors.brand.foreground");
+  --text-secondary: theme("colors.brand.gray.500");
+  --text-muted: theme("colors.brand.gray.400");
 
   /* Border colors */
-  --border-light: #e5e7eb;
-  --border-dark: #d1d5db;
+  --border-light: theme("colors.brand.gray.200");
+  --border-dark: theme("colors.brand.gray.300");
 }
 
 .dark {
   /* Base colors */
-  --background: #22404b;
-  --foreground: #ffffff;
+  --background: theme("colors.brand.foreground");
+  --foreground: theme("colors.brand.background");
 
   /* Brand colors */
-  --brand-primary: #2a9e8f;
-  --brand-secondary: #238b7e;
-  --brand-accent: #e9c46a;
-  --brand-tertiary: #f4a261;
-  --brand-muted: #374151;
+  --brand-primary: theme("colors.brand.primary");
+  --brand-secondary: theme("colors.brand.secondary");
+  --brand-accent: theme("colors.brand.accent");
+  --brand-tertiary: theme("colors.brand.tertiary");
+  --brand-muted: theme("colors.brand.gray.400");
 
   /* Text colors */
-  --text-primary: #ffffff;
-  --text-secondary: #e5e7eb;
-  --text-muted: #9ca3af;
+  --text-primary: theme("colors.brand.background");
+  --text-secondary: theme("colors.brand.gray.200");
+  --text-muted: theme("colors.brand.gray.300");
 
   /* Border colors */
-  --border-light: #374151;
-  --border-dark: #4b5563;
+  --border-light: theme("colors.brand.gray.400");
+  --border-dark: theme("colors.brand.gray.500");
 }
 
 /* Theme transition */

@@ -27,7 +27,7 @@ export default function RequestAnAppointment() {
               </ul>
               <Link
                 href="/request-an-appointment/request-form"
-                className="inline-block mt-4 px-6 py-2 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition"
+                className="inline-block mt-4 px-6 py-2 bg-brand-primary text-white font-semibold rounded-lg hover:bg-brand-secondary transition"
               >
                 Request Your First Appointment
               </Link>
@@ -48,7 +48,7 @@ export default function RequestAnAppointment() {
                 href="https://patient.unifiedpractice.com/ryu-acupuncture"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-block mt-4 px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition"
+                className="inline-block mt-4 px-6 py-2 bg-brand-secondary text-white font-semibold rounded-lg hover:bg-brand-primary transition"
               >
                 Book Your Follow-Up Visit
               </a>
@@ -73,7 +73,7 @@ export default function RequestAnAppointment() {
               </div>
               <a
                 href="https://www.google.com/maps/dir/?api=1&destination=3808+West+Riverside+Dr+Burbank+CA+91505"
-                className="text-blue-500 underline hover:text-blue-700"
+                className="text-brand-primary underline hover:text-brand-secondary"
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -93,7 +93,7 @@ export default function RequestAnAppointment() {
                 Have questions before you book?{" "}
                 <a
                   href="#"
-                  className="text-emerald-600 underline hover:text-emerald-800"
+                  className="text-brand-primary underline hover:text-brand-secondary"
                 >
                   Contact us here
                 </a>
@@ -103,7 +103,7 @@ export default function RequestAnAppointment() {
                 href="https://patient.unifiedpractice.com/ryu-acupuncture"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-block mt-4 px-6 py-3 max-w-fit text-[var(--background)] hover:bg-gray-600 hover:dark:bg-gray-300 bg-[var(--foreground)] rounded-md p-2 transition"
+                className="inline-block mt-4 px-6 py-3 max-w-fit text-brand-background hover:bg-brand-gray-300 bg-brand-foreground rounded-md p-2 transition"
               >
                 Book an Appointment With Us Today!
               </a>

@@ -47,7 +47,7 @@ export default function Page() {
           <ul className="list-disc list-inside space-y-1 text-sm">
             <li>Ph.D. in Oriental Medicine – Yuin University</li>
             <li>
-              Master’s in Traditional Oriental Medicine – Dongguk Royal
+              Master&apos;s in Traditional Oriental Medicine – Dongguk Royal
               University
             </li>
             <li>Former Professor – Dongguk Royal University</li>
@@ -77,7 +77,7 @@ export default function Page() {
           Areas of Specialty
         </h2>
         <ul className="grid sm:grid-cols-2 gap-4 text-base list-disc list-inside max-w-3xl mx-auto">
-          <li>Infertility & Women’s Health</li>
+          <li>Infertility & Women&apos;s Health</li>
           <li>Allergy & Asthma Relief</li>
           <li>Back, Neck & Joint Pain Management</li>
           <li>Hormonal Imbalance & Stress Support</li>
@@ -135,7 +135,7 @@ export default function Page() {
       <div className="space-y-6">
         <h2 className="text-2xl font-semibold text-center">What We Offer</h2>
         <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6 text-sm">
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+          <div className="bg-brand-background dark:bg-brand-gray-500 p-4 rounded-lg shadow">
             <h3 className="font-semibold text-lg mb-1">
               Acupuncture & Electroacupuncture
             </h3>
@@ -144,21 +144,21 @@ export default function Page() {
               improve circulation.
             </p>
           </div>
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+          <div className="bg-brand-background dark:bg-brand-gray-500 p-4 rounded-lg shadow">
             <h3 className="font-semibold text-lg mb-1">Auriculotherapy</h3>
             <p>
               Ear acupuncture for nervous system regulation, detox, and chronic
               conditions.
             </p>
           </div>
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+          <div className="bg-brand-background dark:bg-brand-gray-500 p-4 rounded-lg shadow">
             <h3 className="font-semibold text-lg mb-1">Herbal Medicine</h3>
             <p>
               Custom-formulated herbal prescriptions to balance internal systems
               and support immunity.
             </p>
           </div>
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+          <div className="bg-brand-background dark:bg-brand-gray-500 p-4 rounded-lg shadow">
             <h3 className="font-semibold text-lg mb-1">
               Moxibustion & Cupping
             </h3>
@@ -167,14 +167,14 @@ export default function Page() {
               inflammation.
             </p>
           </div>
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+          <div className="bg-brand-background dark:bg-brand-gray-500 p-4 rounded-lg shadow">
             <h3 className="font-semibold text-lg mb-1">Heat Therapy</h3>
             <p>
               Targeted warming treatments for muscle tension, chronic pain, and
               stagnation.
             </p>
           </div>
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+          <div className="bg-brand-background dark:bg-brand-gray-500 p-4 rounded-lg shadow">
             <h3 className="font-semibold text-lg mb-1">
               Nutritional Supplements
             </h3>
@@ -198,7 +198,7 @@ export default function Page() {
         </p>
         <Link
           href="/request-an-appointment"
-          className="mt-4 inline-block px-8 py-3 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition"
+          className="mt-4 inline-block px-8 py-3 bg-brand-primary text-white font-semibold rounded-lg hover:bg-brand-secondary transition"
         >
           Request an Appointment
         </Link>
