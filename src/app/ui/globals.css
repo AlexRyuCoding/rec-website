@@ -4,51 +4,53 @@
 
 :root {
   /* Base colors */
-  --background: theme("colors.brand.background");
-  --foreground: theme("colors.brand.foreground");
+  --background: #ffffff;
+  --foreground: #22404b;
 
   /* Brand colors */
-  --brand-primary: theme("colors.brand.primary");
-  --brand-secondary: theme("colors.brand.secondary");
-  --brand-accent: theme("colors.brand.accent");
-  --brand-tertiary: theme("colors.brand.tertiary");
-  --brand-muted: theme("colors.brand.muted");
+  --brand-primary: #2a9e8f;
+  --brand-secondary: #238b7e;
+  --brand-accent: #e9c46a;
+  --brand-tertiary: #f4a261;
+  --brand-muted: #e5e7eb;
 
   /* Text colors */
-  --text-primary: theme("colors.brand.foreground");
-  --text-secondary: theme("colors.brand.gray.500");
-  --text-muted: theme("colors.brand.gray.400");
+  --text-primary: #22404b;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
 
   /* Border colors */
-  --border-light: theme("colors.brand.gray.200");
-  --border-dark: theme("colors.brand.gray.300");
+  --border-light: #e5e7eb;
+  --border-dark: #d1d5db;
 }
 
 .dark {
   /* Base colors */
-  --background: theme("colors.brand.foreground");
-  --foreground: theme("colors.brand.background");
+  --background: #22404b;
+  --foreground: #ffffff;
 
   /* Brand colors */
-  --brand-primary: theme("colors.brand.primary");
-  --brand-secondary: theme("colors.brand.secondary");
-  --brand-accent: theme("colors.brand.accent");
-  --brand-tertiary: theme("colors.brand.tertiary");
-  --brand-muted: theme("colors.brand.gray.400");
+  --brand-primary: #2a9e8f;
+  --brand-secondary: #238b7e;
+  --brand-accent: #e9c46a;
+  --brand-tertiary: #f4a261;
+  --brand-muted: #9ca3af;
 
   /* Text colors */
-  --text-primary: theme("colors.brand.background");
-  --text-secondary: theme("colors.brand.gray.200");
-  --text-muted: theme("colors.brand.gray.300");
+  --text-primary: #ffffff;
+  --text-secondary: #e5e7eb;
+  --text-muted: #d1d5db;
 
   /* Border colors */
-  --border-light: theme("colors.brand.gray.400");
-  --border-dark: theme("colors.brand.gray.500");
+  --border-light: #9ca3af;
+  --border-dark: #6b7280;
 }
 
 /* Theme transition */
 * {
-  transition: background-color 0.3s ease, color 0.3s ease,
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease,
     border-color 0.3s ease;
 }
 

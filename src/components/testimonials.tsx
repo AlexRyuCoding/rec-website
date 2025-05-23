@@ -28,12 +28,21 @@ export default function Testimonials() {
   const [direction, setDirection] = useState(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  const paginate = useCallback((newDirection: number) => {
+    setDirection(newDirection);
+    setIndex((prev) =>
+      newDirection === 1
+        ? (prev + 1) % testimonials.length
+        : (prev - 1 + testimonials.length) % testimonials.length
+    );
+  }, []);
+
   const startAutoAdvance = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
     intervalRef.current = setInterval(() => {
       paginate(1);
     }, 8000);
-  }, []);
+  }, [paginate]);
 
   useEffect(() => {
     startAutoAdvance();
@@ -41,16 +50,6 @@ export default function Testimonials() {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [startAutoAdvance]);
-
-  const paginate = (newDirection: number) => {
-    setDirection(newDirection);
-    setIndex((prev) =>
-      newDirection === 1
-        ? (prev + 1) % testimonials.length
-        : (prev - 1 + testimonials.length) % testimonials.length
-    );
-    startAutoAdvance(); // reset timer on user interaction
-  };
 
   const variants = {
     enter: (dir: number) => ({

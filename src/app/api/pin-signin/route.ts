@@ -1,5 +1,7 @@
 import { google } from "googleapis";
 import { NextResponse } from "next/server";
+import { readFileSync } from "fs";
+import { join } from "path";
 
 export async function POST(req: Request) {
   const { pin, confirmed } = await req.json();
@@ -12,8 +14,11 @@ export async function POST(req: Request) {
       timeZone: "America/Los_Angeles",
     });
 
-    // Use credentials from environment variable
-    const credentials = JSON.parse(process.env.GOOGLE_SHEETS_CREDENTIALS!);
+    // Read credentials from file
+    const credentialsPath = process.env.GOOGLE_SHEETS_CREDENTIALS_PATH!;
+    const credentials = JSON.parse(
+      readFileSync(join(process.cwd(), credentialsPath), "utf-8")
+    );
 
     const auth = new google.auth.GoogleAuth({
       credentials,

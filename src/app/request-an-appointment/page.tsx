@@ -48,7 +48,7 @@ export default function RequestAnAppointment() {
                 href="https://patient.unifiedpractice.com/ryu-acupuncture"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-block mt-4 px-6 py-2 bg-brand-secondary text-white font-semibold rounded-lg hover:bg-brand-primary transition"
+                className="inline-block mt-4 px-6 py-2 bg-brand-primary text-white font-semibold rounded-lg hover:bg-brand-primary transition"
               >
                 Book Your Follow-Up Visit
               </a>
