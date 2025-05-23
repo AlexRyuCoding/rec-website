@@ -15,7 +15,13 @@ export async function POST(req: Request) {
     });
 
     // Read credentials from file
-    const credentialsPath = process.env.GOOGLE_SHEETS_CREDENTIALS_PATH!;
+    const credentialsPath = process.env.GOOGLE_SHEETS_CREDENTIALS_PATH;
+    if (!credentialsPath) {
+      return NextResponse.json(
+        { error: "Google Sheets credentials path not configured" },
+        { status: 500 }
+      );
+    }
     const credentials = JSON.parse(
       readFileSync(join(process.cwd(), credentialsPath), "utf-8")
     );
