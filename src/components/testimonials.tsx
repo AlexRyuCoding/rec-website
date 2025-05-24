@@ -71,7 +71,7 @@ export default function Testimonials() {
       <div className="flex flex-col justify-between items-center">
         <h2 className="text-2xl font-semibold mb-6">What Our Patients Say</h2>
 
-        <div className="relative w-full max-w-2xl mx-auto h-36 overflow-hidden">
+        <div className="relative w-full max-w-2xl mx-auto min-h-[14rem] overflow-hidden">
           <AnimatePresence initial={false} custom={direction}>
             <motion.div
               key={index}
@@ -83,12 +83,10 @@ export default function Testimonials() {
               transition={{ duration: 0.5 }}
               className="absolute w-full px-6"
             >
-              <p className="text-gray-600 dark:text-gray-300 text-lg">
+              <p className="text-gray-600 dark:text-gray-300 text-lg mb-4">
                 &quot;{testimonials[index].text}&quot;
               </p>
-              <p className="italic text-sm mt-2">
-                — {testimonials[index].author}
-              </p>
+              <p className="italic text-sm">— {testimonials[index].author}</p>
             </motion.div>
           </AnimatePresence>
         </div>

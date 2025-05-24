@@ -88,7 +88,7 @@ export default function SignInKeypad() {
       <div className="text-2xl">
         Enter your 4-digit PIN here to sign in for your appointment.
       </div>
-      <div className="w-full max-w-[280px] sm:max-w-[380px] p-4 rounded-lg shadow-lg bg-brand-background dark:bg-[var(--background)] border border-brand-foreground dark:border-white self-center">
+      <div className="w-full max-w-[380px] sm:max-w-[480px] p-4 rounded-lg shadow-lg bg-brand-background dark:bg-[var(--background)] border border-brand-foreground dark:border-white self-center">
         {/* Display */}
         <div className="mb-4 p-3 text-xl sm:text-4xl text-right border rounded-lg bg-brand-background dark:bg-[var(--background)]">
           {value || "ENTER YOUR PIN"}
@@ -119,7 +119,7 @@ export default function SignInKeypad() {
             <button
               key={num}
               onClick={() => handleClick(num)}
-              className="py-3 text-xl sm:text-4xl bg-brand-background dark:bg-[var(--background)] hover:bg-brand-muted dark:hover:bg-gray-600 border border-brand-foreground dark:border-brand-foreground rounded-full disabled:opacity-50"
+              className="py-3 text-5xl sm:text-5xl bg-brand-background dark:bg-[var(--background)] hover:bg-brand-muted dark:hover:bg-gray-600 border border-brand-foreground dark:border-brand-background rounded-full disabled:opacity-50"
               disabled={value.length >= 4 || isLoading}
             >
               {num}
@@ -128,14 +128,14 @@ export default function SignInKeypad() {
 
           <button
             onClick={handleBackspace}
-            className="col-span-1 py-3 text-xl bg-[#fcdf97] dark:bg-[#E9C46A] hover:bg-[#E9C46A] dark:hover:bg-[#e8b63c] border border dark:border-white rounded"
+            className="col-span-1 py-4 text-xl bg-[#fcdf97] dark:bg-[#E9C46A] hover:bg-[#E9C46A] dark:hover:bg-[#e8b63c] border border dark:border-white rounded-lg"
             disabled={isLoading}
           >
             ⌫
           </button>
           <button
             onClick={handleClear}
-            className="col-span-1 py-3 text-xl bg-red-200 dark:bg-red-400 hover:bg-red-300 dark:hover:bg-red-500 border border dark:border-white rounded"
+            className="col-span-1 py-3 text-xl bg-red-200 dark:bg-red-400 hover:bg-red-300 dark:hover:bg-red-500 border border dark:border-white rounded-lg"
             disabled={isLoading}
           >
             Clear
