@@ -14,28 +14,36 @@ export async function POST(req: Request) {
       timeZone: "America/Los_Angeles",
     });
 
+    const localPath = process.env.GOOGLE_SHEETS_CREDENTIALS_PATH;
     const encodedCredentials = process.env.GOOGLE_SHEETS_CREDENTIALS_B64;
+    let credentialsPath: string;
 
-    if (!encodedCredentials) {
+    if (localPath && process.env.NODE_ENV === "development") {
+      // Use local credentials file in development
+      credentialsPath = localPath;
+      if (!fs.existsSync(credentialsPath)) {
+        return NextResponse.json(
+          { error: "Local credentials file not found" },
+          { status: 500 }
+        );
+      }
+    } else if (encodedCredentials) {
+      // Use base64 encoded credentials in production
+      const decodedCredentials = Buffer.from(
+        encodedCredentials,
+        "base64"
+      ).toString("utf-8");
+
+      credentialsPath = path.join("/tmp", "service-account.json");
+
+      if (!fs.existsSync(credentialsPath)) {
+        fs.writeFileSync(credentialsPath, decodedCredentials);
+      }
+    } else {
       return NextResponse.json(
-        { error: "Authentication service unavailable" },
+        { error: "Authentication service unavailable - no credentials found" },
         { status: 500 }
       );
-    }
-
-    const decodedCredentials = Buffer.from(
-      encodedCredentials,
-      "base64"
-    ).toString("utf-8");
-
-    const credentialsPath = path.join(
-      process.cwd(),
-      "credentials",
-      "service-account.json"
-    );
-
-    if (!fs.existsSync(credentialsPath)) {
-      fs.writeFileSync(credentialsPath, decodedCredentials);
     }
 
     const credentials = JSON.parse(fs.readFileSync(credentialsPath, "utf-8"));
