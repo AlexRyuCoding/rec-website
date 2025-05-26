@@ -14,36 +14,31 @@ export async function POST(req: Request) {
       timeZone: "America/Los_Angeles",
     });
 
-    const base64 = process.env.GOOGLE_SHEETS_CREDENTIALS_B64;
-    const localPath = process.env.GOOGLE_SHEETS_CREDENTIALS_PATH;
+    const encodedCredentials = process.env.GOOGLE_SHEETS_CREDENTIALS_B64;
     let credentialsPath: string;
 
-    // Use either base64 (Vercel/secure env) or file path (local dev)
-    if (base64) {
-      credentialsPath = path.join("/tmp", "service-account.json");
-      if (!fs.existsSync(credentialsPath)) {
-        const decoded = Buffer.from(base64, "base64").toString("utf-8");
-        fs.writeFileSync(credentialsPath, decoded);
-      }
-    } else if (localPath) {
-      credentialsPath = path.join(process.cwd(), localPath);
-      if (!fs.existsSync(credentialsPath)) {
-        return NextResponse.json(
-          { error: `Local credentials file not found at ${credentialsPath}` },
-          { status: 500 }
-        );
-      }
-    } else {
+    if (!encodedCredentials) {
       return NextResponse.json(
-        {
-          error:
-            "Missing both GOOGLE_SHEETS_CREDENTIALS_B64 and GOOGLE_SHEETS_CREDENTIALS_PATH",
-        },
+        { error: "Authentication service unavailable" },
         { status: 500 }
       );
     }
 
-    // Read and parse the credentials
+    const decodedCredentials = Buffer.from(
+      encodedCredentials,
+      "base64"
+    ).toString("utf-8");
+
+    credentialsPath = path.join(
+      process.cwd(),
+      "credentials",
+      "service-account.json"
+    );
+
+    if (!fs.existsSync(credentialsPath)) {
+      fs.writeFileSync(credentialsPath, decodedCredentials);
+    }
+
     const credentials = JSON.parse(fs.readFileSync(credentialsPath, "utf-8"));
 
     const auth = new google.auth.GoogleAuth({
@@ -67,7 +62,7 @@ export async function POST(req: Request) {
 
     if (patientIdIndex === -1) {
       return NextResponse.json(
-        { error: "PatientID column not found." },
+        { error: "Data service unavailable" },
         { status: 500 }
       );
     }
@@ -75,19 +70,22 @@ export async function POST(req: Request) {
     const matchedRow = rows.find((row) => row[patientIdIndex] === pin);
 
     if (!matchedRow) {
-      return NextResponse.json({ error: "PIN not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Not a valid PIN. Please enter a valid PIN to sign in" },
+        { status: 404 }
+      );
     }
 
-    const firstNameIndex = headers.findIndex((h) =>
+    const firstNameIndex: number = headers.findIndex((h) =>
       h.toLowerCase().includes("first")
     );
-    const lastNameIndex = headers.findIndex((h) =>
+    const lastNameIndex: number = headers.findIndex((h) =>
       h.toLowerCase().includes("last")
     );
 
-    const firstName = matchedRow[firstNameIndex] || "";
-    const lastName = matchedRow[lastNameIndex] || "";
-    const displayName = `${firstName} ${lastName.charAt(0)}.`;
+    const firstName: string = matchedRow[firstNameIndex] || "";
+    const lastName: string = matchedRow[lastNameIndex] || "";
+    const displayName: string = `${firstName} ${lastName.charAt(0)}.`;
 
     // Only log if confirmed
     if (confirmed) {
@@ -105,6 +103,7 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error("Pin signin error:", error);
 
+    // Check for specific error types
     if (error instanceof Error) {
       if (error.message.includes("credentials")) {
         return NextResponse.json(

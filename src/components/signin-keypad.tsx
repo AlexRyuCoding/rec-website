@@ -9,6 +9,7 @@ export default function SignInKeypad() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentPin, setCurrentPin] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const handleClick = (num: string) => {
     if (value.length < 4) {
@@ -28,14 +29,19 @@ export default function SignInKeypad() {
 
   const handleClear = () => {
     setValue("");
+    setErrorMessage("");
   };
 
   const handleModalClose = () => {
+    setPatientName("");
+    setCurrentPin("");
+    setErrorMessage("");
     setIsModalOpen(false);
   };
 
   const handlePinSubmit = async (pin: string) => {
     setIsLoading(true);
+    setErrorMessage("");
     try {
       const res = await fetch("/api/pin-signin", {
         method: "POST",
@@ -50,11 +56,13 @@ export default function SignInKeypad() {
         setCurrentPin(pin);
         setIsModalOpen(true);
       } else {
-        alert(data.error || "PIN not found.");
+        setErrorMessage(data.error || "PIN not found.");
+        setIsModalOpen(true);
       }
     } catch (err) {
       console.error("Submission failed:", err);
-      alert("Something went wrong.");
+      setErrorMessage("Something went wrong.");
+      setIsModalOpen(true);
     } finally {
       setIsLoading(false);
     }
@@ -80,6 +88,7 @@ export default function SignInKeypad() {
   };
 
   const handleDeny = () => {
+    setValue("");
     setIsModalOpen(false);
   };
 
@@ -88,33 +97,40 @@ export default function SignInKeypad() {
       <div className="text-2xl">
         Enter your 4-digit PIN here to sign in for your appointment.
       </div>
-      <div className="w-full max-w-[380px] sm:max-w-[480px] p-4 rounded-lg shadow-lg bg-brand-background dark:bg-[var(--background)] border border-brand-foreground dark:border-white self-center">
+      <motion.div
+        layout
+        className="w-full max-w-[380px] sm:max-w-[480px] p-4 rounded-lg shadow-lg bg-brand-background dark:bg-[var(--background)] border border-brand-foreground dark:border-white self-center"
+      >
         {/* Display */}
-        <div className="mb-4 p-3 text-xl sm:text-4xl text-right border rounded-lg bg-brand-background dark:bg-[var(--background)]">
+        <motion.div
+          layout
+          className="mb-4 p-3 text-xl sm:text-4xl text-right border rounded-lg bg-brand-background dark:bg-[var(--background)]"
+        >
           {value || "ENTER YOUR PIN"}
-        </div>
+        </motion.div>
 
         {/* Loading Animation */}
         <AnimatePresence>
           {isLoading && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex items-center justify-center gap-3 mb-4"
+              layout
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="flex items-center justify-center gap-3 mb-4 text-2xl overflow-hidden"
             >
               <motion.div
                 className="w-8 h-8 border-4 border-[#2A9E8F] border-t-transparent rounded-full"
                 animate={{ rotate: 360 }}
                 transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
               />
-              <span>Finding your info...</span>
+              <span className="text-2xl">Verifying PIN...</span>
             </motion.div>
           )}
         </AnimatePresence>
 
         {/* Keypad Grid */}
-        <div className="grid grid-cols-3 gap-4 mb-4">
+        <motion.div layout className="grid grid-cols-3 gap-4 mb-4">
           {["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map((num) => (
             <button
               key={num}
@@ -140,8 +156,8 @@ export default function SignInKeypad() {
           >
             Clear
           </button>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       {/* Confirmation Modal */}
       <ConfirmationModal
@@ -150,6 +166,7 @@ export default function SignInKeypad() {
         onConfirm={handleConfirm}
         onDeny={handleDeny}
         name={patientName}
+        errorMessage={errorMessage}
       />
     </div>
   );

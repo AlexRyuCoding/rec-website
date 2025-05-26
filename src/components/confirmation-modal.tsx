@@ -8,6 +8,7 @@ interface ConfirmationModalProps {
   onConfirm: () => void;
   onDeny: () => void;
   name: string;
+  errorMessage?: string;
 }
 
 export default function ConfirmationModal({
@@ -16,6 +17,7 @@ export default function ConfirmationModal({
   onConfirm,
   onDeny,
   name,
+  errorMessage,
 }: ConfirmationModalProps) {
   const [showSuccess, setShowSuccess] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
@@ -70,8 +72,12 @@ export default function ConfirmationModal({
           isOpen ? "translate-y-0 opacity-100" : "translate-y-24 opacity-0"
         }`}
       >
-        <div className="text-center m-6">
-          {showSuccess ? (
+        <div className="text-center mb-10">
+          {errorMessage ? (
+            <p className="text-2xl text-red-600 dark:text-red-400">
+              {errorMessage}
+            </p>
+          ) : showSuccess ? (
             <p className="text-4xl gap-8">
               Welcome,
               <br />
@@ -81,17 +87,17 @@ export default function ConfirmationModal({
               <br />
               You&apos;ve successfully signed in!
             </p>
-          ) : (
+          ) : name ? (
             <>
-              <h2 className="text-4xl font-semibold mb-4">Is this you?</h2>
-              <p className="text-4xl">{name}</p>
+              <h2 className="text-4xl font-semibold mb-8">Is this you?</h2>
+              <p className="text-4xl">Name: {name}</p>
             </>
-          )}
+          ) : null}
         </div>
 
         {/* Buttons */}
-        {!showSuccess && (
-          <div className="flex flex-col justify-center gap-4">
+        {!showSuccess && !errorMessage && name && (
+          <div className="flex items-center text-2xl">
             <button
               onClick={handleConfirm}
               className="w-fit mx-auto px-6 py-2 bg-[#2A9E8F] hover:bg-[#238B7E] text-white rounded-full transition-colors text-center"
@@ -100,9 +106,19 @@ export default function ConfirmationModal({
             </button>
             <button
               onClick={onDeny}
-              className="w-fit mx-auto px-6 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-400 dark:hover:bg-gray-600 rounded-full transition-colors text-center"
+              className="w-fit mx-auto px-6 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-400 dark:hover:bg-gray-600 rounded-full transition-colors text-center"
             >
               No
+            </button>
+          </div>
+        )}
+        {errorMessage && (
+          <div className="flex justify-center">
+            <button
+              onClick={onClose}
+              className="w-fit px-6 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-400 dark:hover:bg-gray-600 rounded-full transition-colors text-center"
+            >
+              Close
             </button>
           </div>
         )}
