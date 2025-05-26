@@ -15,7 +15,6 @@ export async function POST(req: Request) {
     });
 
     const encodedCredentials = process.env.GOOGLE_SHEETS_CREDENTIALS_B64;
-    let credentialsPath: string;
 
     if (!encodedCredentials) {
       return NextResponse.json(
@@ -29,7 +28,7 @@ export async function POST(req: Request) {
       "base64"
     ).toString("utf-8");
 
-    credentialsPath = path.join(
+    const credentialsPath = path.join(
       process.cwd(),
       "credentials",
       "service-account.json"
