@@ -68,7 +68,7 @@ export default function ConfirmationModal({
       />
       {/* Modal */}
       <div
-        className={`relative bg-[var(--background)] dark:bg-gray-800 border border-gray-200 dark:border-gray-400 p-6 rounded-lg max-w-md w-full z-10 transition-all duration-300 ${
+        className={`relative bg-[var(--background)] dark:bg-gray-800 border border-gray-200 dark:border-gray-400 p-6 mx-4 sm:mx-auto rounded-lg max-w-md w-full z-10 transition-all duration-300 ${
           isOpen ? "translate-y-0 opacity-100" : "translate-y-24 opacity-0"
         }`}
       >
