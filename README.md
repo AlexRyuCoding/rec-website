@@ -1,8 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RAC Website (Ryu Acupuncture Clinic)
+
+This is the official website for Ryu Acupuncture Clinic, built with [Next.js](https://nextjs.org) and bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+
+## Project Overview
+
+This website serves as the digital presence for Ryu Acupuncture Clinic, featuring:
+
+- Appointment booking system
+- Service information
+- Contact details
+- Online shop
+- Grievance reporting system
+- Administrative dashboard
 
 ## Getting Started
 
-First, run the development server:
+First, install the dependencies:
+
+```bash
+npm install
+# or
+yarn install
+# or
+pnpm install
+```
+
+Then, run the development server:
 
 ```bash
 npm run dev
@@ -10,15 +33,50 @@ npm run dev
 yarn dev
 # or
 pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The project follows Next.js 13+ App Router structure:
+
+- `/app` - Main application code
+  - `/about` - About page and clinic information
+  - `/admin` - Administrative dashboard
+  - `/api` - API routes
+  - `/request-an-appointment` - Appointment booking system
+  - `/contact` - Contact information and form
+  - `/services` - Available acupuncture services
+  - `/shop` - Online shop
+  - `/report-a-grievance` - Grievance reporting system
+  - `/ui` - Reusable UI components
+
+## Technologies Used
+
+- Next.js 13+ (App Router)
+- TypeScript
+- Tailwind CSS
+- Lucide Icons
+- Vercel (Deployment)
+
+## Development Guidelines
+
+1. Follow the existing component structure in the `/ui` directory
+2. Use TypeScript for all new components and features
+3. Maintain responsive design principles
+4. Follow accessibility guidelines
+5. Write meaningful commit messages
+
+## Deployment
+
+The website is deployed on Vercel. Any push to the main branch will trigger an automatic deployment.
+
+## Resources
+
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Lucide Icons](https://lucide.dev/icons/)
+- [Original RAC Website](https://www.ryuacupuncture.com/)
 
 ## Learn More
 
@@ -34,18 +92,3 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
-RAC Website Template
-https://webflow.com/templates/html/healingpath-therapy-website-template?ref=land-book.com%3Futm_medium%3Daffiliate&utm_source=4778439&pscd=try.webflow.com&ps_partner_key=NDc3ODQzOQ&ps_xid=CyCtq9h9Cixppw&gsxid=CyCtq9h9Cixppw&gspk=NDc3ODQzOQ
-
-Other Templates:
-https://land-book.com/design/template?industry=health-and-fitness
-
-Current RAC Website
-https://www.ryuacupuncture.com/
-
-NextJs/Vercel Build
-https://nextjs.org/learn/dashboard-app/creating-layouts-and-pages
-
-Lucide Icons Library
-https://lucide.dev/icons/
