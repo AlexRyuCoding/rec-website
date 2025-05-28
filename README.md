@@ -43,7 +43,6 @@ The project follows Next.js 13+ App Router structure:
 
 - `/app` - Main application code
   - `/about` - About page and clinic information
-  - `/admin` - Administrative dashboard
   - `/api` - API routes
   - `/request-an-appointment` - Appointment booking system
   - `/contact` - Contact information and form
