@@ -8,14 +8,14 @@
   --foreground: #22404b;
 
   /* Brand colors */
-  --brand-primary: #2a9e8f;
+  --brand-primary: #22404b;
   --brand-secondary: #238b7e;
   --brand-accent: #e9c46a;
   --brand-tertiary: #f4a261;
   --brand-muted: #e5e7eb;
 
   /* Text colors */
-  --text-primary: #22404b;
+  --text-primary: #e9c46a;
   --text-secondary: #6b7280;
   --text-muted: #9ca3af;
 

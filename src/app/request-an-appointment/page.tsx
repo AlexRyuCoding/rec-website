@@ -6,7 +6,7 @@ export default function RequestAnAppointment() {
   return (
     <div className="max-w-6xl mx-auto mt-40 px-6 pb-16 space-y-12">
       <main className="flex flex-col gap-4 max-w-4xl mx-auto">
-        <section className="max-w-4xl mx-auto pb-10 space-y-10 text-gray-800 dark:text-gray-100">
+        <section className="max-w-4xl mx-auto pb-10 space-y-10">
           <p className="text-3xl font-semibold">
             Personalized Healing Starts Here
           </p>
@@ -27,7 +27,7 @@ export default function RequestAnAppointment() {
               </ul>
               <Link
                 href="/request-an-appointment/request-form"
-                className="inline-block mt-4 px-6 py-2 bg-brand-primary text-white font-semibold rounded-lg hover:bg-brand-secondary transition"
+                className="inline-block mt-4 px-6 py-2 bg-brand-primary text-white font-semibold rounded-lg hover:bg-blue-500 transition"
               >
                 Request Your First Appointment
               </Link>
@@ -48,7 +48,7 @@ export default function RequestAnAppointment() {
                 href="https://patient.unifiedpractice.com/ryu-acupuncture"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-block mt-4 px-6 py-2 bg-brand-primary text-white font-semibold rounded-lg hover:bg-brand-primary transition"
+                className="inline-block mt-4 px-6 py-2 bg-brand-primary text-white font-semibold rounded-lg hover:bg-blue-500 transition"
               >
                 Book Your Follow-Up Visit
               </a>
@@ -103,7 +103,7 @@ export default function RequestAnAppointment() {
                 href="https://patient.unifiedpractice.com/ryu-acupuncture"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-block mt-4 px-6 py-3 max-w-fit text-brand-background hover:bg-brand-gray-300 bg-brand-foreground rounded-md p-2 transition"
+                className="inline-block mt-4 px-6 py-2 bg-brand-primary text-white font-semibold rounded-lg hover:bg-blue-500 transition"
               >
                 Book an Appointment With Us Today!
               </a>

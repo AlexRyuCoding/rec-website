@@ -3,7 +3,7 @@ import { Geist } from "next/font/google";
 import "./ui/globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import Header from "@/components/header";
-import Footer from "@/components/footer";
+import ConditionalFooter from "@/components/conditional-footer";
 
 const geist = Geist({
   subsets: ["latin"],
@@ -52,7 +52,7 @@ export default function RootLayout({
         >
           <Header />
           {children}
-          <Footer />
+          <ConditionalFooter />
         </ThemeProvider>
       </body>
     </html>

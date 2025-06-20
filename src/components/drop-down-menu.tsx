@@ -93,17 +93,14 @@ export default function DropdownMenu() {
   }
 
   return (
-    <div
-      className="relative inline-block text-left rounded-md border border-gray-400"
-      ref={menuRef}
-    >
+    <div className="relative inline-block text-left" ref={menuRef}>
       <button
         onClick={() => setOpen(!open)}
-        className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-800"
+        className="p-2 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600"
         aria-haspopup="true"
         aria-expanded={open}
       >
-        <AlignJustify className="w-5 h-5" />
+        <AlignJustify className="w-5 h-5 text-brand-foreground dark:text-brand-background" />
       </button>
 
       <div
@@ -124,7 +121,7 @@ export default function DropdownMenu() {
               key={item.href}
               href={item.href}
               onClick={() => setOpen(false)}
-              className={`flex items-center gap-2 px-3 py-2 text-sm hover:font-semibold hover:bg-[#E9C46A] dark:hover:bg-gray-700 transition ${
+              className={`flex items-center gap-2 px-3 py-2 text-sm text-brand-foreground dark:text-brand-background hover:font-semibold hover:bg-brand-accent dark:hover:bg-brand-primary transition ${
                 item.isRoundedTop ? "rounded-t-lg" : ""
               } ${item.isRoundedBottom ? "rounded-b-lg" : ""}`}
             >
