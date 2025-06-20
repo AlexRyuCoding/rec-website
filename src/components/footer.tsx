@@ -4,7 +4,7 @@ import { MapPin, Phone, Mail, Printer } from "lucide-react";
 
 export default function Footer() {
   return (
-    <footer className="w-full py-8 bg-gray-100 dark:bg-gray-800">
+    <footer className="w-full py-8 bg-brand-muted dark:bg-gray-800">
       <div className="container mx-auto px-16">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Contact Information */}

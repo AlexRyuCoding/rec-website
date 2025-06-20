@@ -35,7 +35,7 @@ export default function ThemeToggle() {
         const newTheme = theme === "dark" ? "light" : "dark";
         setTheme(newTheme);
       }}
-      className="p-2 rounded-md hover:bg-gray-200 border border-gray-400 dark:hover:bg-gray-800"
+      className="p-2 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600"
       aria-label="Toggle theme"
     >
       {theme === "dark" ? (

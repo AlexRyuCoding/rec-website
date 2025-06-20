@@ -2,7 +2,7 @@
 import DropdownMenu from "./drop-down-menu";
 import Image from "next/image";
 import Link from "next/link";
-// import ThemeToggle from "./theme-toggle";
+import ThemeToggle from "./theme-toggle";
 import { useState, useEffect } from "react";
 
 export default function Header() {
@@ -20,7 +20,7 @@ export default function Header() {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 flex items-center justify-between w-full px-8 bg-gray-100 dark:bg-gray-800 transition-all duration-300 z-50 ${
+      className={`fixed top-0 left-0 right-0 flex items-center justify-between w-full px-8 bg-brand-muted dark:bg-gray-800 transition-all duration-300 z-50 ${
         isScrolled ? "py-1" : "py-4"
       }`}
     >
@@ -46,7 +46,7 @@ export default function Header() {
         </Link>
       </div>
       <div className="flex items-center gap-2 flex-1 justify-end">
-        {/* <ThemeToggle /> */}
+        <ThemeToggle />
         <DropdownMenu />
       </div>
     </header>

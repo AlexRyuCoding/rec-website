@@ -104,7 +104,7 @@ export default function SignInKeypad() {
         {/* Display */}
         <motion.div
           layout
-          className="mb-4 p-3 text-xl sm:text-4xl text-right border rounded-lg bg-brand-background dark:bg-[var(--background)]"
+          className="mb-4 p-3 text-xl sm:text-4xl text-right border border-brand-foreground dark:border-white rounded-lg bg-brand-background dark:bg-[var(--background)]"
         >
           {value || "ENTER YOUR PIN"}
         </motion.div>
@@ -135,7 +135,7 @@ export default function SignInKeypad() {
             <button
               key={num}
               onClick={() => handleClick(num)}
-              className="py-3 text-5xl sm:text-5xl bg-brand-background dark:bg-[var(--background)] hover:bg-brand-muted dark:hover:bg-gray-600 border border-brand-foreground dark:border-brand-background rounded-full disabled:opacity-50"
+              className="py-3 text-5xl sm:text-5xl bg-brand-background dark:bg-[var(--background)] hover:bg-brand-muted dark:hover:bg-gray-600 border border-brand-foreground dark:border-brand-background rounded-xl disabled:opacity-50"
               disabled={value.length >= 4 || isLoading}
             >
               {num}
@@ -144,17 +144,17 @@ export default function SignInKeypad() {
 
           <button
             onClick={handleBackspace}
-            className="col-span-1 py-4 text-xl bg-[#fcdf97] dark:bg-[#E9C46A] hover:bg-[#E9C46A] dark:hover:bg-[#e8b63c] border border dark:border-white rounded-lg"
+            className="col-span-1 text-5xl bg-[#fcdf97] dark:bg-[#E9C46A] hover:bg-[#E9C46A] dark:hover:bg-[#e8b63c] border border dark:border-white rounded-xl"
             disabled={isLoading}
           >
             ⌫
           </button>
           <button
             onClick={handleClear}
-            className="col-span-1 py-3 text-xl bg-red-200 dark:bg-red-400 hover:bg-red-300 dark:hover:bg-red-500 border border dark:border-white rounded-lg"
+            className="col-span-1 py-3 text-2xl bg-red-300 dark:bg-red-400 hover:bg-red-400 dark:hover:bg-red-600 border border dark:border-white rounded-xl"
             disabled={isLoading}
           >
-            Clear
+            CLEAR
           </button>
         </motion.div>
       </motion.div>

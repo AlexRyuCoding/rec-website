@@ -68,7 +68,7 @@ export default function Home() {
           natural harmony.
         </p>
         <div className="grid sm:grid-cols-3 gap-6 text-left">
-          <div className="bg-brand-muted dark:bg-brand-gray-500 p-6 rounded-xl shadow">
+          <div className="bg-brand-muted dark:bg-gray-600 p-6 rounded-xl shadow-xl">
             <h3 className="font-semibold text-lg">
               Acupuncture & Electroacupuncture
             </h3>
@@ -76,7 +76,7 @@ export default function Home() {
               Stimulate healing, reduce inflammation, and ease pain naturally.
             </p>
           </div>
-          <div className="bg-brand-muted dark:bg-brand-gray-500 p-6 rounded-xl shadow">
+          <div className="bg-brand-muted dark:bg-gray-600 p-6 rounded-xl shadow-xl">
             <h3 className="font-semibold text-lg">
               Herbal Medicine & Supplements
             </h3>
@@ -85,7 +85,7 @@ export default function Home() {
               health.
             </p>
           </div>
-          <div className="bg-brand-muted dark:bg-brand-gray-500 p-6 rounded-xl shadow">
+          <div className="bg-brand-muted dark:bg-gray-600 p-6 rounded-xl shadow-xl">
             <h3 className="font-semibold text-lg">
               Fertility & Women&apos;s Health
             </h3>

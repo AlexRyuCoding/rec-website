@@ -4,6 +4,7 @@ const config: Config = {
   content: [
     "./src/**/*.{js,ts,jsx,tsx}", // adjust to your project structure
   ],
+  darkMode: "class",
   theme: {
     extend: {
       colors: {
