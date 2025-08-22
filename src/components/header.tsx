@@ -1,5 +1,6 @@
 "use client";
 import DropdownMenu from "./drop-down-menu";
+import DesktopMenu from "./desktop-menu";
 import Image from "next/image";
 import Link from "next/link";
 import ThemeToggle from "./theme-toggle";
@@ -24,10 +25,12 @@ export default function Header() {
         isScrolled ? "py-1" : "py-4"
       }`}
     >
-      <div className="flex-1" /> {/* Spacer */}
-      <div className="flex items-center justify-center">
+      <div className="flex items-center justify-end flex-1">
+        <DesktopMenu position="left" />
+      </div>
+
+      <div className="flex items-center justify-center px-8 md:px-8">
         <Link href="/">
-          {/* Light mode logo */}
           <Image
             src="/rac-logo-dark-moss.png"
             alt="Ryu Acupuncture Clinic logo (light mode)"
@@ -35,17 +38,18 @@ export default function Header() {
             height={isScrolled ? 30 : 80}
             className="block dark:hidden transition-all duration-300"
           />
-          {/* Dark mode logo */}
           <Image
             src="/rac-logo-white.png"
             alt="Ryu Acupuncture Clinic logo (dark mode)"
-            width={isScrolled ? 35 : 80}
-            height={isScrolled ? 35 : 80}
+            width={isScrolled ? 30 : 80}
+            height={isScrolled ? 30 : 80}
             className="hidden dark:block transition-all duration-300"
           />
         </Link>
       </div>
-      <div className="flex items-center gap-2 flex-1 justify-end">
+
+      <div className="flex items-center gap-2 flex-1 justify-start">
+        <DesktopMenu position="right" />
         <ThemeToggle />
         <DropdownMenu />
       </div>

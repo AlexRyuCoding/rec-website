@@ -7,6 +7,9 @@ const config: Config = {
   darkMode: "class",
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["var(--font-general-sans)", "Arial", "Helvetica", "sans-serif"],
+      },
       colors: {
         brand: {
           background: "#ffffff",

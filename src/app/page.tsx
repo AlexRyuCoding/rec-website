@@ -2,45 +2,67 @@
 import Image from "next/image";
 import Link from "next/link";
 import Testimonials from "@/components/testimonials";
+import { motion } from "motion/react";
 
 export default function Home() {
   return (
     <section className="max-w-6xl mx-auto mt-40 px-6 pb-16 space-y-12">
-      {/* Hero Section */}
       <div className="text-center space-y-4">
-        <h1 className="text-4xl sm:text-5xl font-bold leading-tight">
-          Restore Balance. Heal Naturally.
-        </h1>
-        <p className="text-lg sm:text-xl max-w-3xl mx-auto">
+        <motion.h1
+          className="text-4xl sm:text-4xl font-bold leading-tight"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.6, delay: 0.4 }}
+        >
+          <motion.span
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1, delay: 0.4 }}
+          >
+            Restore Balance,
+          </motion.span>{" "}
+          <motion.span
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1, delay: 1.6 }}
+          >
+            Heal Naturally.
+          </motion.span>
+        </motion.h1>
+        <motion.p
+          className="text-xl sm:text-xl max-w-3xl mx-auto"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 1, delay: 2.6 }}
+        >
           At Ryu Acupuncture Clinic, we blend the wisdom of Traditional Chinese
           Medicine with compassionate, personalized care to promote integrated
           health, energy, and vitality.
-        </p>
-        <Link
-          href="/request-an-appointment"
-          className="mt-4 inline-block px-8 py-3 bg-brand-primary text-white text-lg font-semibold rounded-lg hover:bg-brand-secondary transition"
-        >
-          Request an Appointment
-        </Link>
+        </motion.p>
       </div>
 
-      {/* About Us */}
       <div className="grid sm:grid-cols-2 gap-10 items-center">
         <div className="space-y-4">
           <h2 className="text-2xl font-semibold">
             Your Partner in Holistic Healing
           </h2>
-          <p>
-            Since 1997, Ryu Acupuncture Clinic has been a trusted provider of
-            Traditional Chinese Medicine in Burbank, CA. Our experienced team
-            offers acupuncture, herbal therapy, and whole-body treatments to
-            help you restore balance, reduce pain, and enhance your well-being.
-          </p>
-          <p>
-            As a family-run practice, we take pride in providing a welcoming
-            environment where each patient is treated with care, respect, and
-            clinical expertise.
-          </p>
+          <div className="text-lg space-y-8">
+            <p>
+              <strong>For over 25 years,</strong> Ryu Acupuncture Clinic has
+              been a trusted provider of Traditional Chinese Medicine in
+              Burbank, CA.
+            </p>
+            <p>
+              Our experienced team offers acupuncture, herbal therapy, and
+              whole-body treatments to help you restore balance, reduce pain,
+              and enhance your well-being.
+            </p>
+            <p>
+              As a family-run practice, we take pride in providing a welcoming
+              environment where each patient is treated with care, respect, and
+              clinical expertise.
+            </p>
+          </div>
           <Link
             href="/about"
             className="text-brand-primary font-medium hover:underline"
@@ -59,10 +81,9 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Services Section */}
       <div className="space-y-6 text-center">
         <h2 className="text-2xl font-semibold">Our Specialties</h2>
-        <p className="max-w-2xl mx-auto">
+        <p className="max-w-2xl mx-auto text-lg">
           We offer a full range of Traditional Chinese Medicine (TCM) therapies
           to treat chronic and acute conditions—while restoring your body&apos;s
           natural harmony.
@@ -72,7 +93,7 @@ export default function Home() {
             <h3 className="font-semibold text-lg">
               Acupuncture & Electroacupuncture
             </h3>
-            <p className="text-sm mt-2">
+            <p className="mt-2">
               Stimulate healing, reduce inflammation, and ease pain naturally.
             </p>
           </div>
@@ -80,7 +101,7 @@ export default function Home() {
             <h3 className="font-semibold text-lg">
               Herbal Medicine & Supplements
             </h3>
-            <p className="text-sm mt-2">
+            <p className="mt-2">
               Customized herbal formulas to restore balance and improve internal
               health.
             </p>
@@ -89,7 +110,7 @@ export default function Home() {
             <h3 className="font-semibold text-lg">
               Fertility & Women&apos;s Health
             </h3>
-            <p className="text-sm mt-2">
+            <p className="mt-2">
               Gentle, natural support for fertility, menstrual health, and
               hormone balance.
             </p>
@@ -102,20 +123,17 @@ export default function Home() {
           Explore All Services
         </Link>
       </div>
-
-      {/* Patient Testimonials */}
       <Testimonials />
 
-      {/* CTA Section */}
       <div className="text-center border-t pt-10">
         <h2 className="text-2xl font-semibold">Ready to Feel Better?</h2>
-        <p className="mt-2">
+        <p className="mt-2 text-lg">
           Whether you&apos;re seeking relief from pain, improving fertility, or
           starting a new chapter of wellness—we&apos;re here for you.
         </p>
         <Link
-          href="/request-an-appointment"
-          className="mt-4 inline-block px-8 py-3 bg-brand-primary text-white font-semibold rounded-lg hover:bg-brand-secondary transition"
+          href="/request-an-appointment/request-form"
+          className="mt-4 inline-block px-8 py-3 bg-brand-primary text-white text-lg font-semibold rounded-lg hover:bg-brand-secondary transition"
         >
           Request Your Appointment Today
         </Link>

@@ -7,7 +7,6 @@ export default function Services() {
   return (
     <div className="min-h-screen mt-40 px-4 pb-10 sm:p-10">
       <main className="flex flex-col gap-4 max-w-4xl mx-auto">
-        {/* Intro */}
         <section className="space-y-4 text-xl pb-4">
           <p>
             At our clinic, we focus on two foundational services:{" "}
@@ -19,7 +18,6 @@ export default function Services() {
           </p>
         </section>
 
-        {/* Acupuncture Section */}
         <section className="space-y-6 pb-10">
           <h2 className="text-3xl font-semibold">
             🌀 Acupuncture: Restoring Balance Through the Needle
@@ -65,7 +63,6 @@ export default function Services() {
           </div>
         </section>
 
-        {/* Call to Action */}
         <section className="space-y-4 text-center pb-10">
           <p className="text-3xl font-medium">
             Meet with our one of our Acupuncturists
@@ -82,7 +79,6 @@ export default function Services() {
           </Link>
         </section>
 
-        {/* Herbal Medicine Section */}
         <section className="space-y-6 pb-10">
           <h2 className="text-3xl font-semibold">
             🌱 Chinese Herbal Medicine: Custom Formulas for Deep Healing
@@ -135,7 +131,64 @@ export default function Services() {
           </div>
         </section>
 
-        {/* FAQ Section */}
+        <section className="space-y-6 pb-10">
+          <div className="space-y-6">
+            <h2 className="text-2xl font-semibold text-center">
+              What We Offer
+            </h2>
+            <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6 text-sm">
+              <div className="bg-brand-background dark:bg-brand-gray-500 p-4 rounded-lg shadow">
+                <h3 className="font-semibold text-lg mb-1">
+                  Acupuncture & Electroacupuncture
+                </h3>
+                <p>
+                  Targeted needle therapy to stimulate healing, relieve pain,
+                  and improve circulation.
+                </p>
+              </div>
+              <div className="bg-brand-background dark:bg-brand-gray-500 p-4 rounded-lg shadow">
+                <h3 className="font-semibold text-lg mb-1">Auriculotherapy</h3>
+                <p>
+                  Ear acupuncture for nervous system regulation, detox, and
+                  chronic conditions.
+                </p>
+              </div>
+              <div className="bg-brand-background dark:bg-brand-gray-500 p-4 rounded-lg shadow">
+                <h3 className="font-semibold text-lg mb-1">Herbal Medicine</h3>
+                <p>
+                  Custom-formulated herbal prescriptions to balance internal
+                  systems and support immunity.
+                </p>
+              </div>
+              <div className="bg-brand-background dark:bg-brand-gray-500 p-4 rounded-lg shadow">
+                <h3 className="font-semibold text-lg mb-1">
+                  Moxibustion & Cupping
+                </h3>
+                <p>
+                  Traditional therapies that boost circulation and reduce
+                  inflammation.
+                </p>
+              </div>
+              <div className="bg-brand-background dark:bg-brand-gray-500 p-4 rounded-lg shadow">
+                <h3 className="font-semibold text-lg mb-1">Heat Therapy</h3>
+                <p>
+                  Targeted warming treatments for muscle tension, chronic pain,
+                  and stagnation.
+                </p>
+              </div>
+              <div className="bg-brand-background dark:bg-brand-gray-500 p-4 rounded-lg shadow">
+                <h3 className="font-semibold text-lg mb-1">
+                  Nutritional Supplements
+                </h3>
+                <p>
+                  Holistic guidance with high-quality supplements to optimize
+                  health from within.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section className="space-y-6 pb-10">
           <h2 className="text-2xl font-semibold">
             🧠 Frequently Asked Questions
@@ -189,20 +242,6 @@ export default function Services() {
           </div>
         </section>
 
-        {/* Clinic Highlights */}
-        <section className="space-y-4 pb-10">
-          <h2 className="text-2xl font-semibold">
-            ✨ What Makes Our Clinic Unique?
-          </h2>
-          <ul className="text-lg list-disc list-inside space-y-1">
-            <li>✅ Over 25 years of clinical experience</li>
-            <li>✅ Fully personalized treatment plans</li>
-            <li>✅ Warm, clean, and peaceful clinic space</li>
-            <li>✅ Collaborative, integrative approach</li>
-          </ul>
-        </section>
-
-        {/* Call to Action */}
         <section className="space-y-4 text-center">
           <p className="text-3xl font-medium">
             Ready to Begin Your Healing Journey?
@@ -215,6 +254,7 @@ export default function Services() {
           <p className="italic font-semibold">
             &quot;When you harmonize the body, the body knows how to heal.&quot;
           </p>
+
           <Link
             href="/request-an-appointment"
             className="inline-block mt-4 px-6 py-3 bg-brand-primary text-white font-semibold rounded-lg hover:bg-brand-secondary transition"

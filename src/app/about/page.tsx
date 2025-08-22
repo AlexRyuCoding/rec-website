@@ -6,7 +6,6 @@ import Link from "next/link";
 export default function Page() {
   return (
     <section className="max-w-5xl mt-32 mx-auto px-6 py-16 space-y-16 dark:text-gray-100">
-      {/*<!-- Clinic Overview -->*/}
       <div className="space-y-6">
         <h1 className="text-4xl font-bold text-center">
           About Ryu Acupuncture Clinic
@@ -16,14 +15,14 @@ export default function Page() {
             Healing That Honors Tradition. Care That Feels Like Family.
           </strong>
         </p>
-        <p className="text-base leading-relaxed">
+        <p className="text-lg leading-relaxed">
           Since opening our doors in <strong>1997</strong>, Ryu Acupuncture
           Clinic has grown into one of Burbank&apos;s most trusted holistic
           healing centers. What began as a small, family-run clinic has become a
           community cornerstone—offering compassionate, results-driven care
           rooted in the wisdom of Traditional Chinese Medicine (TCM).
         </p>
-        <p className="text-base leading-relaxed">
+        <p className="text-lg leading-relaxed">
           Over the years, we&apos;ve helped thousands of patients reduce pain,
           restore balance, and reconnect with their body&apos;s natural healing
           process. Our mission remains simple: to provide exceptional care with
@@ -31,20 +30,19 @@ export default function Page() {
         </p>
       </div>
 
-      {/*<!-- Meet the Doctor -->*/}
       <div className="grid sm:grid-cols-2 gap-10 items-center">
         <div className="space-y-4">
           <h2 className="text-2xl font-semibold">
             Meet Dr. Jay J. Ryu, L.Ac., Ph.D.
           </h2>
-          <p className="text-base">
+          <p className="text-lg">
             With nearly <strong>30 years of clinical experience</strong>, Dr.
             Jay J. Ryu brings deep expertise and a patient-first philosophy to
             every treatment. His background blends academic excellence with
             cultural wisdom, making him a highly respected practitioner in the
             field of Eastern medicine.
           </p>
-          <ul className="list-disc list-inside space-y-1 text-sm">
+          <ul className="list-disc list-inside space-y-1 text-base">
             <li>Ph.D. in Oriental Medicine – Yuin University</li>
             <li>
               Master&apos;s in Traditional Oriental Medicine – Dongguk Royal
@@ -54,7 +52,7 @@ export default function Page() {
             <li>Core Member – Hongik Oriental Medical Association</li>
             <li>Instructor – Acupuncturist Continuing Education Programs</li>
           </ul>
-          <p className="text-base">
+          <p className="text-lg">
             Dr. Ryu is fluent in both English and Korean, and is especially
             known for his compassionate approach and ability to treat complex
             cases with clarity and care.
@@ -62,16 +60,17 @@ export default function Page() {
         </div>
         <div className="flex items-center justify-center w-full">
           <Image
-            src="/dr-jay-ryu-candid-office.jpg"
-            alt="Dr. Jay J. Ryu, L.Ac., Ph.D."
-            className="w-full rounded-xl shadow-lg object-cover"
-            width={1200}
-            height={1200}
+            src="/dr-jay-ryu-profile.png"
+            alt="Dr. Jay Ryu profile picture"
+            title="Profile photo of Dr. Jay Ryu"
+            width="400"
+            height="400"
+            priority={true}
+            className="rounded-3xl shadow-2xl"
           />
         </div>
       </div>
 
-      {/*<!-- Areas of Specialty -->*/}
       <div className="space-y-4">
         <h2 className="text-2xl font-semibold text-center">
           Areas of Specialty
@@ -84,27 +83,24 @@ export default function Page() {
         </ul>
         <div className="w-full flex justify-center py-6 ">
           <Image
-            src="/dr-jay-ryu-profile.png"
-            alt="Dr. Jay Ryu profile picture"
-            title="Profile photo of Dr. Jay Ryu"
-            width="320"
-            height="320"
-            priority={true}
-            className="rounded-3xl shadow-2xl"
+            src="/dr-jay-ryu-candid-office.jpg"
+            alt="Dr. Jay J. Ryu, L.Ac., Ph.D."
+            className="w-full rounded-xl shadow-lg object-cover"
+            width={1200}
+            height={1200}
           />
         </div>
       </div>
 
-      {/*<!-- Clinic Philosophy -->*/}
       <div className="space-y-6">
         <h2 className="text-2xl font-semibold">Our Philosophy</h2>
-        <p className="text-base leading-relaxed">
+        <p className="text-lg leading-relaxed">
           We believe true healing happens when expertise meets empathy. At Ryu
           Acupuncture Clinic, every treatment plan is custom-tailored to support
           the whole person—not just the symptoms. We take time to listen,
           diagnose thoughtfully, and treat holistically.
         </p>
-        <p className="text-base leading-relaxed">
+        <p className="text-lg leading-relaxed">
           Our team uses the ancient principles of TCM alongside a modern
           understanding of the body to restore harmony, prevent illness, and
           support lifelong wellness.
@@ -131,67 +127,19 @@ export default function Page() {
         </div>
       </div>
 
-      {/*<!-- Services Offered -->*/}
-      <div className="space-y-6">
-        <h2 className="text-2xl font-semibold text-center">What We Offer</h2>
-        <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6 text-sm">
-          <div className="bg-brand-background dark:bg-brand-gray-500 p-4 rounded-lg shadow">
-            <h3 className="font-semibold text-lg mb-1">
-              Acupuncture & Electroacupuncture
-            </h3>
-            <p>
-              Targeted needle therapy to stimulate healing, relieve pain, and
-              improve circulation.
-            </p>
-          </div>
-          <div className="bg-brand-background dark:bg-brand-gray-500 p-4 rounded-lg shadow">
-            <h3 className="font-semibold text-lg mb-1">Auriculotherapy</h3>
-            <p>
-              Ear acupuncture for nervous system regulation, detox, and chronic
-              conditions.
-            </p>
-          </div>
-          <div className="bg-brand-background dark:bg-brand-gray-500 p-4 rounded-lg shadow">
-            <h3 className="font-semibold text-lg mb-1">Herbal Medicine</h3>
-            <p>
-              Custom-formulated herbal prescriptions to balance internal systems
-              and support immunity.
-            </p>
-          </div>
-          <div className="bg-brand-background dark:bg-brand-gray-500 p-4 rounded-lg shadow">
-            <h3 className="font-semibold text-lg mb-1">
-              Moxibustion & Cupping
-            </h3>
-            <p>
-              Traditional therapies that boost circulation and reduce
-              inflammation.
-            </p>
-          </div>
-          <div className="bg-brand-background dark:bg-brand-gray-500 p-4 rounded-lg shadow">
-            <h3 className="font-semibold text-lg mb-1">Heat Therapy</h3>
-            <p>
-              Targeted warming treatments for muscle tension, chronic pain, and
-              stagnation.
-            </p>
-          </div>
-          <div className="bg-brand-background dark:bg-brand-gray-500 p-4 rounded-lg shadow">
-            <h3 className="font-semibold text-lg mb-1">
-              Nutritional Supplements
-            </h3>
-            <p>
-              Holistic guidance with high-quality supplements to optimize health
-              from within.
-            </p>
-          </div>
-        </div>
-      </div>
+      <h2 className="text-2xl font-semibold">
+        ✨ What Makes Our Clinic Unique?
+      </h2>
+      <ul className="text-lg list-disc list-inside space-y-1">
+        <li>✅ Over 25 years of clinical experience</li>
+        <li>✅ Fully personalized treatment plans</li>
+        <li>✅ Warm, clean, and peaceful clinic space</li>
+        <li>✅ Collaborative, integrative approach</li>
+      </ul>
 
-      {/*<!-- Closing CTA -->*/}
       <div className="text-center border-t pt-10">
-        <h2 className="text-2xl font-semibold">
-          A Legacy of Healing. A Future of Hope.
-        </h2>
-        <p className="mt-2 text-base max-w-xl mx-auto">
+        <h2 className="text-2xl font-semibold">A Legacy of Healing</h2>
+        <p className="mt-2 text-lg max-w-xl mx-auto">
           Whether you&apos;re beginning your journey toward wellness or
           continuing a path of healing, our team is here to support you every
           step of the way.

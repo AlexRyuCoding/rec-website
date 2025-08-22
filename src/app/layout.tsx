@@ -1,14 +1,9 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
 import "./ui/globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import Header from "@/components/header";
 import ConditionalFooter from "@/components/conditional-footer";
-
-const geist = Geist({
-  subsets: ["latin"],
-  variable: "--font-geist",
-});
+import { generalSans } from "./ui/fonts";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.ryuacupuncture.com"),
@@ -40,7 +35,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${geist.variable} antialiased`}
+        className={`${generalSans.variable} antialiased`}
         suppressHydrationWarning
       >
         <ThemeProvider
