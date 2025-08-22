@@ -12,15 +12,14 @@ export default function RequestAnAppointment() {
           </p>
 
           <div className="space-y-8">
-            {/* <!-- New Patients --> */}
             <div>
               <h2 className="text-2xl font-semibold">New to Our Clinic?</h2>
-              <p className="mt-2 text-base">
+              <p className="mt-2 text-lg">
                 Welcome—you&apos;re in great hands. Your first visit includes a
                 full health intake, pulse and tongue diagnosis, and a customized
                 treatment plan.
               </p>
-              <ul className="list-disc list-inside mt-4 space-y-1">
+              <ul className="list-disc list-inside mt-4 space-y-1 text-base">
                 <li>Holistic intake and assessment</li>
                 <li>Personalized treatment session</li>
                 <li>Plenty of time for your questions</li>
@@ -33,12 +32,11 @@ export default function RequestAnAppointment() {
               </Link>
             </div>
 
-            {/* <!-- Returning Patients --> */}
             <div>
               <h2 className="text-2xl font-semibold">
                 Returning or Existing Patient?
               </h2>
-              <p className="mt-2 text-base">
+              <p className="mt-2 text-lg">
                 We&apos;re glad to have you back. Follow-up sessions help
                 maintain your results and support your ongoing wellness journey.
                 <br />
@@ -54,8 +52,7 @@ export default function RequestAnAppointment() {
               </a>
             </div>
 
-            {/* <!-- Clinic Info --> */}
-            <div className="border-t pt-6 space-y-4">
+            <div className="text-lg border-t pt-6 space-y-4">
               <h2 className="text-xl font-semibold">Clinic Hours & Location</h2>
               <div>
                 <div className="flex items-start gap-2">
@@ -87,9 +84,8 @@ export default function RequestAnAppointment() {
               </p>
             </div>
 
-            {/* <!-- Contact CTA --> */}
             <div className="text-center border-t pt-6">
-              <p className="text-base">
+              <p className="text-lg">
                 Have questions before you book?{" "}
                 <a
                   href="#"

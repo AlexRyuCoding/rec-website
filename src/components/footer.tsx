@@ -7,7 +7,6 @@ export default function Footer() {
     <footer className="w-full py-8 bg-brand-muted dark:bg-gray-800">
       <div className="container mx-auto px-16">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Contact Information */}
           <div className="flex flex-col gap-4">
             <h3 className="text-lg font-semibold">Contact Us</h3>
             <div className="flex items-start gap-2">
@@ -44,7 +43,6 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Hours and Social Media */}
           <div className="flex flex-col gap-4">
             <h3 className="text-lg font-semibold">Hours</h3>
             <p>Monday, Wednesday, Friday: 9:30 AM - 5:00 PM</p>
@@ -94,7 +92,6 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Legal and Logo */}
           <div className="flex flex-col gap-4">
             <div className="flex justify-center mb-4">
               <Link href="/">
@@ -118,7 +115,7 @@ export default function Footer() {
             <div className="flex flex-col items-center">
               <div className="flex flex-col gap-2">
                 <Link
-                  href="https://www.privacypolicygenerator.info/"
+                  href="https://www.termsfeed.com/live/ea661088-687f-4c39-a92a-7a6acf1bdbc8"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:underline"
@@ -126,7 +123,7 @@ export default function Footer() {
                   Privacy Policy
                 </Link>
                 <Link
-                  href="https://www.privacypolicygenerator.info/"
+                  href="https://www.termsfeed.com/live/ea661088-687f-4c39-a92a-7a6acf1bdbc8"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:underline"

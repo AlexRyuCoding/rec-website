@@ -71,7 +71,7 @@ export default function Testimonials() {
       <div className="flex flex-col justify-between items-center">
         <h2 className="text-2xl font-semibold mb-6">What Our Patients Say</h2>
 
-        <div className="relative w-full max-w-2xl mx-auto min-h-[14rem] overflow-hidden">
+        <div className="relative w-full max-w-2xl mx-auto min-h-[10rem] overflow-hidden">
           <AnimatePresence initial={false} custom={direction}>
             <motion.div
               key={index}

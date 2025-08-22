@@ -8,8 +8,6 @@ import {
   Calendar,
   MessageSquareWarning,
   AlignJustify,
-  // Mail,
-  // UserCheck,
   // ShoppingCart,
 } from "lucide-react";
 
@@ -34,12 +32,6 @@ const menuItems: MenuItem[] = [
     icon: <HandHeart className="w-5 h-5" />,
     label: "Services",
   },
-  // { href: "/contact", icon: <Mail className="w-5 h-5" />, label: "Contact" },
-  // {
-  //   href: "/patient-signin",
-  //   icon: <UserCheck className="w-5 h-5" />,
-  //   label: "Patient Sign In",
-  // },
   // {
   //   href: "/shop",
   //   icon: <ShoppingCart className="w-5 h-5" />,
@@ -80,7 +72,7 @@ export default function DropdownMenu() {
 
   if (!mounted) {
     return (
-      <div className="relative inline-block text-left rounded-md border border-gray-400">
+      <div className="relative inline-block text-left rounded-md border border-gray-400 md:hidden">
         <button
           className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-800"
           aria-haspopup="true"
@@ -93,7 +85,7 @@ export default function DropdownMenu() {
   }
 
   return (
-    <div className="relative inline-block text-left" ref={menuRef}>
+    <div className="relative inline-block text-left md:hidden" ref={menuRef}>
       <button
         onClick={() => setOpen(!open)}
         className="p-2 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600"
@@ -121,7 +113,7 @@ export default function DropdownMenu() {
               key={item.href}
               href={item.href}
               onClick={() => setOpen(false)}
-              className={`flex items-center gap-2 px-3 py-2 text-sm text-brand-foreground dark:text-brand-background hover:font-semibold hover:bg-brand-accent dark:hover:bg-brand-primary transition ${
+              className={`flex items-center gap-2 px-3 py-2 text-base text-brand-foreground dark:text-brand-background hover:font-semibold hover:bg-brand-accent dark:hover:bg-brand-primary transition ${
                 item.isRoundedTop ? "rounded-t-lg" : ""
               } ${item.isRoundedBottom ? "rounded-b-lg" : ""}`}
             >
