@@ -12,6 +12,7 @@
     "lint:check": "eslint ."
   },
   "dependencies": {
+    "@vercel/analytics": "^1.6.1",
     "googleapis": "^149.0.0",
     "lucide-react": "^0.511.0",
     "motion": "^12.12.1",

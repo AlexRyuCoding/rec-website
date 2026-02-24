@@ -4,6 +4,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import Header from "@/components/header";
 import ConditionalFooter from "@/components/conditional-footer";
 import { generalSans } from "./ui/fonts";
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.ryuacupuncture.com"),
@@ -49,6 +50,7 @@ export default function RootLayout({
           {children}
           <ConditionalFooter />
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   );
