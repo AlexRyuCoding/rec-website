@@ -1,172 +1,477 @@
+// src/components/signin-keypad.tsx
 "use client";
+
 import { useState } from "react";
-import ConfirmationModal from "./confirmation-modal";
 import { motion, AnimatePresence } from "motion/react";
+import ConfirmationModal from "./confirmation-modal";
+
+type Screen =
+  | "pin_entry"
+  | "verifying"
+  | "confirmed"
+  | "error"
+  | "new_contact"
+  | "new_contact_lookup"
+  | "new_pin_create"
+  | "new_pin_confirm"
+  | "new_pin_saving";
+
+interface PatientInfo {
+  id: string;
+  first_name: string;
+  last_name: string;
+  pb_client_id: string | null;
+}
+
+interface AppointmentInfo {
+  time: string | null;
+  practitioner: string | null;
+}
 
 export default function SignInKeypad() {
-  const [patientName, setPatientName] = useState("");
-  const [value, setValue] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [currentPin, setCurrentPin] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [screen, setScreen] = useState<Screen>("pin_entry");
+  const [pin, setPin] = useState("");
+  const [contact, setContact] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [patient, setPatient] = useState<PatientInfo | null>(null);
+  const [appointment, setAppointment] = useState<AppointmentInfo | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const handleClick = (num: string) => {
-    if (value.length < 4) {
-      const newValue = value + num;
-      setValue(newValue);
+  // --- Returning patient: PIN entry ---
 
-      // Show modal when exactly 4 digits are entered
-      if (newValue.length === 4) {
-        handlePinSubmit(newValue);
+  const handlePinDigit = (digit: string) => {
+    if (pin.length >= 4) return;
+    const next = pin + digit;
+    setPin(next);
+    if (next.length === 4) submitPin(next);
+  };
+
+  const handlePinBackspace = () => setPin((p) => p.slice(0, -1));
+  const handlePinClear = () => setPin("");
+
+  const submitPin = async (entered: string) => {
+    setScreen("verifying");
+    try {
+      const res = await fetch("/api/patients/lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: entered }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorMessage(
+          data.error ?? "PIN not recognized, please see the front desk"
+        );
+        setPin("");
+        setScreen("error");
+        return;
       }
+      setPatient(data);
+      await fetchAppointment(data.pb_client_id);
+      setIsModalOpen(true);
+      setScreen("confirmed");
+    } catch {
+      setErrorMessage("Something went wrong. Please see the front desk.");
+      setPin("");
+      setScreen("error");
     }
   };
 
-  const handleBackspace = () => {
-    setValue((prev) => prev.slice(0, -1));
+  const fetchAppointment = async (pb_client_id: string | null) => {
+    if (!pb_client_id) return;
+    try {
+      const res = await fetch(
+        `/api/appointments/today?pb_client_id=${encodeURIComponent(pb_client_id)}`
+      );
+      const data = await res.json();
+      setAppointment(data.appointment ?? null);
+    } catch {
+      setAppointment(null);
+    }
   };
 
-  const handleClear = () => {
-    setValue("");
-    setErrorMessage("");
+  // --- Check-in (called from modal confirm) ---
+
+  const handleConfirmCheckin = async () => {
+    if (!patient) return;
+    try {
+      await fetch("/api/checkins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          patient_id: patient.id,
+          appointment_time: appointment?.time ?? null,
+          practitioner: appointment?.practitioner ?? null,
+        }),
+      });
+    } catch {
+      // Non-fatal: check-in logging failure shouldn't block the patient
+    }
   };
 
   const handleModalClose = () => {
-    setPatientName("");
-    setCurrentPin("");
-    setErrorMessage("");
     setIsModalOpen(false);
+    setPin("");
+    setPatient(null);
+    setAppointment(null);
+    setErrorMessage("");
+    setScreen("pin_entry");
   };
 
-  const handlePinSubmit = async (pin: string) => {
-    setIsLoading(true);
-    setErrorMessage("");
+  const handleModalDeny = () => {
+    setIsModalOpen(false);
+    setPin("");
+    setPatient(null);
+    setAppointment(null);
+    setScreen("pin_entry");
+  };
+
+  // --- New patient: contact lookup ---
+
+  const handleContactSubmit = async () => {
+    if (!contact.trim()) return;
+    setScreen("new_contact_lookup");
     try {
-      const res = await fetch("/api/pin-signin", {
+      const res = await fetch("/api/patients/setup-pin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin, confirmed: false }),
+        body: JSON.stringify({ contact: contact.trim() }),
       });
-
       const data = await res.json();
-
-      if (res.ok) {
-        setPatientName(data.name);
-        setCurrentPin(pin);
-        setIsModalOpen(true);
-      } else {
-        setErrorMessage(data.error || "PIN not found.");
-        setIsModalOpen(true);
+      if (!res.ok) {
+        setErrorMessage(data.error ?? "Something went wrong.");
+        setScreen("error");
+        return;
       }
-    } catch (err) {
-      console.error("Submission failed:", err);
-      setErrorMessage("Something went wrong.");
-      setIsModalOpen(true);
-    } finally {
-      setIsLoading(false);
+      if (data.status === "not_found") {
+        setErrorMessage(
+          "We couldn't find your record. Please see the front desk to get started."
+        );
+        setScreen("error");
+      } else if (data.status === "has_pin") {
+        setErrorMessage(
+          "You already have a PIN. Please use it, or see the front desk."
+        );
+        setScreen("error");
+      } else {
+        setPatient({
+          id: data.patient_id,
+          first_name: data.first_name,
+          last_name: "",
+          pb_client_id: null,
+        });
+        setScreen("new_pin_create");
+      }
+    } catch {
+      setErrorMessage("Something went wrong. Please see the front desk.");
+      setScreen("error");
     }
   };
 
-  const handleConfirm = async () => {
+  // --- New patient: PIN creation ---
+
+  const handleNewPinDigit = (digit: string) => {
+    if (screen === "new_pin_create" && newPin.length < 4) {
+      const next = newPin + digit;
+      setNewPin(next);
+      if (next.length === 4) setScreen("new_pin_confirm");
+    } else if (screen === "new_pin_confirm" && confirmPin.length < 4) {
+      const next = confirmPin + digit;
+      setConfirmPin(next);
+      if (next.length === 4) submitNewPin(next);
+    }
+  };
+
+  const handleNewPinBackspace = () => {
+    if (screen === "new_pin_create") setNewPin((p) => p.slice(0, -1));
+    else if (screen === "new_pin_confirm") setConfirmPin((p) => p.slice(0, -1));
+  };
+
+  const handleNewPinClear = () => {
+    if (screen === "new_pin_create") setNewPin("");
+    else if (screen === "new_pin_confirm") setConfirmPin("");
+  };
+
+  const submitNewPin = async (entered: string) => {
+    if (entered !== newPin) {
+      setErrorMessage("PINs don't match. Let's try again.");
+      setNewPin("");
+      setConfirmPin("");
+      setScreen("new_pin_create");
+      return;
+    }
+    setScreen("new_pin_saving");
     try {
-      // Send confirmation to API
-      await fetch("/api/pin-signin", {
-        method: "POST",
+      const res = await fetch("/api/patients/setup-pin", {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: currentPin, confirmed: true }),
+        body: JSON.stringify({ patient_id: patient!.id, pin: entered }),
       });
-
-      setIsModalOpen(false);
-      setValue("");
-      setPatientName("");
-      setCurrentPin("");
-    } catch (err) {
-      console.error("Confirmation failed:", err);
-      alert("Something went wrong during confirmation.");
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorMessage(
+          data.error ?? "Failed to save PIN. Please see the front desk."
+        );
+        setScreen("error");
+        return;
+      }
+      const fullPatient: PatientInfo = data;
+      setPatient(fullPatient);
+      await fetchAppointment(fullPatient.pb_client_id);
+      setIsModalOpen(true);
+      setScreen("confirmed");
+    } catch {
+      setErrorMessage("Something went wrong. Please see the front desk.");
+      setScreen("error");
     }
   };
 
-  const handleDeny = () => {
-    setValue("");
+  // --- Reset ---
+
+  const reset = () => {
+    setScreen("pin_entry");
+    setPin("");
+    setContact("");
+    setNewPin("");
+    setConfirmPin("");
+    setPatient(null);
+    setAppointment(null);
+    setErrorMessage("");
     setIsModalOpen(false);
   };
+
+  // --- PIN display helper ---
+
+  const pinDots = (value: string) =>
+    Array.from({ length: 4 }, (_, i) => (
+      <div
+        key={i}
+        className={`w-6 h-6 rounded-full border-2 border-brand-foreground dark:border-white transition-colors ${
+          i < value.length ? "bg-[#2A9E8F]" : "bg-transparent"
+        }`}
+      />
+    ));
+
+  // --- Keypad ---
+
+  const currentPinValue =
+    screen === "new_pin_confirm"
+      ? confirmPin
+      : screen === "new_pin_create"
+        ? newPin
+        : pin;
+
+  const keypadDisabled = ![
+    "pin_entry",
+    "new_pin_create",
+    "new_pin_confirm",
+  ].includes(screen);
+
+  const Keypad = () => (
+    <motion.div layout className="grid grid-cols-3 gap-4 mb-4">
+      {["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map((num) => (
+        <button
+          key={num}
+          onClick={() =>
+            screen === "pin_entry"
+              ? handlePinDigit(num)
+              : handleNewPinDigit(num)
+          }
+          disabled={keypadDisabled || currentPinValue.length >= 4}
+          className="py-3 text-5xl bg-brand-background dark:bg-[var(--background)] hover:bg-brand-muted dark:hover:bg-gray-600 border border-brand-foreground dark:border-brand-background rounded-xl disabled:opacity-50 transition-colors"
+        >
+          {num}
+        </button>
+      ))}
+      <button
+        onClick={
+          screen === "pin_entry" ? handlePinBackspace : handleNewPinBackspace
+        }
+        disabled={keypadDisabled}
+        className="col-span-1 text-5xl bg-[#fcdf97] dark:bg-[#E9C46A] hover:bg-[#E9C46A] dark:hover:bg-[#e8b63c] border rounded-xl disabled:opacity-50 transition-colors"
+      >
+        ⌫
+      </button>
+      <button
+        onClick={screen === "pin_entry" ? handlePinClear : handleNewPinClear}
+        disabled={keypadDisabled}
+        className="col-span-1 py-3 text-2xl bg-red-300 dark:bg-red-400 hover:bg-red-400 dark:hover:bg-red-600 border rounded-xl disabled:opacity-50 transition-colors"
+      >
+        CLEAR
+      </button>
+    </motion.div>
+  );
 
   return (
     <div className="flex flex-col items-center justify-center gap-8">
-      <div className="text-2xl">
-        Enter your 4-digit PIN here to sign in for your appointment.
-      </div>
-      <motion.div
-        layout
-        className="w-full max-w-[380px] sm:max-w-[480px] p-4 rounded-lg shadow-lg bg-brand-background dark:bg-[var(--background)] border border-brand-foreground dark:border-white self-center"
-      >
-        {/* Display */}
-        <motion.div
-          layout
-          className="mb-4 p-3 text-xl sm:text-4xl text-right border border-brand-foreground dark:border-white rounded-lg bg-brand-background dark:bg-[var(--background)]"
-        >
-          {value || "ENTER YOUR PIN"}
-        </motion.div>
-
-        {/* Loading Animation */}
-        <AnimatePresence>
-          {isLoading && (
+      <AnimatePresence mode="wait">
+        {/* PIN entry — returning patient */}
+        {screen === "pin_entry" && (
+          <motion.div
+            key="pin_entry"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex flex-col items-center gap-8 w-full"
+          >
+            <p className="text-2xl text-center">
+              Enter your 4-digit PIN to sign in.
+            </p>
             <motion.div
               layout
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="flex items-center justify-center gap-3 mb-4 text-2xl overflow-hidden"
+              className="w-full max-w-[380px] sm:max-w-[480px] p-4 rounded-lg shadow-lg bg-brand-background dark:bg-[var(--background)] border border-brand-foreground dark:border-white"
             >
-              <motion.div
-                className="w-8 h-8 border-4 border-[#2A9E8F] border-t-transparent rounded-full"
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-              />
-              <span className="text-2xl">Verifying PIN...</span>
+              <div className="flex justify-center gap-4 mb-6 py-4">
+                {pinDots(pin)}
+              </div>
+              <Keypad />
             </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Keypad Grid */}
-        <motion.div layout className="grid grid-cols-3 gap-4 mb-4">
-          {["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map((num) => (
             <button
-              key={num}
-              onClick={() => handleClick(num)}
-              className="py-3 text-5xl sm:text-5xl bg-brand-background dark:bg-[var(--background)] hover:bg-brand-muted dark:hover:bg-gray-600 border border-brand-foreground dark:border-brand-background rounded-xl disabled:opacity-50"
-              disabled={value.length >= 4 || isLoading}
+              onClick={() => setScreen("new_contact")}
+              className="text-lg text-[#2A9E8F] underline underline-offset-2 hover:text-[#238B7E] transition-colors"
             >
-              {num}
+              First visit? Set up your PIN
             </button>
-          ))}
+          </motion.div>
+        )}
 
-          <button
-            onClick={handleBackspace}
-            className="col-span-1 text-5xl bg-[#fcdf97] dark:bg-[#E9C46A] hover:bg-[#E9C46A] dark:hover:bg-[#e8b63c] border border dark:border-white rounded-xl"
-            disabled={isLoading}
+        {/* Verifying / loading */}
+        {(screen === "verifying" ||
+          screen === "new_contact_lookup" ||
+          screen === "new_pin_saving") && (
+          <motion.div
+            key="loading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex flex-col items-center gap-4"
           >
-            ⌫
-          </button>
-          <button
-            onClick={handleClear}
-            className="col-span-1 py-3 text-2xl bg-red-300 dark:bg-red-400 hover:bg-red-400 dark:hover:bg-red-600 border border dark:border-white rounded-xl"
-            disabled={isLoading}
-          >
-            CLEAR
-          </button>
-        </motion.div>
-      </motion.div>
+            <motion.div
+              className="w-12 h-12 border-4 border-[#2A9E8F] border-t-transparent rounded-full"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            />
+            <p className="text-2xl">
+              {screen === "verifying"
+                ? "Verifying PIN..."
+                : screen === "new_pin_saving"
+                  ? "Setting up your PIN..."
+                  : "Looking you up..."}
+            </p>
+          </motion.div>
+        )}
 
-      {/* Confirmation Modal */}
+        {/* Error */}
+        {screen === "error" && (
+          <motion.div
+            key="error"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex flex-col items-center gap-6 max-w-sm text-center"
+          >
+            <p className="text-2xl text-red-600 dark:text-red-400">
+              {errorMessage}
+            </p>
+            <button
+              onClick={reset}
+              className="px-8 py-3 rounded-full bg-[#2A9E8F] text-white text-xl hover:bg-[#238B7E] transition-colors"
+            >
+              Try Again
+            </button>
+          </motion.div>
+        )}
+
+        {/* New patient: contact entry */}
+        {screen === "new_contact" && (
+          <motion.div
+            key="new_contact"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex flex-col items-center gap-6 w-full max-w-sm"
+          >
+            <p className="text-2xl text-center">
+              Enter your phone number or email.
+            </p>
+            <input
+              type="text"
+              value={contact}
+              onChange={(e) => setContact(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleContactSubmit()}
+              placeholder="555-123-4567 or email"
+              className="w-full px-4 py-3 border border-brand-foreground rounded-lg text-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-[#2A9E8F]"
+              autoFocus
+            />
+            <div className="flex gap-4 w-full">
+              <button
+                onClick={reset}
+                className="flex-1 py-3 rounded-full border border-brand-foreground text-xl hover:bg-brand-muted transition-colors"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleContactSubmit}
+                disabled={!contact.trim()}
+                className="flex-1 py-3 rounded-full bg-[#2A9E8F] text-white text-xl hover:bg-[#238B7E] disabled:opacity-50 transition-colors"
+              >
+                Continue
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* New patient: PIN creation */}
+        {(screen === "new_pin_create" || screen === "new_pin_confirm") && (
+          <motion.div
+            key="new_pin"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex flex-col items-center gap-6 w-full"
+          >
+            <p className="text-2xl text-center">
+              {screen === "new_pin_create"
+                ? `Hi ${patient?.first_name}! Choose a 4-digit PIN.`
+                : "Re-enter your PIN to confirm."}
+            </p>
+            <motion.div
+              layout
+              className="w-full max-w-[380px] sm:max-w-[480px] p-4 rounded-lg shadow-lg bg-brand-background dark:bg-[var(--background)] border border-brand-foreground dark:border-white"
+            >
+              <div className="flex justify-center gap-4 mb-6 py-4">
+                {pinDots(currentPinValue)}
+              </div>
+              <Keypad />
+            </motion.div>
+            <button
+              onClick={() => {
+                if (screen === "new_pin_confirm") {
+                  setConfirmPin("");
+                  setScreen("new_pin_create");
+                } else {
+                  reset();
+                }
+              }}
+              className="text-lg text-gray-500 underline underline-offset-2 hover:text-gray-700 transition-colors"
+            >
+              {screen === "new_pin_confirm" ? "Back" : "Cancel"}
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <ConfirmationModal
         isOpen={isModalOpen}
         onClose={handleModalClose}
-        onConfirm={handleConfirm}
-        onDeny={handleDeny}
-        name={patientName}
-        errorMessage={errorMessage}
+        onConfirm={handleConfirmCheckin}
+        onDeny={handleModalDeny}
+        firstName={patient?.first_name ?? ""}
+        lastName={patient?.last_name ?? ""}
+        appointmentTime={appointment?.time ?? null}
+        practitioner={appointment?.practitioner ?? null}
       />
     </div>
   );

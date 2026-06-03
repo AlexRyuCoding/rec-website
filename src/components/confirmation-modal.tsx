@@ -76,7 +76,9 @@ export default function ConfirmationModal({
       >
         <div className="text-center mb-10">
           {errorMessage ? (
-            <p className="text-2xl text-red-600 dark:text-red-400">{errorMessage}</p>
+            <p className="text-2xl text-red-600 dark:text-red-400">
+              {errorMessage}
+            </p>
           ) : showSuccess ? (
             <p className="text-4xl">
               Thank you, <strong>{firstName}</strong>!

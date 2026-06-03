@@ -16,7 +16,10 @@ export async function POST(req: Request) {
   });
 
   if (error) {
-    return NextResponse.json({ error: "Failed to log check-in" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to log check-in" },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ success: true });

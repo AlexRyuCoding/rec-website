@@ -25,7 +25,10 @@ export async function GET(req: Request) {
   const pb_client_id = searchParams.get("pb_client_id");
 
   if (!pb_client_id) {
-    return NextResponse.json({ error: "pb_client_id required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "pb_client_id required" },
+      { status: 400 }
+    );
   }
 
   try {
@@ -45,8 +48,9 @@ export async function GET(req: Request) {
     const data = await res.json();
     // Practice Better returns { data: [...] } or { appointments: [...] }
     // Adjust the key below once you verify with a real response.
-    const appointments: Array<Record<string, unknown>> =
-      (data.data ?? data.appointments ?? []) as Array<Record<string, unknown>>;
+    const appointments: Array<Record<string, unknown>> = (data.data ??
+      data.appointments ??
+      []) as Array<Record<string, unknown>>;
 
     if (appointments.length === 0) {
       return NextResponse.json({ appointment: null });
@@ -54,8 +58,13 @@ export async function GET(req: Request) {
 
     const appt = appointments[0];
     // Adjust field names below to match actual PB API response.
-    const startRaw = (appt.start_time ?? appt.start ?? appt.starts_at ?? "") as string;
-    const practitioner = (appt.staff ?? appt.practitioner) as Record<string, string> | undefined;
+    const startRaw = (appt.start_time ??
+      appt.start ??
+      appt.starts_at ??
+      "") as string;
+    const practitioner = (appt.staff ?? appt.practitioner) as
+      | Record<string, string>
+      | undefined;
     const practitionerName = practitioner
       ? `${practitioner.first_name ?? ""} ${practitioner.last_name ?? ""}`.trim()
       : null;

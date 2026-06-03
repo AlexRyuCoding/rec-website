@@ -10,21 +10,25 @@ export async function POST(req: Request) {
   const { contact } = await req.json();
 
   if (!contact || contact.trim().length < 3) {
-    return NextResponse.json({ error: "Enter a valid phone number or email" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Enter a valid phone number or email" },
+      { status: 400 }
+    );
   }
 
   const supabase = createServiceClient();
   const normalized = normalizePhone(contact.trim());
   const isPhone = /^\d{7,15}$/.test(normalized);
 
-  let query = supabase
+  const query = supabase
     .from("patients")
     .select("id, first_name, last_name, phone, pin, pb_client_id");
 
   if (isPhone) {
     // Fetch all and filter by normalized phone — Supabase doesn't support inline transforms
     const { data: patients, error } = await query;
-    if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
+    if (error)
+      return NextResponse.json({ error: "Database error" }, { status: 500 });
 
     const patient = (patients ?? []).find(
       (p) => normalizePhone(p.phone ?? "") === normalized
@@ -36,11 +40,19 @@ export async function POST(req: Request) {
     if (patient.pin) {
       return NextResponse.json({ status: "has_pin" });
     }
-    return NextResponse.json({ status: "ok", patient_id: patient.id, first_name: patient.first_name });
+    return NextResponse.json({
+      status: "ok",
+      patient_id: patient.id,
+      first_name: patient.first_name,
+    });
   } else {
     // Email lookup
-    const { data: patients, error } = await query.eq("email", contact.trim().toLowerCase());
-    if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
+    const { data: patients, error } = await query.eq(
+      "email",
+      contact.trim().toLowerCase()
+    );
+    if (error)
+      return NextResponse.json({ error: "Database error" }, { status: 500 });
 
     if (!patients || patients.length === 0) {
       return NextResponse.json({ status: "not_found" });
@@ -49,7 +61,11 @@ export async function POST(req: Request) {
     if (patient.pin) {
       return NextResponse.json({ status: "has_pin" });
     }
-    return NextResponse.json({ status: "ok", patient_id: patient.id, first_name: patient.first_name });
+    return NextResponse.json({
+      status: "ok",
+      patient_id: patient.id,
+      first_name: patient.first_name,
+    });
   }
 }
 
@@ -57,7 +73,10 @@ export async function PATCH(req: Request) {
   const { patient_id, pin } = await req.json();
 
   if (!patient_id || !pin || !/^\d{4}$/.test(pin)) {
-    return NextResponse.json({ error: "patient_id and 4-digit pin required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "patient_id and 4-digit pin required" },
+      { status: 400 }
+    );
   }
 
   const hashed = await bcrypt.hash(pin, 8);

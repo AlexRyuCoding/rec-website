@@ -6,7 +6,10 @@ export async function POST(req: Request) {
   const { pin } = await req.json();
 
   if (!pin || !/^\d{4}$/.test(pin)) {
-    return NextResponse.json({ error: "PIN must be exactly 4 digits" }, { status: 400 });
+    return NextResponse.json(
+      { error: "PIN must be exactly 4 digits" },
+      { status: 400 }
+    );
   }
 
   const supabase = createServiceClient();
