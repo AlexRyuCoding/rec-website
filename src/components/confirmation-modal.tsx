@@ -55,7 +55,9 @@ export default function ConfirmationModal({
     setTimeout(onConfirm, 3000);
   };
 
-  const displayName = `${firstName} ${lastName.charAt(0)}.`;
+  const displayName = lastName
+    ? `${firstName} ${lastName.charAt(0)}.`
+    : firstName;
 
   return (
     <div

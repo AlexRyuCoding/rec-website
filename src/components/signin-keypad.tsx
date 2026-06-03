@@ -449,6 +449,7 @@ export default function SignInKeypad() {
             <button
               onClick={() => {
                 if (screen === "new_pin_confirm") {
+                  setNewPin("");
                   setConfirmPin("");
                   setScreen("new_pin_create");
                 } else {
