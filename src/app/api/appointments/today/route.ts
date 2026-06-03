@@ -3,6 +3,9 @@ import { NextResponse } from "next/server";
 const PB_BASE = "https://api.practicebetter.io/v1";
 
 async function getPbToken(): Promise<string> {
+  if (!process.env.PB_CLIENT_ID || !process.env.PB_CLIENT_SECRET) {
+    throw new Error("PB credentials not configured");
+  }
   const res = await fetch(`${PB_BASE}/oauth/token`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -35,6 +38,7 @@ export async function GET(req: Request) {
     );
 
     if (!res.ok) {
+      console.error("PB appointments fetch failed:", res.status);
       return NextResponse.json({ appointment: null });
     }
 
@@ -51,8 +55,7 @@ export async function GET(req: Request) {
     const appt = appointments[0];
     // Adjust field names below to match actual PB API response.
     const startRaw = (appt.start_time ?? appt.start ?? appt.starts_at ?? "") as string;
-    const practitioner = appt.staff as Record<string, string> | undefined
-      ?? appt.practitioner as Record<string, string> | undefined;
+    const practitioner = (appt.staff ?? appt.practitioner) as Record<string, string> | undefined;
     const practitionerName = practitioner
       ? `${practitioner.first_name ?? ""} ${practitioner.last_name ?? ""}`.trim()
       : null;
