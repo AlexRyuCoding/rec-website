@@ -79,8 +79,29 @@ export async function PATCH(req: Request) {
     );
   }
 
-  const hashed = await bcrypt.hash(pin, 8);
   const supabase = createServiceClient();
+
+  // PIN lookup is by PIN alone, so each PIN must map to exactly one patient
+  const { data: existing, error: pinFetchError } = await supabase
+    .from("patients")
+    .select("id, pin")
+    .not("pin", "is", null)
+    .neq("id", patient_id);
+
+  if (pinFetchError) {
+    return NextResponse.json({ error: "Database error" }, { status: 500 });
+  }
+
+  for (const other of existing ?? []) {
+    if (await bcrypt.compare(pin, other.pin!)) {
+      return NextResponse.json(
+        { error: "That PIN is already taken — please choose a different one." },
+        { status: 409 }
+      );
+    }
+  }
+
+  const hashed = await bcrypt.hash(pin, 8);
 
   const { data: patient, error } = await supabase
     .from("patients")
