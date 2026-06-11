@@ -162,6 +162,7 @@ export default function SignInKeypad() {
           last_name: "",
           pb_client_id: null,
         });
+        setErrorMessage("");
         setScreen("new_pin_create");
       }
     } catch {
@@ -174,6 +175,7 @@ export default function SignInKeypad() {
 
   const handleNewPinDigit = (digit: string) => {
     if (screen === "new_pin_create" && newPin.length < 4) {
+      if (newPin.length === 0) setErrorMessage("");
       const next = newPin + digit;
       setNewPin(next);
       if (next.length === 4) setScreen("new_pin_confirm");
@@ -211,6 +213,16 @@ export default function SignInKeypad() {
       });
       const data = await res.json();
       if (!res.ok) {
+        if (res.status === 409) {
+          setErrorMessage(
+            data.error ??
+              "That PIN is already taken — please choose a different one."
+          );
+          setNewPin("");
+          setConfirmPin("");
+          setScreen("new_pin_create");
+          return;
+        }
         setErrorMessage(
           data.error ?? "Failed to save PIN. Please see the front desk."
         );
@@ -437,6 +449,11 @@ export default function SignInKeypad() {
                 ? `Hi ${patient?.first_name}! Choose a 4-digit PIN.`
                 : "Re-enter your PIN to confirm."}
             </p>
+            {errorMessage && screen === "new_pin_create" && (
+              <p className="text-lg text-red-600 dark:text-red-400 text-center max-w-sm">
+                {errorMessage}
+              </p>
+            )}
             <motion.div
               layout
               className="w-full max-w-[380px] sm:max-w-[480px] p-4 rounded-lg shadow-lg bg-brand-background dark:bg-[var(--background)] border border-brand-foreground dark:border-white"
