@@ -88,10 +88,10 @@ async function main() {
     try {
       await upsertPatient(supabaseUrl, serviceKey, {
         pb_client_id: client.id,
-        first_name: client.first_name ?? "",
-        last_name: client.last_name ?? "",
-        email: client.email ?? null,
-        phone: client.phone ?? null,
+        first_name: client.profile?.firstName ?? "",
+        last_name: client.profile?.lastName ?? "",
+        email: client.profile?.emailAddress ?? null,
+        phone: client.profile?.mobilePhone ?? client.profile?.homePhone ?? null,
       });
       upserted++;
     } catch (err) {
