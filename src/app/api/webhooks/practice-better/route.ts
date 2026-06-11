@@ -82,9 +82,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  const eventType = (event.eventType ??
-    event.event_type ??
-    event.type) as string | undefined;
+  const eventType = (event.eventType ?? event.event_type ?? event.type) as
+    | string
+    | undefined;
   if (eventType !== "client.record.created") {
     return NextResponse.json({ received: true });
   }
@@ -108,8 +108,7 @@ export async function POST(req: Request) {
         first_name: record.profile?.firstName ?? "",
         last_name: record.profile?.lastName ?? "",
         email: record.profile?.emailAddress ?? null,
-        phone:
-          record.profile?.mobilePhone ?? record.profile?.homePhone ?? null,
+        phone: record.profile?.mobilePhone ?? record.profile?.homePhone ?? null,
       },
       { onConflict: "pb_client_id" }
     );
