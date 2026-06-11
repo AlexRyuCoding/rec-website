@@ -1,18 +1,20 @@
 import { NextResponse } from "next/server";
 
-const PB_BASE = "https://api.practicebetter.io/v1";
+const PB_BASE = "https://api.practicebetter.io";
+const PB_AUTH_BASE = "https://api.practicebetter.io";
 
 async function getPbToken(): Promise<string> {
   if (!process.env.PB_CLIENT_ID || !process.env.PB_CLIENT_SECRET) {
     throw new Error("PB credentials not configured");
   }
-  const res = await fetch(`${PB_BASE}/oauth/token`, {
+  const res = await fetch(`${PB_AUTH_BASE}/oauth2/token`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
       grant_type: "client_credentials",
-      client_id: process.env.PB_CLIENT_ID,
-      client_secret: process.env.PB_CLIENT_SECRET,
+      client_id: process.env.PB_CLIENT_ID!,
+      client_secret: process.env.PB_CLIENT_SECRET!,
+      scope: "read",
     }),
   });
   if (!res.ok) throw new Error("Failed to get Practice Better token");
