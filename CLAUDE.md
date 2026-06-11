@@ -22,6 +22,8 @@ throughout the day unassisted.
 - SUPABASE_SERVICE_ROLE_KEY=
 - PB_CLIENT_ID=
 - PB_CLIENT_SECRET=
+- PB_WEBHOOK_VERIFICATION_TOKEN= (self-generated; validates the one-time webhook handshake)
+- PB_WEBHOOK_SIGNING_SECRET= (issued by PB at subscription creation; HMAC key for event POSTs)
 - ADMIN_KIOSK_PASSWORD=
 
 ## Route Structure
@@ -32,6 +34,7 @@ throughout the day unassisted.
 - /api/patients/setup-pin — creates PIN for new patient
 - /api/appointments/today — fetches today's appointment from Practice Better
 - /api/checkins — writes check-in record to Supabase
+- /api/webhooks/practice-better — PB webhook: GET = verification handshake, POST = signed client.record.created events → upsert patient into Supabase
 
 ## Middleware
 
@@ -79,10 +82,18 @@ On success, set a secure httpOnly session cookie and redirect to the kiosk.
 ### scripts/sync-patients.js
 
 - Authenticates with Practice Better API
-- Fetches all clients (GET /v1/clients)
+- Fetches all client records (GET /consultant/records, paginated)
 - Upserts into Supabase patients table using pb_client_id as the unique key
 - Run manually from terminal: node scripts/sync-patients.js
 - Safe to re-run — upsert won't duplicate records
+
+### scripts/setup-pb-webhook.js
+
+- One-time: registers the PB webhook subscription for client.record.created
+- Requires PB_WEBHOOK_VERIFICATION_TOKEN set locally AND deployed first
+- Prints the signing secret once — store as PB_WEBHOOK_SIGNING_SECRET
+- Run: node scripts/setup-pb-webhook.js [endpointUrl]
+  (default endpoint: https://www.ryuacupuncture.com/api/webhooks/practice-better)
 
 ## Page UI — /admin/patient-signin
 
