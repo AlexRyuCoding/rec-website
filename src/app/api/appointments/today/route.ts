@@ -1,25 +1,12 @@
 import { NextResponse } from "next/server";
+import { PB_BASE, getPbToken } from "@/lib/practice-better";
 
-const PB_BASE = "https://api.practicebetter.io";
-const PB_AUTH_BASE = "https://api.practicebetter.io";
-
-async function getPbToken(): Promise<string> {
-  if (!process.env.PB_CLIENT_ID || !process.env.PB_CLIENT_SECRET) {
-    throw new Error("PB credentials not configured");
-  }
-  const res = await fetch(`${PB_AUTH_BASE}/oauth2/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "client_credentials",
-      client_id: process.env.PB_CLIENT_ID!,
-      client_secret: process.env.PB_CLIENT_SECRET!,
-      scope: "read",
-    }),
-  });
-  if (!res.ok) throw new Error("Failed to get Practice Better token");
-  const data = await res.json();
-  return data.access_token as string;
+interface PbSession {
+  sessionDate?: string;
+  cancelled?: boolean;
+  consultant?: {
+    profile?: { firstName?: string; lastName?: string };
+  };
 }
 
 export async function GET(req: Request) {
@@ -35,49 +22,47 @@ export async function GET(req: Request) {
 
   try {
     const token = await getPbToken();
-    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    // Clinic-local date — server may run in UTC
+    const today = new Date().toLocaleDateString("en-CA", {
+      timeZone: "America/Los_Angeles",
+    });
 
-    const res = await fetch(
-      `${PB_BASE}/appointments?client_id=${encodeURIComponent(pb_client_id)}&date=${today}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+    const params = new URLSearchParams({
+      records: pb_client_id,
+      date_eq: today,
+    });
+    const res = await fetch(`${PB_BASE}/consultant/sessions?${params}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
     if (!res.ok) {
-      console.error("PB appointments fetch failed:", res.status);
+      console.error("PB sessions fetch failed:", res.status);
       return NextResponse.json({ appointment: null });
     }
 
     const data = await res.json();
-    // Practice Better returns { data: [...] } or { appointments: [...] }
-    // Adjust the key below once you verify with a real response.
-    const appointments: Array<Record<string, unknown>> = (data.data ??
-      data.appointments ??
-      []) as Array<Record<string, unknown>>;
+    const sessions = ((data.items ?? []) as PbSession[])
+      .filter((s) => !s.cancelled && s.sessionDate)
+      .sort((a, b) => a.sessionDate!.localeCompare(b.sessionDate!));
 
-    if (appointments.length === 0) {
+    if (sessions.length === 0) {
       return NextResponse.json({ appointment: null });
     }
 
-    const appt = appointments[0];
-    // Adjust field names below to match actual PB API response.
-    const startRaw = (appt.start_time ??
-      appt.start ??
-      appt.starts_at ??
-      "") as string;
-    const practitioner = (appt.staff ?? appt.practitioner) as
-      | Record<string, string>
-      | undefined;
-    const practitionerName = practitioner
-      ? `${practitioner.first_name ?? ""} ${practitioner.last_name ?? ""}`.trim()
+    const appt = sessions[0];
+    const profile = appt.consultant?.profile;
+    const practitionerName = profile
+      ? `${profile.firstName ?? ""} ${profile.lastName ?? ""}`.trim() || null
       : null;
 
-    const appointmentTime = startRaw
-      ? new Date(startRaw).toLocaleTimeString("en-US", {
-          hour: "numeric",
-          minute: "2-digit",
-          timeZone: "America/Los_Angeles",
-        })
-      : null;
+    const appointmentTime = new Date(appt.sessionDate!).toLocaleTimeString(
+      "en-US",
+      {
+        hour: "numeric",
+        minute: "2-digit",
+        timeZone: "America/Los_Angeles",
+      }
+    );
 
     return NextResponse.json({
       appointment: {
