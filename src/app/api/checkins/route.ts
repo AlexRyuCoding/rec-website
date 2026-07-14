@@ -14,6 +14,28 @@ export async function POST(req: Request) {
   }
 
   const supabase = createServiceClient();
+
+  // Double-tap / re-entered-PIN guard: one check-in per patient per
+  // 4-hour window keeps the log truthful without blocking a genuine
+  // morning + afternoon double visit.
+  const since = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
+  const { data: recent, error: dupError } = await supabase
+    .from("checkins")
+    .select("id")
+    .eq("patient_id", patient_id)
+    .gte("checked_in_at", since)
+    .limit(1);
+
+  if (dupError) {
+    return NextResponse.json(
+      { error: "Failed to log check-in" },
+      { status: 500 }
+    );
+  }
+  if (recent && recent.length > 0) {
+    return NextResponse.json({ success: true, duplicate: true });
+  }
+
   const { error } = await supabase.from("checkins").insert({
     patient_id,
     appointment_time: appointment_time ?? null,
@@ -27,5 +49,5 @@ export async function POST(req: Request) {
     );
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, duplicate: false });
 }

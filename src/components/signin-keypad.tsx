@@ -1,7 +1,7 @@
 // src/components/signin-keypad.tsx
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import ConfirmationModal from "./confirmation-modal";
 
@@ -108,8 +108,10 @@ export default function SignInKeypad() {
 
   // --- Check-in (called from modal confirm) ---
 
-  const handleConfirmCheckin = async (): Promise<boolean> => {
-    if (!patient) return false;
+  const handleConfirmCheckin = async (): Promise<
+    "ok" | "duplicate" | "error"
+  > => {
+    if (!patient) return "error";
     try {
       const res = await fetch("/api/checkins", {
         method: "POST",
@@ -120,9 +122,11 @@ export default function SignInKeypad() {
           practitioner: appointment?.practitioner ?? null,
         }),
       });
-      return res.ok;
+      if (!res.ok) return "error";
+      const data = await res.json();
+      return data.duplicate ? "duplicate" : "ok";
     } catch {
-      return false;
+      return "error";
     }
   };
 
@@ -289,6 +293,31 @@ export default function SignInKeypad() {
     setErrorMessage("");
     setIsModalOpen(false);
   };
+
+  // Idle reset: an abandoned mid-flow session leaves patient info on
+  // screen for the next person, so return to the PIN pad after 60s of no
+  // interaction. reset() only calls stable setState functions, so
+  // mounting this once is safe.
+  useEffect(() => {
+    const IDLE_MS = 60_000;
+    let lastActivity = Date.now();
+    const bump = () => {
+      lastActivity = Date.now();
+    };
+    const events = ["pointerdown", "keydown", "touchstart"] as const;
+    events.forEach((e) => window.addEventListener(e, bump));
+    const interval = setInterval(() => {
+      if (Date.now() - lastActivity >= IDLE_MS) {
+        lastActivity = Date.now();
+        reset();
+      }
+    }, 5000);
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, bump));
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // --- PIN display helper ---
 

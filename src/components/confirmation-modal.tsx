@@ -6,8 +6,8 @@ import { useEffect, useState } from "react";
 interface ConfirmationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  // Performs the check-in; resolves true when it was recorded.
-  onConfirm: () => Promise<boolean>;
+  // Performs the check-in. "duplicate" = already checked in recently.
+  onConfirm: () => Promise<"ok" | "duplicate" | "error">;
   onDeny: () => void;
   firstName: string;
   lastName: string;
@@ -26,6 +26,7 @@ export default function ConfirmationModal({
   practitioner,
 }: ConfirmationModalProps) {
   const [showSuccess, setShowSuccess] = useState(false);
+  const [wasDuplicate, setWasDuplicate] = useState(false);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
@@ -34,6 +35,7 @@ export default function ConfirmationModal({
     if (isOpen) {
       setIsVisible(true);
       setShowSuccess(false);
+      setWasDuplicate(false);
       setSaving(false);
       setFailed(false);
     } else {
@@ -56,12 +58,13 @@ export default function ConfirmationModal({
 
   const handleConfirm = async () => {
     setSaving(true);
-    const ok = await onConfirm();
+    const result = await onConfirm();
     setSaving(false);
-    if (ok) {
-      setShowSuccess(true);
-    } else {
+    if (result === "error") {
       setFailed(true);
+    } else {
+      setWasDuplicate(result === "duplicate");
+      setShowSuccess(true);
     }
   };
 
@@ -93,10 +96,21 @@ export default function ConfirmationModal({
             </p>
           ) : showSuccess ? (
             <p className="text-4xl">
-              Thank you, <strong>{firstName}</strong>!
-              <br />
-              <br />
-              You&apos;re checked in.
+              {wasDuplicate ? (
+                <>
+                  You&apos;re already checked in, <strong>{firstName}</strong>!
+                  <br />
+                  <br />
+                  Please have a seat.
+                </>
+              ) : (
+                <>
+                  Thank you, <strong>{firstName}</strong>!
+                  <br />
+                  <br />
+                  You&apos;re checked in.
+                </>
+              )}
             </p>
           ) : firstName ? (
             <>
