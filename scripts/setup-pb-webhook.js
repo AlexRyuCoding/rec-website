@@ -54,7 +54,7 @@ async function main() {
     },
     body: JSON.stringify({
       endpointUrl: ENDPOINT_URL,
-      eventTypes: ["client.record.created"],
+      eventTypes: ["client.record.created", "client.record.updated"],
       verificationToken,
       description: "ryuacupuncture.com kiosk patient sync",
     }),

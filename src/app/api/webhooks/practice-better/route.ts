@@ -85,7 +85,12 @@ export async function POST(req: Request) {
   const eventType = (event.eventType ?? event.event_type ?? event.type) as
     | string
     | undefined;
-  if (eventType !== "client.record.created") {
+  // created: new patient → insert. updated: contact info corrected in PB
+  // (the source of truth) → refresh our copy. Both are the same upsert.
+  if (
+    eventType !== "client.record.created" &&
+    eventType !== "client.record.updated"
+  ) {
     return NextResponse.json({ received: true });
   }
 
