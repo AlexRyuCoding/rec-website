@@ -140,8 +140,10 @@ policies on both tables; all access goes through the service-role key.
     share contact info, esp. in the legacy PB import). Resolution: zero
     matches → "see the front desk"; all matches have PINs → "you already
     have a PIN"; exactly one match without a PIN → proceed with that
-    patient; several without PINs → "shared contact info, see the front
-    desk" (never guess which family member it is)
+    patient; several without PINs → "Select your name to set up your PIN"
+    screen listing each PIN-less match as first name + last INITIAL (never
+    full last name); tapping a name proceeds to PIN creation for that
+    patient. Patients who already have a PIN are never listed.
 - Step 2: Enter a 4-digit PIN (twice to confirm)
 - On success: hash with bcrypt, save to patients table, proceed to
   appointment confirmation as a normal check-in

@@ -10,14 +10,16 @@ function normalizePhone(raw: string): string {
 interface ContactMatch {
   id: string;
   first_name: string;
+  last_name: string | null;
   pin: string | null;
 }
 
 // Emails and phones are shared within families, so a contact can match
 // several patients. Setting up a PIN only applies to patients without one:
-// if exactly one match has no PIN, that's who's standing at the kiosk.
-// Zero without a PIN → they all have PINs. More than one → can't safely
-// guess which family member this is.
+// exactly one match without a PIN → that's who's standing at the kiosk.
+// Several without PINs → return them as name options (first name + last
+// initial only) and let the patient pick themselves. Patients who already
+// have a PIN are never offered as options.
 function resolveMatches(matches: ContactMatch[]) {
   if (matches.length === 0) {
     return NextResponse.json({ status: "not_found" });
@@ -27,7 +29,14 @@ function resolveMatches(matches: ContactMatch[]) {
     return NextResponse.json({ status: "has_pin" });
   }
   if (withoutPin.length > 1) {
-    return NextResponse.json({ status: "ambiguous" });
+    return NextResponse.json({
+      status: "select",
+      options: withoutPin.map((p) => ({
+        patient_id: p.id,
+        first_name: p.first_name,
+        last_initial: (p.last_name ?? "").charAt(0),
+      })),
+    });
   }
   return NextResponse.json({
     status: "ok",
@@ -54,7 +63,9 @@ export async function POST(req: Request) {
   const normalized = normalizePhone(contact.trim());
   const isPhone = /^\d{7,15}$/.test(normalized);
 
-  const query = supabase.from("patients").select("id, first_name, phone, pin");
+  const query = supabase
+    .from("patients")
+    .select("id, first_name, last_name, pin");
 
   if (isPhone) {
     // phone_digits is a generated normalized column — exact indexed match

@@ -12,9 +12,16 @@ type Screen =
   | "error"
   | "new_contact"
   | "new_contact_lookup"
+  | "new_select_name"
   | "new_pin_create"
   | "new_pin_confirm"
   | "new_pin_saving";
+
+interface NameOption {
+  patient_id: string;
+  first_name: string;
+  last_initial: string;
+}
 
 interface PatientInfo {
   id: string;
@@ -35,6 +42,7 @@ export default function SignInKeypad() {
   const [newPin, setNewPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
   const [patient, setPatient] = useState<PatientInfo | null>(null);
+  const [nameOptions, setNameOptions] = useState<NameOption[]>([]);
   const [appointment, setAppointment] = useState<AppointmentInfo | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -163,11 +171,10 @@ export default function SignInKeypad() {
           "You already have a PIN. Please use it, or see the front desk."
         );
         setScreen("error");
-      } else if (data.status === "ambiguous") {
-        setErrorMessage(
-          "That contact info is shared by more than one patient. Please see the front desk to set up your PIN."
-        );
-        setScreen("error");
+      } else if (data.status === "select") {
+        setNameOptions(data.options ?? []);
+        setErrorMessage("");
+        setScreen("new_select_name");
       } else {
         setPatient({
           id: data.patient_id,
@@ -182,6 +189,20 @@ export default function SignInKeypad() {
       setErrorMessage("Something went wrong. Please see the front desk.");
       setScreen("error");
     }
+  };
+
+  // --- New patient: pick your name (shared family contact) ---
+
+  const handleNameSelect = (option: NameOption) => {
+    setPatient({
+      id: option.patient_id,
+      first_name: option.first_name,
+      last_name: option.last_initial,
+      pb_client_id: null,
+    });
+    setNameOptions([]);
+    setErrorMessage("");
+    setScreen("new_pin_create");
   };
 
   // --- New patient: PIN creation ---
@@ -263,6 +284,7 @@ export default function SignInKeypad() {
     setNewPin("");
     setConfirmPin("");
     setPatient(null);
+    setNameOptions([]);
     setAppointment(null);
     setErrorMessage("");
     setIsModalOpen(false);
@@ -446,6 +468,39 @@ export default function SignInKeypad() {
                 Continue
               </button>
             </div>
+          </motion.div>
+        )}
+
+        {/* New patient: shared contact — pick your name */}
+        {screen === "new_select_name" && (
+          <motion.div
+            key="new_select_name"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex flex-col items-center gap-6 w-full max-w-sm"
+          >
+            <p className="text-2xl text-center">
+              Select your name to set up your PIN.
+            </p>
+            <div className="flex flex-col gap-4 w-full">
+              {nameOptions.map((option) => (
+                <button
+                  key={option.patient_id}
+                  onClick={() => handleNameSelect(option)}
+                  className="py-4 px-6 rounded-xl border border-brand-foreground text-2xl bg-brand-background dark:bg-[var(--background)] hover:bg-brand-muted dark:hover:bg-gray-600 transition-colors"
+                >
+                  {option.first_name}
+                  {option.last_initial ? ` ${option.last_initial}.` : ""}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={reset}
+              className="text-lg text-gray-500 underline underline-offset-2 hover:text-gray-700 transition-colors"
+            >
+              Cancel
+            </button>
           </motion.div>
         )}
 
