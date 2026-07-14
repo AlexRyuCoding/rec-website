@@ -74,6 +74,7 @@ policies on both tables; all access goes through the service-role key.
 | phone        | string    |                           |
 | pin          | string    | bcrypt hashed, nullable   |
 | pb_client_id | string    | Practice Better client ID |
+| phone_digits | string    | generated: phone stripped to digits; indexed for kiosk lookup |
 | created_at   | timestamp | auto                      |
 
 ### checkins table

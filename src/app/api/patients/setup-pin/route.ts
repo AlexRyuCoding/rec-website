@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { createServiceClient } from "@/lib/supabase";
+import { createServiceClient, fetchAllPatientsWithPins } from "@/lib/supabase";
 import { isAdminAuthorized } from "@/lib/admin-auth";
 
 function normalizePhone(raw: string): string {
@@ -57,16 +57,15 @@ export async function POST(req: Request) {
   const query = supabase.from("patients").select("id, first_name, phone, pin");
 
   if (isPhone) {
-    // Fetch all and filter by normalized phone — Supabase doesn't support inline transforms
-    const { data: patients, error } = await query;
+    // phone_digits is a generated normalized column — exact indexed match
+    const { data: patients, error } = await query.eq(
+      "phone_digits",
+      normalized
+    );
     if (error)
       return NextResponse.json({ error: "Database error" }, { status: 500 });
 
-    return resolveMatches(
-      (patients ?? []).filter(
-        (p) => normalizePhone(p.phone ?? "") === normalized
-      )
-    );
+    return resolveMatches(patients ?? []);
   } else {
     const { data: patients, error } = await query.eq(
       "email",
@@ -120,18 +119,17 @@ export async function PATCH(req: Request) {
   }
 
   // PIN lookup is by PIN alone, so each PIN must map to exactly one patient
-  const { data: existing, error: pinFetchError } = await supabase
-    .from("patients")
-    .select("id, pin")
-    .not("pin", "is", null)
-    .neq("id", patient_id);
-
-  if (pinFetchError) {
+  let existing;
+  try {
+    existing = (await fetchAllPatientsWithPins(supabase)).filter(
+      (p) => p.id !== patient_id
+    );
+  } catch {
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
 
-  for (const other of existing ?? []) {
-    if (await bcrypt.compare(pin, other.pin!)) {
+  for (const other of existing) {
+    if (await bcrypt.compare(pin, other.pin)) {
       return NextResponse.json(
         { error: "That PIN is already taken — please choose a different one." },
         { status: 409 }
