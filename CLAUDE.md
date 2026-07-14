@@ -28,16 +28,24 @@ throughout the day unassisted.
 - NEXTAUTH_URL= (http://localhost:3000 in dev; https://www.ryuacupuncture.com in prod)
 - GOOGLE_CLIENT_ID= / GOOGLE_CLIENT_SECRET= (Google Cloud OAuth client)
 - ALLOWED_ADMIN_EMAILS= (comma-separated staff Google accounts allowed to unlock the kiosk)
+- CRON_SECRET= (self-generated; auths the daily Vercel Cron keepalive ping)
 
 ## Route Structure
 
 - /admin/patient-signin — the kiosk page (protected by middleware)
+- /admin/dashboard — staff dashboard: check-ins viewer (Today/Yesterday/
+  week/month/custom + CSV export) and patient search with Reset PIN
 - /api/auth/[...nextauth] — NextAuth (Google sign-in, session, callbacks)
+- /api/admin/checkins — GET check-ins in a from/to range, joined with names
+- /api/admin/patients — GET staff patient search (returns has_pin, never the hash)
+- /api/admin/reset-pin — POST clears a patient's PIN (patient re-creates at kiosk)
+- /api/cron/keepalive — daily Vercel Cron ping (Bearer CRON_SECRET) so the
+  free-tier Supabase project never pauses for inactivity
 - /api/patients/lookup — matches PIN, returns patient record
 - /api/patients/setup-pin — creates PIN for new patient
 - /api/appointments/today — fetches today's appointment from Practice Better
 - /api/checkins — writes check-in record to Supabase
-- /api/webhooks/practice-better — PB webhook: GET = verification handshake, POST = signed client.record.created events → upsert patient into Supabase
+- /api/webhooks/practice-better — PB webhook: GET = verification handshake, POST = signed client.record.created/updated events → upsert patient into Supabase (PB is the source of truth for contact info; staff fix wrong numbers/emails in PB, never in Supabase)
 
 ## Auth (Google sign-in via NextAuth)
 
@@ -130,7 +138,11 @@ policies on both tables; all access goes through the service-role key.
 - Patient taps their 4-digit PIN
 - On match: show name + appointment time + confirm button
 - On confirm: log check-in, show "Thank you [first name]!" briefly, reset
+- Re-check-in within 4 hours: no duplicate row; shows "You're already
+  checked in" instead
 - On no match: show "PIN not recognized, please see the front desk"
+- Kiosk resets to the PIN pad after 60s of inactivity (abandoned flows
+  must not leave patient info on screen)
 
 **New Patient**
 
