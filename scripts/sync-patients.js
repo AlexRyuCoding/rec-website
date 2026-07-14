@@ -49,7 +49,9 @@ async function fetchAllClients(token) {
 
     const page = data.items ?? [];
     clients.push(...page);
-    console.log(`Fetched ${clients.length}${total ? ` / ${total}` : ""} clients...`);
+    console.log(
+      `Fetched ${clients.length}${total ? ` / ${total}` : ""} clients...`
+    );
 
     if (!data.hasMore || page.length === 0) break;
     beforeId = page[page.length - 1].id;
@@ -125,13 +127,18 @@ async function main() {
       upserted += batch.length;
     } catch (batchErr) {
       // Batch failed — retry rows one at a time to isolate the bad ones
-      console.warn(`Batch at ${i} failed (${batchErr.message}); retrying rows individually`);
+      console.warn(
+        `Batch at ${i} failed (${batchErr.message}); retrying rows individually`
+      );
       for (const row of batch) {
         try {
           await upsertPatients(supabaseUrl, serviceKey, [row]);
           upserted++;
         } catch (err) {
-          console.error(`Error upserting client ${row.pb_client_id}:`, err.message);
+          console.error(
+            `Error upserting client ${row.pb_client_id}:`,
+            err.message
+          );
           errors++;
         }
       }
