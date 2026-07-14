@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { PB_BASE, getPbToken } from "@/lib/practice-better";
+import { isAdminAuthorized } from "@/lib/admin-auth";
 
 interface PbSession {
   sessionDate?: string;
@@ -10,6 +11,10 @@ interface PbSession {
 }
 
 export async function GET(req: Request) {
+  if (!(await isAdminAuthorized())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { searchParams } = new URL(req.url);
   const pb_client_id = searchParams.get("pb_client_id");
 

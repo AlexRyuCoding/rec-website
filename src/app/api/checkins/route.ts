@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
+import { isAdminAuthorized } from "@/lib/admin-auth";
 
 export async function POST(req: Request) {
+  if (!(await isAdminAuthorized())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { patient_id, appointment_time, practitioner } = await req.json();
 
   if (!patient_id) {

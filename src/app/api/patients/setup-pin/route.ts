@@ -1,12 +1,46 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { createServiceClient } from "@/lib/supabase";
+import { isAdminAuthorized } from "@/lib/admin-auth";
 
 function normalizePhone(raw: string): string {
   return raw.replace(/\D/g, "");
 }
 
+interface ContactMatch {
+  id: string;
+  first_name: string;
+  pin: string | null;
+}
+
+// Emails and phones are shared within families, so a contact can match
+// several patients. Setting up a PIN only applies to patients without one:
+// if exactly one match has no PIN, that's who's standing at the kiosk.
+// Zero without a PIN → they all have PINs. More than one → can't safely
+// guess which family member this is.
+function resolveMatches(matches: ContactMatch[]) {
+  if (matches.length === 0) {
+    return NextResponse.json({ status: "not_found" });
+  }
+  const withoutPin = matches.filter((p) => !p.pin);
+  if (withoutPin.length === 0) {
+    return NextResponse.json({ status: "has_pin" });
+  }
+  if (withoutPin.length > 1) {
+    return NextResponse.json({ status: "ambiguous" });
+  }
+  return NextResponse.json({
+    status: "ok",
+    patient_id: withoutPin[0].id,
+    first_name: withoutPin[0].first_name,
+  });
+}
+
 export async function POST(req: Request) {
+  if (!(await isAdminAuthorized())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { contact } = await req.json();
 
   if (!contact || contact.trim().length < 3) {
@@ -20,9 +54,7 @@ export async function POST(req: Request) {
   const normalized = normalizePhone(contact.trim());
   const isPhone = /^\d{7,15}$/.test(normalized);
 
-  const query = supabase
-    .from("patients")
-    .select("id, first_name, last_name, phone, pin, pb_client_id");
+  const query = supabase.from("patients").select("id, first_name, phone, pin");
 
   if (isPhone) {
     // Fetch all and filter by normalized phone — Supabase doesn't support inline transforms
@@ -30,23 +62,12 @@ export async function POST(req: Request) {
     if (error)
       return NextResponse.json({ error: "Database error" }, { status: 500 });
 
-    const patient = (patients ?? []).find(
-      (p) => normalizePhone(p.phone ?? "") === normalized
+    return resolveMatches(
+      (patients ?? []).filter(
+        (p) => normalizePhone(p.phone ?? "") === normalized
+      )
     );
-
-    if (!patient) {
-      return NextResponse.json({ status: "not_found" });
-    }
-    if (patient.pin) {
-      return NextResponse.json({ status: "has_pin" });
-    }
-    return NextResponse.json({
-      status: "ok",
-      patient_id: patient.id,
-      first_name: patient.first_name,
-    });
   } else {
-    // Email lookup
     const { data: patients, error } = await query.eq(
       "email",
       contact.trim().toLowerCase()
@@ -54,22 +75,15 @@ export async function POST(req: Request) {
     if (error)
       return NextResponse.json({ error: "Database error" }, { status: 500 });
 
-    if (!patients || patients.length === 0) {
-      return NextResponse.json({ status: "not_found" });
-    }
-    const patient = patients[0];
-    if (patient.pin) {
-      return NextResponse.json({ status: "has_pin" });
-    }
-    return NextResponse.json({
-      status: "ok",
-      patient_id: patient.id,
-      first_name: patient.first_name,
-    });
+    return resolveMatches(patients ?? []);
   }
 }
 
 export async function PATCH(req: Request) {
+  if (!(await isAdminAuthorized())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { patient_id, pin } = await req.json();
 
   if (!patient_id || !pin || !/^\d{4}$/.test(pin)) {
@@ -80,6 +94,30 @@ export async function PATCH(req: Request) {
   }
 
   const supabase = createServiceClient();
+
+  // Setting a PIN is only for patients who don't have one — never an
+  // overwrite path, or a stolen patient_id could hijack an existing PIN.
+  const { data: target, error: targetError } = await supabase
+    .from("patients")
+    .select("id, pin")
+    .eq("id", patient_id)
+    .maybeSingle();
+
+  if (targetError) {
+    return NextResponse.json({ error: "Database error" }, { status: 500 });
+  }
+  if (!target) {
+    return NextResponse.json({ error: "Patient not found" }, { status: 404 });
+  }
+  if (target.pin) {
+    return NextResponse.json(
+      {
+        error:
+          "A PIN is already set for this patient. Please see the front desk.",
+      },
+      { status: 403 }
+    );
+  }
 
   // PIN lookup is by PIN alone, so each PIN must map to exactly one patient
   const { data: existing, error: pinFetchError } = await supabase
@@ -107,6 +145,7 @@ export async function PATCH(req: Request) {
     .from("patients")
     .update({ pin: hashed })
     .eq("id", patient_id)
+    .is("pin", null)
     .select("id, first_name, last_name, pb_client_id")
     .single();
 

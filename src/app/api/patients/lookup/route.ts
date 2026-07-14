@@ -1,8 +1,20 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { createServiceClient } from "@/lib/supabase";
+import { isAdminAuthorized } from "@/lib/admin-auth";
+import { pinAttemptsExhausted, recordPinFailure } from "@/lib/pin-rate-limit";
 
 export async function POST(req: Request) {
+  if (!(await isAdminAuthorized())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (await pinAttemptsExhausted()) {
+    return NextResponse.json(
+      { error: "Too many attempts. Please see the front desk." },
+      { status: 429 }
+    );
+  }
+
   const { pin } = await req.json();
 
   if (!pin || !/^\d{4}$/.test(pin)) {
@@ -34,6 +46,7 @@ export async function POST(req: Request) {
     }
   }
 
+  await recordPinFailure();
   return NextResponse.json(
     { error: "PIN not recognized, please see the front desk" },
     { status: 404 }
