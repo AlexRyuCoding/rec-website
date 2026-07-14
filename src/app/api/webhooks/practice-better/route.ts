@@ -107,7 +107,7 @@ export async function POST(req: Request) {
         pb_client_id: record.id,
         first_name: record.profile?.firstName ?? "",
         last_name: record.profile?.lastName ?? "",
-        email: record.profile?.emailAddress ?? null,
+        email: record.profile?.emailAddress?.toLowerCase() ?? null,
         phone: record.profile?.mobilePhone ?? record.profile?.homePhone ?? null,
       },
       { onConflict: "pb_client_id" }

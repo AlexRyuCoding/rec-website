@@ -22,16 +22,20 @@ async function getPbToken() {
 }
 
 async function fetchAllClients(token) {
+  // PB returns records newest-first and paginates with a cursor:
+  // before_id=<oldest id of the current page> fetches the next (older)
+  // page. NOTE: after_id walks the other way (newer records) — using it
+  // here re-fetches the newest page forever. skip/limit is capped at 500.
   const clients = [];
-  let afterId = null;
   const limit = 100;
+  let beforeId = null;
+  let total = null;
 
   while (true) {
     const params = new URLSearchParams({ limit: String(limit) });
-    if (afterId) params.set("after_id", afterId);
+    if (beforeId) params.set("before_id", beforeId);
 
-    const url = `${PB_BASE}/consultant/records?${params}`;
-    const res = await fetch(url, {
+    const res = await fetch(`${PB_BASE}/consultant/records?${params}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) {
@@ -40,27 +44,37 @@ async function fetchAllClients(token) {
     }
     const data = await res.json();
 
+    // count shrinks with the cursor window; the first page's count is the total
+    if (total === null && typeof data.count === "number") total = data.count;
+
     const page = data.items ?? [];
     clients.push(...page);
+    console.log(`Fetched ${clients.length}${total ? ` / ${total}` : ""} clients...`);
 
     if (!data.hasMore || page.length === 0) break;
-    afterId = page[page.length - 1].id;
+    beforeId = page[page.length - 1].id;
   }
 
   return clients;
 }
 
-async function upsertPatient(supabaseUrl, serviceKey, patient) {
-  const res = await fetch(`${supabaseUrl}/rest/v1/patients`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: serviceKey,
-      Authorization: `Bearer ${serviceKey}`,
-      Prefer: "resolution=merge-duplicates,return=minimal",
-    },
-    body: JSON.stringify(patient),
-  });
+// Batch upsert: one request per 100 patients instead of one per patient.
+// on_conflict=pb_client_id merges on the PB record id, so re-runs update
+// existing rows instead of failing the unique constraint.
+async function upsertPatients(supabaseUrl, serviceKey, patients) {
+  const res = await fetch(
+    `${supabaseUrl}/rest/v1/patients?on_conflict=pb_client_id`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      },
+      body: JSON.stringify(patients),
+    }
+  );
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`Upsert failed ${res.status}: ${body}`);
@@ -71,7 +85,9 @@ async function main() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceKey) {
-    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+    throw new Error(
+      "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY"
+    );
   }
 
   console.log("Connecting to Practice Better...");
@@ -79,25 +95,48 @@ async function main() {
 
   console.log("Fetching clients...");
   const clients = await fetchAllClients(token);
-  console.log(`Found ${clients.length} clients`);
+
+  // Dedupe by PB record id — a batch upsert fails outright if the same
+  // key appears twice ("cannot affect row a second time")
+  const unique = [...new Map(clients.map((c) => [c.id, c])).values()];
+  if (unique.length !== clients.length) {
+    console.warn(
+      `Warning: ${clients.length - unique.length} duplicate records returned by PB — deduped`
+    );
+  }
+  console.log(`Found ${unique.length} clients`);
+
+  const rows = unique.map((client) => ({
+    pb_client_id: client.id,
+    first_name: client.profile?.firstName ?? "",
+    last_name: client.profile?.lastName ?? "",
+    email: client.profile?.emailAddress?.toLowerCase() ?? null,
+    phone: client.profile?.mobilePhone ?? client.profile?.homePhone ?? null,
+  }));
 
   let upserted = 0;
   let errors = 0;
+  const batchSize = 100;
 
-  for (const client of clients) {
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const batch = rows.slice(i, i + batchSize);
     try {
-      await upsertPatient(supabaseUrl, serviceKey, {
-        pb_client_id: client.id,
-        first_name: client.profile?.firstName ?? "",
-        last_name: client.profile?.lastName ?? "",
-        email: client.profile?.emailAddress ?? null,
-        phone: client.profile?.mobilePhone ?? client.profile?.homePhone ?? null,
-      });
-      upserted++;
-    } catch (err) {
-      console.error(`Error upserting client ${client.id}:`, err.message);
-      errors++;
+      await upsertPatients(supabaseUrl, serviceKey, batch);
+      upserted += batch.length;
+    } catch (batchErr) {
+      // Batch failed — retry rows one at a time to isolate the bad ones
+      console.warn(`Batch at ${i} failed (${batchErr.message}); retrying rows individually`);
+      for (const row of batch) {
+        try {
+          await upsertPatients(supabaseUrl, serviceKey, [row]);
+          upserted++;
+        } catch (err) {
+          console.error(`Error upserting client ${row.pb_client_id}:`, err.message);
+          errors++;
+        }
+      }
     }
+    console.log(`Upserted ${upserted} / ${rows.length}...`);
   }
 
   console.log(`Done. Upserted: ${upserted}, Errors: ${errors}`);
