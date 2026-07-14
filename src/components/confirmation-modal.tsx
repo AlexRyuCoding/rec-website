@@ -6,13 +6,13 @@ import { useEffect, useState } from "react";
 interface ConfirmationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  // Performs the check-in; resolves true when it was recorded.
+  onConfirm: () => Promise<boolean>;
   onDeny: () => void;
   firstName: string;
   lastName: string;
   appointmentTime: string | null;
   practitioner: string | null;
-  errorMessage?: string;
 }
 
 export default function ConfirmationModal({
@@ -24,14 +24,18 @@ export default function ConfirmationModal({
   lastName,
   appointmentTime,
   practitioner,
-  errorMessage,
 }: ConfirmationModalProps) {
   const [showSuccess, setShowSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setIsVisible(true);
+      setShowSuccess(false);
+      setSaving(false);
+      setFailed(false);
     } else {
       const timer = setTimeout(() => setIsVisible(false), 300);
       return () => clearTimeout(timer);
@@ -50,9 +54,15 @@ export default function ConfirmationModal({
 
   if (!isVisible && !isOpen) return null;
 
-  const handleConfirm = () => {
-    setShowSuccess(true);
-    setTimeout(onConfirm, 3000);
+  const handleConfirm = async () => {
+    setSaving(true);
+    const ok = await onConfirm();
+    setSaving(false);
+    if (ok) {
+      setShowSuccess(true);
+    } else {
+      setFailed(true);
+    }
   };
 
   const displayName = lastName
@@ -69,7 +79,7 @@ export default function ConfirmationModal({
         className={`fixed inset-0 bg-black/30 backdrop-blur-sm transition-all duration-300 ${
           isOpen ? "opacity-100" : "opacity-0 backdrop-blur-none"
         }`}
-        onClick={onClose}
+        onClick={saving ? undefined : onClose}
       />
       <div
         className={`relative bg-[var(--background)] dark:bg-gray-800 border border-gray-200 dark:border-gray-400 p-6 mx-4 sm:mx-auto rounded-lg max-w-md w-full z-10 transition-all duration-300 ${
@@ -77,9 +87,9 @@ export default function ConfirmationModal({
         }`}
       >
         <div className="text-center mb-10">
-          {errorMessage ? (
+          {failed ? (
             <p className="text-2xl text-red-600 dark:text-red-400">
-              {errorMessage}
+              We couldn&apos;t record your check-in. Please see the front desk.
             </p>
           ) : showSuccess ? (
             <p className="text-4xl">
@@ -102,23 +112,25 @@ export default function ConfirmationModal({
           ) : null}
         </div>
 
-        {!showSuccess && !errorMessage && firstName && (
+        {!showSuccess && !failed && firstName && (
           <div className="flex items-center justify-center gap-4 text-2xl">
             <button
               onClick={handleConfirm}
-              className="px-6 py-2 bg-[#2A9E8F] hover:bg-[#238B7E] text-white rounded-full transition-colors"
+              disabled={saving}
+              className="px-6 py-2 bg-[#2A9E8F] hover:bg-[#238B7E] text-white rounded-full disabled:opacity-50 transition-colors"
             >
-              Yes, Sign In
+              {saving ? "Signing in..." : "Yes, Sign In"}
             </button>
             <button
               onClick={onDeny}
-              className="px-6 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-400 dark:hover:bg-gray-600 rounded-full transition-colors"
+              disabled={saving}
+              className="px-6 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-400 dark:hover:bg-gray-600 rounded-full disabled:opacity-50 transition-colors"
             >
               No
             </button>
           </div>
         )}
-        {errorMessage && (
+        {failed && (
           <div className="flex justify-center">
             <button
               onClick={onClose}

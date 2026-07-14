@@ -51,6 +51,11 @@ export default function SignInKeypad() {
   const handlePinBackspace = () => setPin((p) => p.slice(0, -1));
   const handlePinClear = () => setPin("");
 
+  // Kiosk session expired mid-day — staff need to unlock again
+  const redirectToLogin = () => {
+    window.location.href = "/admin/login";
+  };
+
   const submitPin = async (entered: string) => {
     setScreen("verifying");
     try {
@@ -59,6 +64,7 @@ export default function SignInKeypad() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pin: entered }),
       });
+      if (res.status === 401) return redirectToLogin();
       const data = await res.json();
       if (!res.ok) {
         setErrorMessage(
@@ -94,10 +100,10 @@ export default function SignInKeypad() {
 
   // --- Check-in (called from modal confirm) ---
 
-  const handleConfirmCheckin = async () => {
-    if (!patient) return;
+  const handleConfirmCheckin = async (): Promise<boolean> => {
+    if (!patient) return false;
     try {
-      await fetch("/api/checkins", {
+      const res = await fetch("/api/checkins", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -106,8 +112,9 @@ export default function SignInKeypad() {
           practitioner: appointment?.practitioner ?? null,
         }),
       });
+      return res.ok;
     } catch {
-      // Non-fatal: check-in logging failure shouldn't block the patient
+      return false;
     }
   };
 
@@ -139,6 +146,7 @@ export default function SignInKeypad() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ contact: contact.trim() }),
       });
+      if (res.status === 401) return redirectToLogin();
       const data = await res.json();
       if (!res.ok) {
         setErrorMessage(data.error ?? "Something went wrong.");
@@ -153,6 +161,11 @@ export default function SignInKeypad() {
       } else if (data.status === "has_pin") {
         setErrorMessage(
           "You already have a PIN. Please use it, or see the front desk."
+        );
+        setScreen("error");
+      } else if (data.status === "ambiguous") {
+        setErrorMessage(
+          "That contact info is shared by more than one patient. Please see the front desk to set up your PIN."
         );
         setScreen("error");
       } else {
@@ -211,6 +224,7 @@ export default function SignInKeypad() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ patient_id: patient!.id, pin: entered }),
       });
+      if (res.status === 401) return redirectToLogin();
       const data = await res.json();
       if (!res.ok) {
         if (res.status === 409) {
