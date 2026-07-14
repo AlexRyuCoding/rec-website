@@ -4,8 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 interface CheckinRow {
   id: string;
   checked_in_at: string;
-  appointment_time: string | null;
-  practitioner: string | null;
   first_name: string;
   last_name: string;
 }
@@ -104,13 +102,11 @@ export default function AdminDashboard() {
   }, [loadCheckins]);
 
   const exportCsv = () => {
-    const header = "Checked in,Patient,Appointment,Practitioner";
+    const header = "Checked in,Patient";
     const lines = rows.map((r) =>
       [
         new Date(r.checked_in_at).toLocaleString(),
         `${r.first_name} ${r.last_name}`,
-        r.appointment_time ?? "",
-        r.practitioner ?? "",
       ]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)
         .join(",")
@@ -274,9 +270,7 @@ export default function AdminDashboard() {
                   <thead>
                     <tr className="border-b border-brand-foreground">
                       <th className="py-2 pr-4">Checked in</th>
-                      <th className="py-2 pr-4">Patient</th>
-                      <th className="py-2 pr-4">Appointment</th>
-                      <th className="py-2">Practitioner</th>
+                      <th className="py-2">Patient</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -285,13 +279,9 @@ export default function AdminDashboard() {
                         <td className="py-2 pr-4 whitespace-nowrap">
                           {fmtTime(r.checked_in_at)}
                         </td>
-                        <td className="py-2 pr-4">
+                        <td className="py-2">
                           {r.first_name} {r.last_name}
                         </td>
-                        <td className="py-2 pr-4">
-                          {r.appointment_time ?? "—"}
-                        </td>
-                        <td className="py-2">{r.practitioner ?? "—"}</td>
                       </tr>
                     ))}
                   </tbody>

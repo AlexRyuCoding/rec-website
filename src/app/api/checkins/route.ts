@@ -7,7 +7,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { patient_id, appointment_time, practitioner } = await req.json();
+  const { patient_id } = await req.json();
 
   if (!patient_id) {
     return NextResponse.json({ error: "patient_id required" }, { status: 400 });
@@ -36,11 +36,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, duplicate: true });
   }
 
-  const { error } = await supabase.from("checkins").insert({
-    patient_id,
-    appointment_time: appointment_time ?? null,
-    practitioner: practitioner ?? null,
-  });
+  // Who + when only — appointment details stay in Practice Better
+  const { error } = await supabase.from("checkins").insert({ patient_id });
 
   if (error) {
     return NextResponse.json(

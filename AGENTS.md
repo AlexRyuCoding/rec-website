@@ -44,7 +44,7 @@ throughout the day unassisted.
 - /api/patients/lookup — matches PIN, returns patient record
 - /api/patients/setup-pin — creates PIN for new patient
 - /api/appointments/today — fetches today's appointment from Practice Better
-- /api/checkins — writes check-in record to Supabase
+- /api/checkins — writes check-in record (patient_id + timestamp only) to Supabase
 - /api/webhooks/practice-better — PB webhook: GET = verification handshake, POST = signed client.record.created/updated events → upsert patient into Supabase (PB is the source of truth for contact info; staff fix wrong numbers/emails in PB, never in Supabase)
 
 ## Auth (Google sign-in via NextAuth)
@@ -87,13 +87,15 @@ policies on both tables; all access goes through the service-role key.
 
 ### checkins table
 
-| column           | type      | notes                     |
-| ---------------- | --------- | ------------------------- |
-| id               | uuid      | primary key               |
-| patient_id       | uuid      | foreign key → patients.id |
-| checked_in_at    | timestamp | auto-set on insert        |
-| appointment_time | string    | from Practice Better      |
-| practitioner     | string    | from Practice Better      |
+| column        | type      | notes                     |
+| ------------- | --------- | ------------------------- |
+| id            | uuid      | primary key               |
+| patient_id    | uuid      | foreign key → patients.id |
+| checked_in_at | timestamp | auto-set on insert        |
+
+Data minimization: a check-in logs who + when ONLY. Appointment time and
+practitioner are displayed on the kiosk confirm screen (live from PB) but
+never written to the log — they already live in Practice Better.
 
 ## Practice Better API
 

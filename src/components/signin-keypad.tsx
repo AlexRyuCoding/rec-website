@@ -116,11 +116,7 @@ export default function SignInKeypad() {
       const res = await fetch("/api/checkins", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          patient_id: patient.id,
-          appointment_time: appointment?.time ?? null,
-          practitioner: appointment?.practitioner ?? null,
-        }),
+        body: JSON.stringify({ patient_id: patient.id }),
       });
       if (!res.ok) return "error";
       const data = await res.json();
