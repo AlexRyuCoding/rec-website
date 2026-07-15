@@ -1,3 +1,4 @@
+// All /admin pages are staff-only — keep them out of search indexes
 export const metadata = {
   robots: {
     index: false,

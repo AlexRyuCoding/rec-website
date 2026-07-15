@@ -12,7 +12,9 @@
     "lint:check": "eslint ."
   },
   "dependencies": {
-    "googleapis": "^149.0.0",
+    "@supabase/supabase-js": "^2.107.0",
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.4.2",
     "lucide-react": "^0.511.0",
     "motion": "^12.12.1",
     "next": "15.1.11",
@@ -25,6 +27,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4.1.7",
+    "@types/bcryptjs": "^3.0.0",
     "@types/node": "^20",
     "@types/nodemailer": "^6.4.17",
     "@types/react": "^18",
