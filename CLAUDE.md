@@ -41,6 +41,11 @@ throughout the day unassisted.
 - /api/admin/checkins — GET check-ins in a from/to range, joined with names
 - /api/admin/patients — GET staff patient search (returns has_pin, never the hash)
 - /api/admin/reset-pin — POST clears a patient's PIN (patient re-creates at kiosk)
+- /api/admin/sync-patients — POST bulk-syncs PB client records in chunks
+  (~500/call, before_id cursor); the dashboard "Full sync" button loops it
+  until done. {quick:true} = newest 100 only (catches recently created
+  patients, e.g. a missed webhook; PB orders by creation, so it can't see
+  edits to old records) and reports how many were genuinely new
 - /api/cron/keepalive — daily Vercel Cron ping (Bearer CRON_SECRET) so the
   free-tier Supabase project never pauses for inactivity
 - /api/patients/lookup — matches PIN, returns patient record
