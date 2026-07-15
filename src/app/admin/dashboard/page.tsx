@@ -176,6 +176,80 @@ export default function AdminDashboard() {
     }
   };
 
+  // --- Bulk sync from Practice Better ---
+  // The API syncs ~500 records per call and returns a cursor; this loop
+  // keeps calling until done so each serverless request stays fast.
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
+
+  const syncPatients = async (quick = false) => {
+    setSyncing(true);
+    setSyncMsg(quick ? "Checking the newest records…" : "Starting sync…");
+    let beforeId: string | null = null;
+    let fetched = 0;
+    let upserted = 0;
+    let errors = 0;
+    let total: number | null = null;
+    try {
+      for (;;) {
+        const res = await fetch("/api/admin/sync-patients", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            quick ? { quick: true } : beforeId ? { before_id: beforeId } : {}
+          ),
+        });
+        if (res.status === 401) {
+          window.location.href = "/admin/login";
+          return;
+        }
+        const data: {
+          done: boolean;
+          before_id: string | null;
+          fetched: number;
+          upserted: number;
+          errors: number;
+          total: number | null;
+          created: number | null;
+          error?: string;
+        } = await res.json();
+        if (!res.ok) {
+          setSyncMsg(data.error ?? "Sync failed — try again.");
+          return;
+        }
+        fetched += data.fetched;
+        upserted += data.upserted;
+        errors += data.errors;
+        if (data.total) total = data.total;
+        if (data.done || !data.before_id) {
+          setSyncMsg(
+            quick
+              ? `Quick sync complete — checked the newest ${fetched} records` +
+                  (data.created !== null
+                    ? `: ${data.created} new patient${data.created === 1 ? "" : "s"} added`
+                    : "") +
+                  (errors ? `, ${errors} errors` : "") +
+                  "."
+              : `Sync complete — ${upserted.toLocaleString()} patients updated` +
+                  (errors ? `, ${errors} errors` : "") +
+                  "."
+          );
+          return;
+        }
+        beforeId = data.before_id;
+        setSyncMsg(
+          `Syncing… ${fetched.toLocaleString()}${
+            total ? ` of ${total.toLocaleString()}` : ""
+          } records`
+        );
+      }
+    } catch {
+      setSyncMsg("Sync failed — check your connection and try again.");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const tabClass = (active: boolean) =>
     `px-6 py-3 text-lg rounded-t-lg border border-b-0 border-brand-foreground transition-colors ${
       active ? "bg-[#2A9E8F] text-white" : "bg-transparent hover:bg-brand-muted"
@@ -315,6 +389,27 @@ export default function AdminDashboard() {
             </div>
 
             {searchError && <p className="text-gray-500">{searchError}</p>}
+
+            <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-brand-muted">
+              <button
+                onClick={() => syncPatients(true)}
+                disabled={syncing}
+                className="px-4 py-2 rounded-full border border-brand-foreground hover:bg-brand-muted disabled:opacity-50 transition-colors"
+              >
+                Quick sync (newest 100)
+              </button>
+              <button
+                onClick={() => syncPatients()}
+                disabled={syncing}
+                className="px-4 py-2 rounded-full border border-brand-foreground hover:bg-brand-muted disabled:opacity-50 transition-colors"
+              >
+                {syncing ? "Syncing…" : "Full sync from Practice Better"}
+              </button>
+              <span className="text-sm text-gray-500">
+                {syncMsg ||
+                  "New and updated patients normally arrive automatically. Quick sync catches recently added patients; full sync re-pulls every record."}
+              </span>
+            </div>
             {patients.length > 0 && (
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
