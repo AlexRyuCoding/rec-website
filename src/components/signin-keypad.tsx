@@ -315,6 +315,39 @@ export default function SignInKeypad() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Physical keyboard / numpad support on the PIN screens. The contact
+  // screen types into a real input, so keystrokes focused there are left
+  // alone. Re-subscribes every render so the handlers see current state.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+      const isPinEntry = screen === "pin_entry";
+      const isNewPin =
+        screen === "new_pin_create" || screen === "new_pin_confirm";
+      if (!isPinEntry && !isNewPin) return;
+
+      if (/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        if (isPinEntry) handlePinDigit(e.key);
+        else handleNewPinDigit(e.key);
+      } else if (e.key === "Backspace" || e.key === "Delete") {
+        e.preventDefault();
+        if (isPinEntry) handlePinBackspace();
+        else handleNewPinBackspace();
+      } else if (e.key === "Escape") {
+        if (isPinEntry) handlePinClear();
+        else handleNewPinClear();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
   // --- PIN display helper ---
 
   const pinDots = (value: string) =>
