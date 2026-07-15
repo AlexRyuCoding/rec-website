@@ -3,8 +3,10 @@ import SignInKeypad from "@/components/signin-keypad";
 
 export default function Page() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 pb-10 sm:p-10 mt-12">
-      <main className="flex flex-col gap-[24px] row-start-2 items-center sm:items-start">
+    // Kiosk: exactly one viewport tall, never scrolls. pt-28 clears the
+    // fixed header (py-4 + 80px logo ≈ 112px).
+    <div className="h-dvh overflow-hidden flex flex-col items-center justify-center px-4 pb-4 pt-28">
+      <main className="flex flex-col items-center">
         <SignInKeypad />
       </main>
     </div>

@@ -54,8 +54,6 @@ export default function ConfirmationModal({
     }
   }, [showSuccess, onClose]);
 
-  if (!isVisible && !isOpen) return null;
-
   const handleConfirm = async () => {
     setSaving(true);
     const result = await onConfirm();
@@ -67,6 +65,27 @@ export default function ConfirmationModal({
       setShowSuccess(true);
     }
   };
+
+  // Numpad-only check-in: Enter confirms, Escape declines. Re-subscribes
+  // every render so the handler sees current state.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (saving || showSuccess) return;
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (failed) onClose();
+        else handleConfirm();
+      } else if (e.key === "Escape") {
+        if (failed) onClose();
+        else onDeny();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
+  if (!isVisible && !isOpen) return null;
 
   const displayName = lastName
     ? `${firstName} ${lastName.charAt(0)}.`
@@ -114,12 +133,19 @@ export default function ConfirmationModal({
             </p>
           ) : firstName ? (
             <>
-              <h2 className="text-4xl font-semibold mb-6">Is this you?</h2>
+              <h2 className="text-4xl font-semibold mb-6">
+                {appointmentTime ? "Is this your appointment?" : "Is this you?"}
+              </h2>
               <p className="text-3xl mb-3">{displayName}</p>
-              {appointmentTime && (
-                <p className="text-xl text-gray-600 dark:text-gray-300">
-                  Appointment at {appointmentTime}
+              {appointmentTime ? (
+                <p className="text-2xl">
+                  Today at <strong>{appointmentTime}</strong>
                   {practitioner ? ` with ${practitioner}` : ""}
+                </p>
+              ) : (
+                <p className="text-lg text-gray-600 dark:text-gray-300">
+                  We couldn&apos;t find a booked appointment for today — you can
+                  still sign in.
                 </p>
               )}
             </>
