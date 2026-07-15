@@ -29,6 +29,8 @@ throughout the day unassisted.
 - GOOGLE_CLIENT_ID= / GOOGLE_CLIENT_SECRET= (Google Cloud OAuth client)
 - ALLOWED_ADMIN_EMAILS= (comma-separated staff Google accounts allowed to unlock the kiosk)
 - CRON_SECRET= (self-generated; auths the daily Vercel Cron keepalive ping)
+- RESEND_API_KEY= (Resend API key; sends appointment-request + grievance form emails)
+- RESEND_FROM_EMAIL= (sender on the Resend-verified domain, e.g. forms@ryuacupuncture.com; falls back to onboarding@resend.dev which only delivers to the Resend account owner)
 
 ## Route Structure
 

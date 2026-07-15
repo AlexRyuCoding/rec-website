@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
 interface GrievanceFormData {
   name?: string;
@@ -9,8 +9,13 @@ interface GrievanceFormData {
   message: string;
 }
 
+// Sender must be on a Resend-verified domain in production.
+// onboarding@resend.dev only delivers to the Resend account owner's inbox.
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
+const TO_EMAIL = "ryuacupuncture@yahoo.com";
+
 // Validate required environment variables
-const requiredEnvVars = ["EMAIL_USER", "EMAIL_PASS"];
+const requiredEnvVars = ["RESEND_API_KEY"];
 
 function validateEnvVars() {
   const missing = requiredEnvVars.filter((varName) => !process.env[varName]);
@@ -48,15 +53,6 @@ export async function POST(req: Request) {
 
     const { name, email, phone, subject, message } = data;
 
-    // Create a transporter using Gmail SMTP
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-
     // Prepare email content with better formatting
     const timestamp = new Date().toLocaleString();
     const emailContent = `
@@ -74,13 +70,20 @@ ${email ? `Email: ${email}` : "Email: Not provided"}
 ${phone ? `Phone: ${phone}` : "Phone: Not provided"}
     `.trim();
 
+    const resend = new Resend(process.env.RESEND_API_KEY);
+
     // Send email
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: "ryuacupuncture@yahoo.com",
+    const { error } = await resend.emails.send({
+      from: `Grievance Form <${FROM_EMAIL}>`,
+      to: TO_EMAIL,
+      ...(email ? { replyTo: email } : {}),
       subject: `‼️⚠️New Grievance: ${subject}`,
       text: emailContent,
     });
+
+    if (error) {
+      throw new Error(`Resend error: ${error.message}`);
+    }
 
     return NextResponse.json({
       success: true,
