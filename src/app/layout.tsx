@@ -3,7 +3,7 @@ import "./ui/globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import Header from "@/components/header";
 import ConditionalFooter from "@/components/conditional-footer";
-import { generalSans } from "./ui/fonts";
+import { instrumentSerif, interTight } from "./ui/fonts";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.ryuacupuncture.com"),
@@ -28,14 +28,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <link
-          href="https://fonts.googleapis.com/icon?family=Material+Icons"
-          rel="stylesheet"
-        />
-      </head>
       <body
-        className={`${generalSans.variable} antialiased`}
+        className={`${instrumentSerif.variable} ${interTight.variable} antialiased`}
         suppressHydrationWarning
       >
         <ThemeProvider
