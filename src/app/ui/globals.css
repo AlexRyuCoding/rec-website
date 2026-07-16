@@ -103,8 +103,10 @@ body {
     box-shadow:
       0 24px 60px rgba(0, 0, 0, 0.18),
       inset 0 1px 0 rgba(255, 255, 255, 0.35);
-    backdrop-filter: blur(22px) saturate(1.2);
-    -webkit-backdrop-filter: blur(22px) saturate(1.2);
+    /* Alex's calibration (2026-07-16): minimal frost, liquid read kept by
+       the raised saturation. Module default was blur(22px) saturate(1.2). */
+    backdrop-filter: blur(6px) saturate(1.4);
+    -webkit-backdrop-filter: blur(6px) saturate(1.4);
   }
   /* Inverted ink variant: the same glass recipe re-tinted for light
      backdrops (header over porcelain islands). */
