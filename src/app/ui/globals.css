@@ -98,30 +98,19 @@ body {
      soft drop are the effect module itself, applied only where Alex opted in. */
   .glass-surface {
     border-radius: 26px;
+    /* Alex's call (2026-07-16): fully clear glass — 90%-transparent fill,
+       no backdrop blur. The rim border + inset bevel carry the glass read. */
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.3);
     box-shadow:
       0 24px 60px rgba(0, 0, 0, 0.18),
       inset 0 1px 0 rgba(255, 255, 255, 0.35);
-    backdrop-filter: blur(22px) saturate(1.2);
-    -webkit-backdrop-filter: blur(22px) saturate(1.2);
   }
   /* Inverted ink variant: the same glass recipe re-tinted for light
      backdrops (header over porcelain islands). */
   .glass-surface--ink {
     background: rgba(46, 61, 66, 0.08);
     border-color: rgba(46, 61, 66, 0.25);
-  }
-
-  @supports not (
-    (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
-  ) {
-    .glass-surface {
-      background: rgba(14, 24, 29, 0.72);
-    }
-    .glass-surface--ink {
-      background: rgba(236, 234, 230, 0.9);
-    }
   }
 
   @keyframes ring-fill {
