@@ -1,5 +1,5 @@
 "use client";
-import { createElement, useRef } from "react";
+import { createElement, Fragment, useRef } from "react";
 import { gsap, useGSAP } from "@/lib/gsap";
 import { useMotionPrefs } from "./motion-provider";
 
@@ -47,17 +47,18 @@ export default function SplitReveal({
     as,
     { ref, className },
     words.map(({ word, italic, key }) => (
-      <span
-        key={key}
-        data-word
-        className="inline-block overflow-hidden pb-[0.08em] align-top"
-      >
+      <Fragment key={key}>
         <span
-          className={`inline-block will-change-transform ${italic ? "italic" : ""}`}
+          data-word
+          className="inline-block overflow-hidden pb-[0.08em] align-top"
         >
-          {word}{" "}
-        </span>
-      </span>
+          <span
+            className={`inline-block will-change-transform ${italic ? "italic" : ""}`}
+          >
+            {word}
+          </span>
+        </span>{" "}
+      </Fragment>
     ))
   );
 }

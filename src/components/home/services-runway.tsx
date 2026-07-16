@@ -56,6 +56,13 @@ export default function ServicesRunway() {
             { autoAlpha: 0, scale: 1.08 },
             { autoAlpha: 1, scale: 1 },
             i
+          )
+          .to(`[data-count="${i - 1}"]`, { autoAlpha: 0, y: -24 }, i)
+          .fromTo(
+            `[data-count="${i}"]`,
+            { autoAlpha: 0, y: 24 },
+            { autoAlpha: 1, y: 0 },
+            i
           );
       });
     },
@@ -133,7 +140,19 @@ export default function ServicesRunway() {
           </div>
         </div>
         <p className="mt-8 font-serif text-card text-cream/50" data-counter>
-          <span className="text-cream">01</span> / 03
+          <span className="relative inline-block h-[1em] w-[2ch] align-top">
+            {SLIDES.map((_, i) => (
+              <span
+                key={i}
+                data-count={i}
+                className="absolute inset-0 text-cream"
+                style={i > 0 ? { opacity: 0, visibility: "hidden" } : undefined}
+              >
+                {String(i + 1).padStart(2, "0")}
+              </span>
+            ))}
+          </span>{" "}
+          / 03
         </p>
       </div>
     </section>

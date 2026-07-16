@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import SplitReveal from "@/components/motion/split-reveal";
 import Reveal from "@/components/motion/reveal";
 import PillLink from "@/components/ui/pill-link";
@@ -21,12 +22,12 @@ export default function PreFooterCta() {
         </PillLink>
         <p className="text-sm text-cream/50">
           New patient?{" "}
-          <a
+          <Link
             href="/request-an-appointment"
             className="underline-link text-cream"
           >
             Request your first appointment
-          </a>
+          </Link>
         </p>
       </Reveal>
     </section>

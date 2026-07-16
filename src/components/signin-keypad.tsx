@@ -412,7 +412,7 @@ export default function SignInKeypad() {
         onClick={screen === "pin_entry" ? handlePinClear : handleNewPinClear}
         disabled={keypadDisabled}
         aria-label="Clear all digits"
-        className="col-span-1 py-3 text-2xl bg-error hover:bg-error active:scale-95 border rounded-xl disabled:opacity-50 transition"
+        className="col-span-1 py-3 text-2xl bg-error hover:bg-error/80 active:scale-95 border rounded-xl disabled:opacity-50 transition"
       >
         CLEAR
       </button>
@@ -538,7 +538,7 @@ export default function SignInKeypad() {
             </div>
             <button
               onClick={reset}
-              className="text-lg text-cream/50 underline underline-offset-2 hover:text-cream/50 transition-colors"
+              className="text-lg text-cream/50 underline underline-offset-2 hover:text-cream transition-colors"
             >
               Cancel
             </button>
@@ -575,7 +575,7 @@ export default function SignInKeypad() {
                   reset();
                 }
               }}
-              className="text-lg text-cream/50 underline underline-offset-2 hover:text-cream/50 transition-colors"
+              className="text-lg text-cream/50 underline underline-offset-2 hover:text-cream transition-colors"
             >
               {screen === "new_pin_confirm" ? "Back" : "Cancel"}
             </button>

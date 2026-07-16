@@ -20,6 +20,15 @@ export default function MobileMenu() {
   const pathname = usePathname();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const navRef = useRef<HTMLElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+
+  // Remove the sheet (its links + pill) from tab order while closed —
+  // React 18 has no `inert` prop, so set the DOM property directly.
+  useEffect(() => {
+    const sheetEl = sheetRef.current;
+    if (!sheetEl) return;
+    (sheetEl as HTMLElement & { inert: boolean }).inert = !open;
+  }, [open]);
 
   // Close on navigation
   useEffect(() => {
@@ -75,6 +84,7 @@ export default function MobileMenu() {
       />
 
       <div
+        ref={sheetRef}
         role={open ? "dialog" : undefined}
         aria-modal={open || undefined}
         aria-label={open ? "Site menu" : undefined}

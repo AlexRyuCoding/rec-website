@@ -133,7 +133,7 @@ export default function RequestForm() {
             <button
               type="submit"
               disabled={status.kind === "sending"}
-              className="group mt-2 inline-block w-fit rounded-full bg-surface px-8 py-4 text-sm font-bold leading-none text-cream transition-opacity disabled:opacity-50"
+              className="mt-2 inline-block w-fit rounded-full bg-surface px-8 py-4 text-sm font-bold leading-none text-cream transition-opacity disabled:opacity-50"
             >
               {status.kind === "sending" ? "Sending…" : "Submit Request"}
             </button>

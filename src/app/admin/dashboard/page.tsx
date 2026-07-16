@@ -447,7 +447,7 @@ export default function AdminDashboard() {
                               <span className="flex gap-2 justify-end">
                                 <button
                                   onClick={() => resetPin(p.id)}
-                                  className="px-3 py-1 rounded-full bg-error text-white hover:bg-error transition-colors"
+                                  className="px-3 py-1 rounded-full bg-error text-white hover:bg-error/80 transition-colors"
                                 >
                                   Confirm reset
                                 </button>
