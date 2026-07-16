@@ -1,7 +1,8 @@
-"use client";
-
+import type { Metadata } from "next";
 import RequestForm from "@/components/request-form";
 
-export default function RequestFormPage() {
+export const metadata: Metadata = { title: "Request Form" };
+
+export default function Page() {
   return <RequestForm />;
 }
