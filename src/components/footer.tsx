@@ -2,6 +2,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRef } from "react";
+import { KeyRound, LayoutDashboard } from "lucide-react";
 import { gsap, useGSAP } from "@/lib/gsap";
 import { useMotionPrefs } from "@/components/motion/motion-provider";
 import { SITE } from "@/lib/site";
@@ -137,6 +138,22 @@ export default function Footer() {
             >
               Report a Grievance
             </Link>
+            <div className="mt-2 flex gap-4">
+              <Link
+                href="/admin/dashboard"
+                aria-label="Staff dashboard"
+                className="text-cream/20 transition-colors duration-300 hover:text-cream/60"
+              >
+                <LayoutDashboard className="size-4" />
+              </Link>
+              <Link
+                href="/admin/patient-signin"
+                aria-label="Patient check-in kiosk"
+                className="text-cream/20 transition-colors duration-300 hover:text-cream/60"
+              >
+                <KeyRound className="size-4" />
+              </Link>
+            </div>
           </div>
         </div>
 
