@@ -1,18 +1,19 @@
 import type { Metadata } from "next";
 import "./ui/globals.css";
-import { ThemeProvider } from "@/components/theme-provider";
 import Header from "@/components/header";
 import ConditionalFooter from "@/components/conditional-footer";
+import MotionProvider from "@/components/motion/motion-provider";
 import { instrumentSerif, interTight } from "./ui/fonts";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.ryuacupuncture.com"),
-  title: "Ryu Acupuncture Clinic, Inc.",
+  title: {
+    default: "Ryu Acupuncture Clinic — Burbank, CA",
+    template: "%s — Ryu Acupuncture Clinic",
+  },
   description:
     "Holistic acupuncture and Chinese medicine in Burbank, CA. Treating pain, stress, fertility, and chronic conditions with personalized care.",
-  icons: {
-    icon: "/rac-logo-blue-white.png",
-  },
+  icons: { icon: "/rac-logo-blue-white.png" },
   openGraph: {
     title: "Ryu Acupuncture Clinic, Inc.",
     description:
@@ -23,26 +24,17 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <body
         className={`${instrumentSerif.variable} ${interTight.variable} antialiased`}
-        suppressHydrationWarning
       >
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem={true}
-          disableTransitionOnChange={false}
-          storageKey="rac-theme"
-        >
+        <MotionProvider>
           <Header />
           {children}
           <ConditionalFooter />
-        </ThemeProvider>
+        </MotionProvider>
       </body>
     </html>
   );
