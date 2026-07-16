@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "vitest run",
     "lint:fix": "eslint . --fix",
     "lint:strict": "eslint . --max-warnings 0",
     "lint:check": "eslint ."
