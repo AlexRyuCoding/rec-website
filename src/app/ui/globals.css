@@ -3,66 +3,93 @@
 @tailwind utilities;
 
 :root {
-  /* Base colors */
-  --background: #ffffff;
-  --foreground: #22404b;
-
-  /* Brand colors */
-  --brand-primary: #22404b;
-  --brand-secondary: #238b7e;
-  --brand-accent: #e9c46a;
-  --brand-tertiary: #f4a261;
-  --brand-muted: #e5e7eb;
-
-  /* Text colors */
-  --text-primary: #e9c46a;
-  --text-secondary: #6b7280;
-  --text-muted: #9ca3af;
-
-  /* Border colors */
-  --border-light: #e5e7eb;
-  --border-dark: #d1d5db;
+  --canvas: #0e181d;
+  --surface: #22404b;
+  --island: #eceae6;
+  --ink: #2e3d42;
+  --accent: #e9c46a;
+  --error: #ff3c3c;
+  --muted-on-dark: rgba(236, 234, 230, 0.4);
+  --muted-on-light: rgba(46, 61, 66, 0.45);
+  --hairline-on-dark: rgba(236, 234, 230, 0.14);
+  --hairline-on-light: rgba(46, 61, 66, 0.12);
+  --ease-default: cubic-bezier(0.24, 1, 0.36, 1);
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-menu: cubic-bezier(0.6, 0.14, 0, 1);
 }
-
-.dark {
-  /* Base colors */
-  --background: #22404b;
-  --foreground: #ffffff;
-
-  /* Brand colors */
-  --brand-primary: #2a9e8f;
-  --brand-secondary: #238b7e;
-  --brand-accent: #e9c46a;
-  --brand-tertiary: #f4a261;
-  --brand-muted: #9ca3af;
-
-  /* Text colors */
-  --text-primary: #ffffff;
-  --text-secondary: #e5e7eb;
-  --text-muted: #d1d5db;
-
-  /* Border colors */
-  --border-light: #9ca3af;
-  --border-dark: #6b7280;
-}
-
-/* Theme transition */
-* {
-  transition:
-    background-color 0.3s ease,
-    color 0.3s ease,
-    border-color 0.3s ease;
-}
-
-/* @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-} */
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-general-sans), Arial, Helvetica, sans-serif;
+  background: var(--canvas);
+  color: var(--island);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--canvas);
+}
+
+@layer components {
+  /* Underline link: 1px line wipes out to the right, re-enters from the left */
+  .underline-link {
+    position: relative;
+    display: inline-block;
+  }
+  .underline-link::before,
+  .underline-link::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -3px;
+    height: 1px;
+    width: 100%;
+    background: currentColor;
+  }
+  .underline-link::before {
+    transform-origin: right;
+    transition: transform 0.7s var(--ease-out-quint);
+  }
+  .underline-link::after {
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.7s var(--ease-out-quint) 0.35s;
+  }
+  .underline-link:hover::before {
+    transform: scaleX(0);
+  }
+  .underline-link:hover::after {
+    transform: scaleX(1);
+  }
+
+  /* 16-stop eased ramp fading media into the canvas (house scrim) */
+  .media-ramp {
+    position: relative;
+  }
+  .media-ramp::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 45%;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgba(14, 24, 29, 0) 0%,
+      rgba(14, 24, 29, 0.013) 12.19%,
+      rgba(14, 24, 29, 0.049) 22.01%,
+      rgba(14, 24, 29, 0.104) 29.8%,
+      rgba(14, 24, 29, 0.175) 35.95%,
+      rgba(14, 24, 29, 0.259) 40.81%,
+      rgba(14, 24, 29, 0.352) 44.77%,
+      rgba(14, 24, 29, 0.45) 48.18%,
+      rgba(14, 24, 29, 0.55) 51.41%,
+      rgba(14, 24, 29, 0.648) 54.84%,
+      rgba(14, 24, 29, 0.741) 58.82%,
+      rgba(14, 24, 29, 0.825) 63.73%,
+      rgba(14, 24, 29, 0.896) 69.94%,
+      rgba(14, 24, 29, 0.951) 77.8%,
+      rgba(14, 24, 29, 0.987) 87.7%,
+      rgba(14, 24, 29, 1) 100%
+    );
+  }
 }
