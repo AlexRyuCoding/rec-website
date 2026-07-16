@@ -38,3 +38,4 @@ next-env.d.ts
 # credentials
 credentials/
 public/acu-herbs-bg.png
+.gstack/

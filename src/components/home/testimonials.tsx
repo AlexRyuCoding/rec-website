@@ -69,7 +69,7 @@ export default function Testimonials() {
         }
       }}
     >
-      <p className="mb-10 text-sm font-medium text-cream/40">
+      <p className="mb-10 text-sm font-medium text-cream/50">
         What our patients say:
       </p>
       <div className="relative min-h-56 max-w-4xl lg:min-h-48">

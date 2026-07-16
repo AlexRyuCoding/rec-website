@@ -109,7 +109,13 @@ export default function Footer() {
                   aria-label={s.alt}
                   className="flex size-10 items-center justify-center rounded-full border border-cream/15 transition-colors duration-300 hover:bg-island"
                 >
-                  <Image src={s.src} alt="" width={18} height={18} />
+                  <Image
+                    src={s.src}
+                    alt=""
+                    width={18}
+                    height={18}
+                    className="size-[18px] object-contain"
+                  />
                 </a>
               ))}
             </div>
@@ -135,7 +141,7 @@ export default function Footer() {
         </div>
 
         <p
-          className="mt-12 border-t pt-6 text-center text-xs text-cream/40"
+          className="mt-12 border-t pt-6 text-center text-xs text-cream/50"
           style={{ borderColor: "var(--hairline-on-dark)" }}
         >
           © {new Date().getFullYear()} Ryu Acupuncture Clinic. All rights

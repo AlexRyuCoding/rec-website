@@ -71,9 +71,9 @@ export default function ServicesRunway() {
             className="flex flex-col gap-6 lg:flex-row lg:items-center"
           >
             <div className="lg:w-1/2">
-              <h3 className="font-serif text-title text-cream">
+              <h2 className="font-serif text-title text-cream">
                 {s.title} <i>{s.sub}</i>
-              </h3>
+              </h2>
               <p className="mt-4 max-w-sm text-cream/60">{s.copy}</p>
             </div>
             <div className="relative aspect-[4/3] overflow-hidden rounded-card lg:w-1/2">
@@ -88,7 +88,7 @@ export default function ServicesRunway() {
   return (
     <section ref={root} className="relative h-[300vh]">
       <div className="sticky top-0 flex h-svh flex-col justify-center px-4 lg:px-8">
-        <p className="mb-6 text-sm font-medium text-cream/40">
+        <p className="mb-6 text-sm font-medium text-cream/50">
           What we treat with:
         </p>
         <div className="flex flex-col gap-10 lg:flex-row lg:items-center lg:justify-between">
@@ -100,9 +100,9 @@ export default function ServicesRunway() {
                 className="absolute inset-0"
                 style={i > 0 ? { opacity: 0, visibility: "hidden" } : undefined}
               >
-                <h3 className="font-serif text-title text-cream">
+                <h2 className="font-serif text-title text-cream">
                   {s.title} <i>{s.sub}</i>
-                </h3>
+                </h2>
                 <p className="mt-4 max-w-sm text-cream/60">{s.copy}</p>
                 <Link
                   href="/services"
@@ -132,7 +132,7 @@ export default function ServicesRunway() {
             ))}
           </div>
         </div>
-        <p className="mt-8 font-serif text-card text-cream/40" data-counter>
+        <p className="mt-8 font-serif text-card text-cream/50" data-counter>
           <span className="text-cream">01</span> / 03
         </p>
       </div>

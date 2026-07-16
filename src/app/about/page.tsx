@@ -34,9 +34,9 @@ const SPECIALTIES = [
 
 export default function About() {
   return (
-    <>
+    <main>
       <section className="flex min-h-[70svh] flex-col justify-end px-4 pb-12 pt-28 lg:px-8">
-        <p className="mb-6 text-sm font-medium text-cream/40">About us:</p>
+        <p className="mb-6 text-sm font-medium text-cream/50">About us:</p>
         <SplitReveal
           as="h1"
           className="max-w-6xl font-serif text-display text-cream"
@@ -170,7 +170,7 @@ export default function About() {
       </section>
 
       <section className="px-4 pb-24 lg:px-8 lg:pb-40">
-        <p className="mb-6 text-sm font-medium text-cream/40">
+        <p className="mb-6 text-sm font-medium text-cream/50">
           What makes our clinic unique:
         </p>
         <ul className="max-w-3xl">
@@ -196,6 +196,6 @@ export default function About() {
           </PillLink>
         </Reveal>
       </section>
-    </>
+    </main>
   );
 }

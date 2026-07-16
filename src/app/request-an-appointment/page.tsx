@@ -19,9 +19,9 @@ const FIRST_VISIT = [
 
 export default function RequestAnAppointment() {
   return (
-    <>
+    <main>
       <section className="flex min-h-[60svh] flex-col justify-end px-4 pb-12 pt-28 lg:px-8">
-        <p className="mb-6 text-sm font-medium text-cream/40">Appointments:</p>
+        <p className="mb-6 text-sm font-medium text-cream/50">Appointments:</p>
         <SplitReveal
           as="h1"
           className="max-w-6xl font-serif text-display text-cream"
@@ -91,7 +91,7 @@ export default function RequestAnAppointment() {
       <section className="px-4 pb-24 lg:px-8 lg:pb-40">
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-3">
           <div className="flex flex-col gap-3">
-            <p className="text-sm font-bold text-cream/40">Hours</p>
+            <p className="text-sm font-bold text-cream/50">Hours</p>
             {SITE.hours.map((h) => (
               <p key={h.days} className="text-sm text-cream/70">
                 {h.days} · {h.time}
@@ -99,7 +99,7 @@ export default function RequestAnAppointment() {
             ))}
           </div>
           <div className="flex flex-col gap-3">
-            <p className="text-sm font-bold text-cream/40">Location</p>
+            <p className="text-sm font-bold text-cream/50">Location</p>
             <p className="max-w-xs text-sm text-cream/70">
               {SITE.address.line}
             </p>
@@ -113,7 +113,7 @@ export default function RequestAnAppointment() {
             </a>
           </div>
           <div className="flex flex-col gap-3">
-            <p className="text-sm font-bold text-cream/40">Phone</p>
+            <p className="text-sm font-bold text-cream/50">Phone</p>
             <a
               href={SITE.phone.href}
               className="underline-link w-fit font-serif text-card text-cream"
@@ -123,6 +123,6 @@ export default function RequestAnAppointment() {
           </div>
         </div>
       </section>
-    </>
+    </main>
   );
 }

@@ -13,9 +13,9 @@ export const metadata: Metadata = {
 
 export default function Contact() {
   return (
-    <>
+    <main>
       <section className="flex min-h-[60svh] flex-col justify-end px-4 pb-12 pt-28 lg:px-8">
-        <p className="mb-6 text-sm font-medium text-cream/40">Contact:</p>
+        <p className="mb-6 text-sm font-medium text-cream/50">Contact:</p>
         <SplitReveal
           as="h1"
           className="font-serif text-display text-cream"
@@ -29,7 +29,7 @@ export default function Contact() {
       <section className="px-4 pb-24 lg:px-8 lg:pb-40">
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-3">
           <Reveal className="flex flex-col gap-4">
-            <p className="text-sm font-bold text-cream/40">Reach us</p>
+            <p className="text-sm font-bold text-cream/50">Reach us</p>
             <a
               href={SITE.phone.href}
               className="underline-link w-fit font-serif text-card text-cream"
@@ -42,11 +42,11 @@ export default function Contact() {
             >
               {SITE.email}
             </a>
-            <p className="text-sm text-cream/40">Fax: {SITE.fax.display}</p>
+            <p className="text-sm text-cream/50">Fax: {SITE.fax.display}</p>
           </Reveal>
 
           <Reveal delay={0.1} className="flex flex-col gap-4">
-            <p className="text-sm font-bold text-cream/40">Visit us</p>
+            <p className="text-sm font-bold text-cream/50">Visit us</p>
             <p className="max-w-xs text-cream/70">{SITE.address.line}</p>
             <a
               href={SITE.address.mapsUrl}
@@ -59,7 +59,7 @@ export default function Contact() {
           </Reveal>
 
           <Reveal delay={0.2} className="flex flex-col gap-4">
-            <p className="text-sm font-bold text-cream/40">Hours</p>
+            <p className="text-sm font-bold text-cream/50">Hours</p>
             {SITE.hours.map((h) => (
               <div
                 key={h.days}
@@ -77,7 +77,7 @@ export default function Contact() {
           <PillLink href={SITE.bookingUrl} external variant="gold">
             Book an Appointment
           </PillLink>
-          <p className="text-sm text-cream/40">
+          <p className="text-sm text-cream/50">
             Questions before you book?{" "}
             <Link
               href="/request-an-appointment/request-form"
@@ -88,6 +88,6 @@ export default function Contact() {
           </p>
         </Reveal>
       </section>
-    </>
+    </main>
   );
 }

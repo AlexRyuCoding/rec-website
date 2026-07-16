@@ -19,7 +19,7 @@ export default function PreFooterCta() {
         <PillLink href={SITE.bookingUrl} external variant="gold">
           Book Now
         </PillLink>
-        <p className="text-sm text-cream/40">
+        <p className="text-sm text-cream/50">
           New patient?{" "}
           <a
             href="/request-an-appointment"

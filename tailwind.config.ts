@@ -49,6 +49,15 @@ const config: Config = {
         "out-quint": "cubic-bezier(0.22, 1, 0.36, 1)",
         menu: "cubic-bezier(0.6, 0.14, 0, 1)",
       },
+      keyframes: {
+        fadeIn: {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
+        },
+      },
+      animation: {
+        "fade-in": "fadeIn 300ms ease",
+      },
       fontSize: {
         display: [
           "clamp(3.25rem, 1.25rem + 8.9vw, 9rem)",
@@ -66,7 +75,10 @@ const config: Config = {
           "clamp(1.375rem, 1.2rem + 0.9vw, 2.1875rem)",
           { lineHeight: "1", letterSpacing: "-0.02em" },
         ],
-        lead: ["clamp(1.125rem, 1rem + 0.5vw, 1.375rem)", { lineHeight: "1.35" }],
+        lead: [
+          "clamp(1.125rem, 1rem + 0.5vw, 1.375rem)",
+          { lineHeight: "1.35" },
+        ],
       },
     },
   },

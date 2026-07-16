@@ -40,9 +40,9 @@ export default function ScrollFillText({
   );
 
   return (
-    <p ref={ref} className={className} aria-label={text}>
+    <p ref={ref} className={className} role="text" aria-label={text}>
       {text.split(" ").map((word, i) => (
-        <span key={i} aria-hidden data-fill-word className="opacity-20">
+        <span key={i} aria-hidden data-fill-word className="opacity-50">
           {word}{" "}
         </span>
       ))}

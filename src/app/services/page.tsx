@@ -99,9 +99,9 @@ function TreatList({ items }: { items: string[] }) {
 
 export default function Services() {
   return (
-    <>
+    <main>
       <section className="flex min-h-[70svh] flex-col justify-end px-4 pb-12 pt-28 lg:px-8">
-        <p className="mb-6 text-sm font-medium text-cream/40">Our services:</p>
+        <p className="mb-6 text-sm font-medium text-cream/50">Our services:</p>
         <SplitReveal
           as="h1"
           className="max-w-6xl font-serif text-display text-cream"
@@ -265,6 +265,6 @@ export default function Services() {
           </div>
         </Reveal>
       </section>
-    </>
+    </main>
   );
 }
