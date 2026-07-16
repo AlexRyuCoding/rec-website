@@ -29,7 +29,9 @@ const RING_C = 2 * Math.PI * RING_R;
 export default function Testimonials() {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [pauseCycle, setPauseCycle] = useState(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wasPaused = useRef(false);
 
   const advance = useCallback(
     (dir: 1 | -1) =>
@@ -45,11 +47,27 @@ export default function Testimonials() {
     };
   }, [paused, advance, index]);
 
+  // Re-key the ring on the paused -> unpaused transition so it restarts
+  // in lockstep with the auto-advance timer above (which also restarts
+  // whenever `paused` flips to false).
+  useEffect(() => {
+    if (wasPaused.current && !paused) {
+      setPauseCycle((c) => c + 1);
+    }
+    wasPaused.current = paused;
+  }, [paused]);
+
   return (
     <section
       className="px-4 py-24 lg:px-8 lg:py-40"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          setPaused(false);
+        }
+      }}
     >
       <p className="mb-10 text-sm font-medium text-cream/40">
         What our patients say:
@@ -97,7 +115,7 @@ export default function Testimonials() {
             strokeWidth="1.5"
           />
           <circle
-            key={paused ? `p-${index}` : index}
+            key={`${index}-${pauseCycle}`}
             cx="20"
             cy="20"
             r={RING_R}
@@ -107,9 +125,8 @@ export default function Testimonials() {
             strokeDasharray={RING_C}
             strokeDashoffset={RING_C}
             style={{
-              animation: paused
-                ? "none"
-                : `ring-fill ${INTERVAL_MS}ms linear forwards`,
+              animation: `ring-fill ${INTERVAL_MS}ms linear forwards`,
+              animationPlayState: paused ? "paused" : "running",
             }}
           />
         </svg>
