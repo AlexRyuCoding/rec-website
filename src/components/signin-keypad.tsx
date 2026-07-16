@@ -350,15 +350,23 @@ export default function SignInKeypad() {
 
   // --- PIN display helper ---
 
-  const pinDots = (value: string) =>
-    Array.from({ length: 4 }, (_, i) => (
-      <div
-        key={i}
-        className={`w-6 h-6 rounded-full border-2 border-brand-foreground dark:border-white transition-colors ${
-          i < value.length ? "bg-[#2A9E8F]" : "bg-transparent"
-        }`}
-      />
-    ));
+  // role="status" makes screen readers announce progress as digits go in
+  const pinDots = (value: string) => (
+    <div
+      className="flex justify-center gap-4 mb-6 py-4"
+      role="status"
+      aria-label={`${value.length} of 4 digits entered`}
+    >
+      {Array.from({ length: 4 }, (_, i) => (
+        <div
+          key={i}
+          className={`w-6 h-6 rounded-full border-2 border-brand-foreground dark:border-white transition-colors ${
+            i < value.length ? "bg-brand-primary" : "bg-transparent"
+          }`}
+        />
+      ))}
+    </div>
+  );
 
   // --- Keypad ---
 
@@ -386,7 +394,7 @@ export default function SignInKeypad() {
               : handleNewPinDigit(num)
           }
           disabled={keypadDisabled || currentPinValue.length >= 4}
-          className="py-3 text-5xl bg-brand-background dark:bg-[var(--background)] hover:bg-brand-muted dark:hover:bg-gray-600 border border-brand-foreground dark:border-brand-background rounded-xl disabled:opacity-50 transition-colors"
+          className="py-3 text-5xl bg-brand-background dark:bg-[var(--background)] hover:bg-brand-muted dark:hover:bg-gray-600 active:bg-brand-muted dark:active:bg-gray-600 active:scale-95 border border-brand-foreground dark:border-brand-background rounded-xl disabled:opacity-50 transition"
         >
           {num}
         </button>
@@ -396,14 +404,16 @@ export default function SignInKeypad() {
           screen === "pin_entry" ? handlePinBackspace : handleNewPinBackspace
         }
         disabled={keypadDisabled}
-        className="col-span-1 text-5xl bg-[#fcdf97] dark:bg-[#E9C46A] hover:bg-[#E9C46A] dark:hover:bg-[#e8b63c] border rounded-xl disabled:opacity-50 transition-colors"
+        aria-label="Delete last digit"
+        className="col-span-1 text-5xl bg-brand-accent-light dark:bg-brand-accent hover:bg-brand-accent dark:hover:bg-brand-accent-dark active:scale-95 border rounded-xl disabled:opacity-50 transition"
       >
-        ⌫
+        <span aria-hidden="true">⌫</span>
       </button>
       <button
         onClick={screen === "pin_entry" ? handlePinClear : handleNewPinClear}
         disabled={keypadDisabled}
-        className="col-span-1 py-3 text-2xl bg-red-300 dark:bg-red-400 hover:bg-red-400 dark:hover:bg-red-600 border rounded-xl disabled:opacity-50 transition-colors"
+        aria-label="Clear all digits"
+        className="col-span-1 py-3 text-2xl bg-red-300 dark:bg-red-400 hover:bg-red-400 dark:hover:bg-red-600 active:scale-95 border rounded-xl disabled:opacity-50 transition"
       >
         CLEAR
       </button>
@@ -429,14 +439,12 @@ export default function SignInKeypad() {
               layout
               className="w-full max-w-[380px] sm:max-w-[480px] p-4 rounded-lg shadow-lg bg-brand-background dark:bg-[var(--background)] border border-brand-foreground dark:border-white"
             >
-              <div className="flex justify-center gap-4 mb-6 py-4">
-                {pinDots(pin)}
-              </div>
+              {pinDots(pin)}
               <Keypad />
             </motion.div>
             <button
               onClick={() => setScreen("new_contact")}
-              className="text-lg text-[#2A9E8F] underline underline-offset-2 hover:text-[#238B7E] transition-colors"
+              className="text-lg text-brand-primary underline underline-offset-2 hover:text-brand-secondary transition-colors"
             >
               First visit? Set up your PIN
             </button>
@@ -455,7 +463,7 @@ export default function SignInKeypad() {
             className="flex flex-col items-center gap-4"
           >
             <motion.div
-              className="w-12 h-12 border-4 border-[#2A9E8F] border-t-transparent rounded-full"
+              className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full"
               animate={{ rotate: 360 }}
               transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
             />
@@ -483,7 +491,7 @@ export default function SignInKeypad() {
             </p>
             <button
               onClick={reset}
-              className="px-8 py-3 rounded-full bg-[#2A9E8F] text-white text-xl hover:bg-[#238B7E] transition-colors"
+              className="px-8 py-3 rounded-full bg-brand-primary text-white text-xl hover:bg-brand-secondary active:scale-95 transition"
             >
               Try Again
             </button>
@@ -508,20 +516,20 @@ export default function SignInKeypad() {
               onChange={(e) => setContact(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleContactSubmit()}
               placeholder="555-123-4567 or email"
-              className="w-full px-4 py-3 border border-brand-foreground rounded-lg text-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-[#2A9E8F]"
+              className="w-full px-4 py-3 border border-brand-foreground rounded-lg text-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-primary"
               autoFocus
             />
             <div className="flex gap-4 w-full">
               <button
                 onClick={reset}
-                className="flex-1 py-3 rounded-full border border-brand-foreground text-xl hover:bg-brand-muted transition-colors"
+                className="flex-1 py-3 rounded-full border border-brand-foreground text-xl hover:bg-brand-muted active:scale-95 transition"
               >
                 Back
               </button>
               <button
                 onClick={handleContactSubmit}
                 disabled={!contact.trim()}
-                className="flex-1 py-3 rounded-full bg-[#2A9E8F] text-white text-xl hover:bg-[#238B7E] disabled:opacity-50 transition-colors"
+                className="flex-1 py-3 rounded-full bg-brand-primary text-white text-xl hover:bg-brand-secondary active:scale-95 disabled:opacity-50 transition"
               >
                 Continue
               </button>
@@ -546,7 +554,7 @@ export default function SignInKeypad() {
                 <button
                   key={option.patient_id}
                   onClick={() => handleNameSelect(option)}
-                  className="py-4 px-6 rounded-xl border border-brand-foreground text-2xl bg-brand-background dark:bg-[var(--background)] hover:bg-brand-muted dark:hover:bg-gray-600 transition-colors"
+                  className="py-4 px-6 rounded-xl border border-brand-foreground text-2xl bg-brand-background dark:bg-[var(--background)] hover:bg-brand-muted dark:hover:bg-gray-600 active:scale-95 transition"
                 >
                   {option.first_name}
                   {option.last_initial ? ` ${option.last_initial}.` : ""}
@@ -585,9 +593,7 @@ export default function SignInKeypad() {
               layout
               className="w-full max-w-[380px] sm:max-w-[480px] p-4 rounded-lg shadow-lg bg-brand-background dark:bg-[var(--background)] border border-brand-foreground dark:border-white"
             >
-              <div className="flex justify-center gap-4 mb-6 py-4">
-                {pinDots(currentPinValue)}
-              </div>
+              {pinDots(currentPinValue)}
               <Keypad />
             </motion.div>
             <button

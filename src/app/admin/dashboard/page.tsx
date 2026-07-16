@@ -252,7 +252,9 @@ export default function AdminDashboard() {
 
   const tabClass = (active: boolean) =>
     `px-6 py-3 text-lg rounded-t-lg border border-b-0 border-brand-foreground transition-colors ${
-      active ? "bg-[#2A9E8F] text-white" : "bg-transparent hover:bg-brand-muted"
+      active
+        ? "bg-brand-primary text-white"
+        : "bg-transparent hover:bg-brand-muted"
     }`;
 
   return (
@@ -292,7 +294,7 @@ export default function AdminDashboard() {
                   onClick={() => setPreset(p)}
                   className={`px-4 py-2 rounded-full border transition-colors ${
                     preset === p
-                      ? "bg-[#2A9E8F] text-white border-[#2A9E8F]"
+                      ? "bg-brand-primary text-white border-brand-primary"
                       : "border-brand-foreground hover:bg-brand-muted"
                   }`}
                 >
@@ -377,12 +379,12 @@ export default function AdminDashboard() {
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && search()}
                 placeholder="Search by name, email, or phone"
-                className="flex-1 px-4 py-2 border border-brand-foreground rounded-lg bg-transparent focus:outline-none focus:ring-2 focus:ring-[#2A9E8F]"
+                className="flex-1 px-4 py-2 border border-brand-foreground rounded-lg bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-primary"
               />
               <button
                 onClick={search}
                 disabled={searching || query.trim().length < 2}
-                className="px-6 py-2 rounded-lg bg-[#2A9E8F] text-white hover:bg-[#238B7E] disabled:opacity-50 transition-colors"
+                className="px-6 py-2 rounded-lg bg-brand-primary text-white hover:bg-brand-secondary disabled:opacity-50 transition-colors"
               >
                 {searching ? "Searching..." : "Search"}
               </button>
@@ -437,7 +439,7 @@ export default function AdminDashboard() {
                         </td>
                         <td className="py-2 text-right">
                           {resetDoneId === p.id ? (
-                            <span className="text-[#2A9E8F]">
+                            <span className="text-brand-primary">
                               Cleared — patient can set a new PIN at the kiosk
                             </span>
                           ) : p.has_pin ? (

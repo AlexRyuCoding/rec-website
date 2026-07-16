@@ -104,11 +104,15 @@ export default function ConfirmationModal({
         onClick={saving ? undefined : onClose}
       />
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Check-in confirmation"
         className={`relative bg-[var(--background)] dark:bg-gray-800 border border-gray-200 dark:border-gray-400 p-6 mx-4 sm:mx-auto rounded-lg max-w-md w-full z-10 transition-all duration-300 ${
           isOpen ? "translate-y-0 opacity-100" : "translate-y-24 opacity-0"
         }`}
       >
-        <div className="text-center mb-10">
+        {/* aria-live announces the thank-you / error text when it appears */}
+        <div className="text-center mb-10" aria-live="polite">
           {failed ? (
             <p className="text-2xl text-red-600 dark:text-red-400">
               We couldn&apos;t record your check-in. Please see the front desk.
@@ -157,14 +161,14 @@ export default function ConfirmationModal({
             <button
               onClick={handleConfirm}
               disabled={saving}
-              className="px-6 py-2 bg-[#2A9E8F] hover:bg-[#238B7E] text-white rounded-full disabled:opacity-50 transition-colors"
+              className="px-6 py-2 bg-brand-primary hover:bg-brand-secondary active:scale-95 text-white rounded-full disabled:opacity-50 transition"
             >
               {saving ? "Signing in..." : "Yes, Sign In"}
             </button>
             <button
               onClick={onDeny}
               disabled={saving}
-              className="px-6 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-400 dark:hover:bg-gray-600 rounded-full disabled:opacity-50 transition-colors"
+              className="px-6 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-400 dark:hover:bg-gray-600 active:scale-95 rounded-full disabled:opacity-50 transition"
             >
               No
             </button>
@@ -174,7 +178,7 @@ export default function ConfirmationModal({
           <div className="flex justify-center">
             <button
               onClick={onClose}
-              className="px-6 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-400 dark:hover:bg-gray-600 rounded-full transition-colors"
+              className="px-6 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-400 dark:hover:bg-gray-600 active:scale-95 rounded-full transition"
             >
               Close
             </button>

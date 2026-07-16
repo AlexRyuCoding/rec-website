@@ -32,7 +32,7 @@ export default function AdminLoginPage() {
         <button
           onClick={handleSignIn}
           disabled={loading}
-          className="flex items-center justify-center gap-3 py-3 rounded-lg bg-[#2A9E8F] text-white text-lg font-medium hover:bg-[#238B7E] disabled:opacity-50 transition-colors"
+          className="flex items-center justify-center gap-3 py-3 rounded-lg bg-brand-primary text-white text-lg font-medium hover:bg-brand-secondary disabled:opacity-50 transition-colors"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
             <path
