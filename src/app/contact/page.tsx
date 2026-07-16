@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import SplitReveal from "@/components/motion/split-reveal";
 import Reveal from "@/components/motion/reveal";
 import PillLink from "@/components/ui/pill-link";
@@ -78,12 +79,12 @@ export default function Contact() {
           </PillLink>
           <p className="text-sm text-cream/40">
             Questions before you book?{" "}
-            <a
+            <Link
               href="/request-an-appointment/request-form"
               className="underline-link text-cream"
             >
               Send us a message
-            </a>
+            </Link>
           </p>
         </Reveal>
       </section>
