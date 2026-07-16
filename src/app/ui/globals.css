@@ -106,11 +106,21 @@ body {
     backdrop-filter: blur(22px) saturate(1.2);
     -webkit-backdrop-filter: blur(22px) saturate(1.2);
   }
+  /* Inverted ink variant: the same glass recipe re-tinted for light
+     backdrops (header over porcelain islands). */
+  .glass-surface--ink {
+    background: rgba(46, 61, 66, 0.08);
+    border-color: rgba(46, 61, 66, 0.25);
+  }
+
   @supports not (
     (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
   ) {
     .glass-surface {
       background: rgba(14, 24, 29, 0.72);
+    }
+    .glass-surface--ink {
+      background: rgba(236, 234, 230, 0.9);
     }
   }
 

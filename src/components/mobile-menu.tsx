@@ -16,7 +16,11 @@ const MENU_ITEMS = [
   { href: "/report-a-grievance", label: "Report a Grievance" },
 ];
 
-export default function MobileMenu() {
+export default function MobileMenu({
+  inverted = false,
+}: {
+  inverted?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   // Portal target only exists client-side
   const [mounted, setMounted] = useState(false);
@@ -131,7 +135,9 @@ export default function MobileMenu() {
         onClick={() => setOpen(!open)}
         aria-label={open ? "Close menu" : "Open menu"}
         aria-expanded={open}
-        className="flex size-11 items-center justify-center rounded-full border border-cream/15 text-cream"
+        className={`flex size-11 items-center justify-center rounded-full border transition-colors duration-300 ${
+          inverted ? "border-ink/20 text-ink" : "border-cream/15 text-cream"
+        }`}
       >
         {open ? <X className="size-5" /> : <AlignJustify className="size-5" />}
       </button>
