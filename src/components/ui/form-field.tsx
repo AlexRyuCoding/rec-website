@@ -17,7 +17,7 @@ interface FormFieldProps {
 const FIELD_CLASSES =
   "peer w-full border border-ink/20 bg-transparent px-6 pt-6 pb-2 text-base text-ink outline-none transition-colors duration-300 focus:border-ink/60";
 const LABEL_CLASSES =
-  "pointer-events-none absolute left-6 top-1/2 -translate-y-1/2 text-muted-on-light text-base text-ink/50 transition-all duration-300 ease-default peer-focus:top-4 peer-focus:text-xs peer-[:not(:placeholder-shown)]:top-4 peer-[:not(:placeholder-shown)]:text-xs";
+  "pointer-events-none absolute left-6 top-1/2 -translate-y-1/2 text-base text-ink/50 transition-all duration-300 ease-default peer-focus:top-4 peer-focus:text-xs peer-[:not(:placeholder-shown)]:top-4 peer-[:not(:placeholder-shown)]:text-xs";
 
 export default function FormField({
   id,
