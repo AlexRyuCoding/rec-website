@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { AlignJustify, X } from "lucide-react";
 import PillLink from "@/components/ui/pill-link";
@@ -18,6 +18,8 @@ const MENU_ITEMS = [
 export default function MobileMenu() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const navRef = useRef<HTMLElement>(null);
 
   // Close on navigation
   useEffect(() => {
@@ -32,9 +34,30 @@ export default function MobileMenu() {
     };
   }, [open]);
 
+  // Escape closes the sheet and returns focus to the trigger; opening
+  // moves focus into the sheet's first link
+  useEffect(() => {
+    if (!open) return;
+
+    navRef.current?.querySelector("a")?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
   return (
     <div className="lg:hidden">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen(!open)}
         aria-label={open ? "Close menu" : "Open menu"}
@@ -52,15 +75,19 @@ export default function MobileMenu() {
       />
 
       <div
+        role={open ? "dialog" : undefined}
+        aria-modal={open || undefined}
+        aria-label={open ? "Site menu" : undefined}
         className={`fixed inset-x-0 bottom-0 rounded-t-sheet bg-island px-6 pb-10 pt-8 text-ink transition-transform duration-500 ease-menu ${
           open ? "translate-y-0" : "pointer-events-none translate-y-full"
         }`}
       >
-        <nav className="flex flex-col">
+        <nav ref={navRef} className="flex flex-col">
           {MENU_ITEMS.map((item) => (
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => setOpen(false)}
               className="border-b py-4 font-serif text-3xl leading-none last:border-b-0"
               style={{ borderColor: "var(--hairline-on-light)" }}
             >
@@ -69,10 +96,16 @@ export default function MobileMenu() {
           ))}
         </nav>
         <div className="mt-6 flex items-center justify-between">
-          <PillLink href={SITE.bookingUrl} external variant="dark">
-            Book Now
-          </PillLink>
-          <a href={SITE.phone.href} className="text-sm font-bold">
+          <span onClick={() => setOpen(false)}>
+            <PillLink href={SITE.bookingUrl} external variant="dark">
+              Book Now
+            </PillLink>
+          </span>
+          <a
+            href={SITE.phone.href}
+            onClick={() => setOpen(false)}
+            className="text-sm font-bold"
+          >
             {SITE.phone.display}
           </a>
         </div>
