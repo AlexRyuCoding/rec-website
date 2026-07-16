@@ -92,4 +92,10 @@ body {
       rgba(14, 24, 29, 1) 100%
     );
   }
+
+  @keyframes ring-fill {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
 }
