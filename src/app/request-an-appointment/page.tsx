@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { SITE } from "@/lib/site";
 
 export default function RequestAnAppointment() {
   return (
@@ -43,7 +44,7 @@ export default function RequestAnAppointment() {
                 Sign in and book your appointment below.
               </p>
               <a
-                href="https://patient.unifiedpractice.com/ryu-acupuncture"
+                href={SITE.bookingUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-block mt-4 px-6 py-2 bg-brand-primary text-white font-semibold rounded-lg hover:bg-blue-500 transition"
@@ -96,7 +97,7 @@ export default function RequestAnAppointment() {
                 .
               </p>
               <a
-                href="https://patient.unifiedpractice.com/ryu-acupuncture"
+                href={SITE.bookingUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-block mt-4 px-6 py-2 bg-brand-primary text-white font-semibold rounded-lg hover:bg-blue-500 transition"
