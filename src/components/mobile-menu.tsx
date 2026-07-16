@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { AlignJustify, X } from "lucide-react";
 import PillLink from "@/components/ui/pill-link";
@@ -17,10 +18,16 @@ const MENU_ITEMS = [
 
 export default function MobileMenu() {
   const [open, setOpen] = useState(false);
+  // Portal target only exists client-side
+  const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Remove the sheet (its links + pill) from tab order while closed —
   // React 18 has no `inert` prop, so set the DOM property directly.
@@ -28,7 +35,7 @@ export default function MobileMenu() {
     const sheetEl = sheetRef.current;
     if (!sheetEl) return;
     (sheetEl as HTMLElement & { inert: boolean }).inert = !open;
-  }, [open]);
+  }, [open, mounted]);
 
   // Close on navigation
   useEffect(() => {
@@ -63,22 +70,15 @@ export default function MobileMenu() {
     };
   }, [open]);
 
-  return (
-    <div className="lg:hidden">
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => setOpen(!open)}
-        aria-label={open ? "Close menu" : "Open menu"}
-        aria-expanded={open}
-        className="flex size-12 items-center justify-center rounded-full border border-cream/15 text-cream"
-      >
-        {open ? <X className="size-5" /> : <AlignJustify className="size-5" />}
-      </button>
-
+  // The overlay + sheet are portaled to <body>: position:fixed breaks inside
+  // the header because its glass surface (backdrop-filter) — or any ancestor
+  // transform — becomes their containing block, dragging the "closed" sheet
+  // into view. That was the scroll-opens-menu bug.
+  const sheet = (
+    <>
       <div
         onClick={() => setOpen(false)}
-        className={`fixed inset-0 -z-10 bg-canvas/50 backdrop-blur-md transition-opacity duration-500 ${
+        className={`fixed inset-0 z-40 bg-canvas/50 backdrop-blur-md transition-opacity duration-500 ${
           open ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       />
@@ -88,8 +88,8 @@ export default function MobileMenu() {
         role={open ? "dialog" : undefined}
         aria-modal={open || undefined}
         aria-label={open ? "Site menu" : undefined}
-        className={`fixed inset-x-0 bottom-0 rounded-t-sheet bg-island px-6 pb-10 pt-8 text-ink transition-transform duration-500 ease-menu ${
-          open ? "translate-y-0" : "pointer-events-none translate-y-full"
+        className={`fixed inset-x-3 bottom-3 z-50 rounded-sheet bg-island px-6 pb-8 pt-6 text-ink transition-transform duration-500 ease-menu ${
+          open ? "translate-y-0" : "pointer-events-none translate-y-[110%]"
         }`}
       >
         <nav ref={navRef} className="flex flex-col">
@@ -120,6 +120,23 @@ export default function MobileMenu() {
           </a>
         </div>
       </div>
+    </>
+  );
+
+  return (
+    <div className="lg:hidden">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-label={open ? "Close menu" : "Open menu"}
+        aria-expanded={open}
+        className="flex size-11 items-center justify-center rounded-full border border-cream/15 text-cream"
+      >
+        {open ? <X className="size-5" /> : <AlignJustify className="size-5" />}
+      </button>
+
+      {mounted && createPortal(sheet, document.body)}
     </div>
   );
 }
