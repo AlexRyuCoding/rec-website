@@ -22,25 +22,31 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-brand-background">
-      <div className="flex flex-col gap-6 w-full max-w-sm p-8 border border-brand-foreground rounded-xl shadow-md bg-brand-background">
-        <h1 className="text-2xl font-semibold text-center">Staff Login</h1>
-        <p className="text-center text-gray-600 dark:text-gray-300">
+    <div className="flex min-h-screen items-center justify-center bg-canvas px-4">
+      <div className="flex w-full max-w-sm flex-col gap-6 rounded-card bg-island p-10 text-ink">
+        <h1 className="text-center font-serif text-3xl">
+          Staff <i>login</i>
+        </h1>
+        <p className="text-center text-sm text-ink/60">
           Sign in with your staff Google account to unlock the kiosk.
         </p>
-        {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+        {error && (
+          <p role="alert" className="text-center text-sm text-error">
+            {error}
+          </p>
+        )}
         <button
           onClick={handleSignIn}
           disabled={loading}
-          className="flex items-center justify-center gap-3 py-3 rounded-lg bg-brand-primary text-white text-lg font-medium hover:bg-brand-secondary disabled:opacity-50 transition-colors"
+          className="flex items-center justify-center gap-3 rounded-full bg-surface py-4 text-sm font-bold text-cream transition-opacity disabled:opacity-50"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
             <path
               fill="currentColor"
               d="M21.35 11.1H12v2.9h5.35c-.5 2.35-2.45 3.7-5.35 3.7a5.7 5.7 0 1 1 0-11.4c1.45 0 2.75.5 3.8 1.5l2.15-2.15A8.55 8.55 0 0 0 12 3.15a8.85 8.85 0 1 0 0 17.7c5.1 0 8.5-3.6 8.5-8.65 0-.35-.05-.75-.15-1.1Z"
             />
           </svg>
-          {loading ? "Redirecting..." : "Sign in with Google"}
+          {loading ? "Redirecting…" : "Sign in with Google"}
         </button>
       </div>
     </div>

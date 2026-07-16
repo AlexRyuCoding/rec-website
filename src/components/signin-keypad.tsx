@@ -360,7 +360,7 @@ export default function SignInKeypad() {
       {Array.from({ length: 4 }, (_, i) => (
         <div
           key={i}
-          className={`w-6 h-6 rounded-full border-2 border-brand-foreground dark:border-white transition-colors ${
+          className={`w-6 h-6 rounded-full border-2 border-brand-foreground transition-colors ${
             i < value.length ? "bg-brand-primary" : "bg-transparent"
           }`}
         />
@@ -394,7 +394,7 @@ export default function SignInKeypad() {
               : handleNewPinDigit(num)
           }
           disabled={keypadDisabled || currentPinValue.length >= 4}
-          className="py-3 text-5xl bg-brand-background dark:bg-[var(--background)] hover:bg-brand-muted dark:hover:bg-gray-600 active:bg-brand-muted dark:active:bg-gray-600 active:scale-95 border border-brand-foreground dark:border-brand-background rounded-xl disabled:opacity-50 transition"
+          className="py-3 text-5xl bg-brand-background hover:bg-brand-muted active:bg-brand-muted active:scale-95 border border-cream/15 text-cream rounded-full disabled:opacity-50 transition"
         >
           {num}
         </button>
@@ -405,7 +405,7 @@ export default function SignInKeypad() {
         }
         disabled={keypadDisabled}
         aria-label="Delete last digit"
-        className="col-span-1 text-5xl bg-brand-accent-light dark:bg-brand-accent hover:bg-brand-accent dark:hover:bg-brand-accent-dark active:scale-95 border rounded-xl disabled:opacity-50 transition"
+        className="col-span-1 text-5xl bg-brand-accent-light hover:bg-brand-accent active:scale-95 border rounded-xl disabled:opacity-50 transition"
       >
         <span aria-hidden="true">⌫</span>
       </button>
@@ -413,7 +413,7 @@ export default function SignInKeypad() {
         onClick={screen === "pin_entry" ? handlePinClear : handleNewPinClear}
         disabled={keypadDisabled}
         aria-label="Clear all digits"
-        className="col-span-1 py-3 text-2xl bg-red-300 dark:bg-red-400 hover:bg-red-400 dark:hover:bg-red-600 active:scale-95 border rounded-xl disabled:opacity-50 transition"
+        className="col-span-1 py-3 text-2xl bg-error hover:bg-error active:scale-95 border rounded-xl disabled:opacity-50 transition"
       >
         CLEAR
       </button>
@@ -437,7 +437,7 @@ export default function SignInKeypad() {
             </p>
             <motion.div
               layout
-              className="w-full max-w-[380px] sm:max-w-[480px] p-4 rounded-lg shadow-lg bg-brand-background dark:bg-[var(--background)] border border-brand-foreground dark:border-white"
+              className="w-full max-w-[380px] sm:max-w-[480px] p-4 rounded-lg bg-brand-background border border-brand-foreground"
             >
               {pinDots(pin)}
               <Keypad />
@@ -486,9 +486,7 @@ export default function SignInKeypad() {
             exit={{ opacity: 0 }}
             className="flex flex-col items-center gap-6 max-w-sm text-center"
           >
-            <p className="text-2xl text-red-600 dark:text-red-400">
-              {errorMessage}
-            </p>
+            <p className="text-2xl text-error">{errorMessage}</p>
             <button
               onClick={reset}
               className="px-8 py-3 rounded-full bg-brand-primary text-white text-xl hover:bg-brand-secondary active:scale-95 transition"
@@ -554,7 +552,7 @@ export default function SignInKeypad() {
                 <button
                   key={option.patient_id}
                   onClick={() => handleNameSelect(option)}
-                  className="py-4 px-6 rounded-xl border border-brand-foreground text-2xl bg-brand-background dark:bg-[var(--background)] hover:bg-brand-muted dark:hover:bg-gray-600 active:scale-95 transition"
+                  className="py-4 px-6 rounded-xl border border-brand-foreground text-2xl bg-brand-background hover:bg-brand-muted active:scale-95 transition"
                 >
                   {option.first_name}
                   {option.last_initial ? ` ${option.last_initial}.` : ""}
@@ -563,7 +561,7 @@ export default function SignInKeypad() {
             </div>
             <button
               onClick={reset}
-              className="text-lg text-gray-500 underline underline-offset-2 hover:text-gray-700 transition-colors"
+              className="text-lg text-cream/50 underline underline-offset-2 hover:text-cream/50 transition-colors"
             >
               Cancel
             </button>
@@ -585,13 +583,13 @@ export default function SignInKeypad() {
                 : "Re-enter your PIN to confirm."}
             </p>
             {errorMessage && screen === "new_pin_create" && (
-              <p className="text-lg text-red-600 dark:text-red-400 text-center max-w-sm">
+              <p className="text-lg text-error text-center max-w-sm">
                 {errorMessage}
               </p>
             )}
             <motion.div
               layout
-              className="w-full max-w-[380px] sm:max-w-[480px] p-4 rounded-lg shadow-lg bg-brand-background dark:bg-[var(--background)] border border-brand-foreground dark:border-white"
+              className="w-full max-w-[380px] sm:max-w-[480px] p-4 rounded-lg bg-brand-background border border-brand-foreground"
             >
               {pinDots(currentPinValue)}
               <Keypad />
@@ -606,7 +604,7 @@ export default function SignInKeypad() {
                   reset();
                 }
               }}
-              className="text-lg text-gray-500 underline underline-offset-2 hover:text-gray-700 transition-colors"
+              className="text-lg text-cream/50 underline underline-offset-2 hover:text-cream/50 transition-colors"
             >
               {screen === "new_pin_confirm" ? "Back" : "Cancel"}
             </button>

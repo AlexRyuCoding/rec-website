@@ -16,18 +16,17 @@ const config: Config = {
         cream: "#eceae6",
         gold: "#e9c46a",
         error: "#ff3c3c",
-        // Legacy palette — admin/kiosk still reference these. Task 13 re-points
-        // the values to the new register; do not use brand-* in new code.
+        // Legacy palette — now aliased to the dark register. Admin/kiosk only.
         brand: {
-          background: "#ffffff",
-          foreground: "#22404b",
+          background: "#0e181d", // canvas
+          foreground: "#eceae6", // cream
           primary: "#2a9e8f",
           secondary: "#238b7e",
           accent: "#e9c46a",
           "accent-light": "#fcdf97",
           "accent-dark": "#e8b63c",
           tertiary: "#f4a261",
-          muted: "#e5e7eb",
+          muted: "#22404b", // surface
           highlight: "#fefae0",
           danger: "#e76f51",
           gray: {
