@@ -3,6 +3,7 @@ import SplitReveal from "@/components/motion/split-reveal";
 import Reveal from "@/components/motion/reveal";
 import Parallax from "@/components/motion/parallax";
 import PillLink from "@/components/ui/pill-link";
+import Link from "next/link";
 import { SITE } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -131,8 +132,9 @@ export default function Services() {
               needles into specific points along the body&apos;s energy pathways
               (called meridians). This stimulates the body&apos;s innate ability
               to heal, regulate internal systems, and reduce pain. Most people
-              feel minimal to no pain — many patients fall asleep during
-              treatment.
+              feel minimal to no pain — sensations are often described as
+              tingling, warmth, or a calming heaviness, and many patients fall
+              asleep during treatment.
             </p>
             <p className="mb-2 mt-8 text-sm font-bold text-cream">
               What can acupuncture treat?
@@ -150,6 +152,21 @@ export default function Services() {
         </div>
       </section>
 
+      <section className="px-4 py-16 text-center lg:px-8 lg:py-24">
+        <Reveal>
+          <h2 className="mx-auto max-w-2xl font-serif text-heading text-cream">
+            Meet with one of our <i>acupuncturists.</i>
+          </h2>
+          <p className="mx-auto mt-6 max-w-md leading-relaxed text-cream/60">
+            The best way for us to get to know you and what you are coming for
+            is through a comprehensive consultation and treatment.
+          </p>
+          <PillLink href="/request-an-appointment" className="mt-6">
+            Set Up Your Appointment Today
+          </PillLink>
+        </Reveal>
+      </section>
+
       <section className="px-4 py-16 lg:px-8 lg:py-24">
         <div className="flex flex-col gap-10 lg:flex-row-reverse lg:items-start lg:justify-between">
           <div className="lg:w-[45%]">
@@ -161,7 +178,8 @@ export default function Services() {
               create formulas tailored to your unique condition and constitution
               — in powder, pill, or tea form, based on your body type, symptoms,
               and the root cause of imbalance. We source only from
-              third-party-tested, reputable suppliers.
+              third-party-tested, reputable suppliers. Formulas are
+              custom-blended to be safe and effective.
             </p>
             <p className="mb-2 mt-8 text-sm font-bold text-cream">
               What can herbal medicine help with?
@@ -222,7 +240,15 @@ export default function Services() {
 
       <section className="px-4 pb-24 text-center lg:px-8 lg:pb-40">
         <Reveal>
-          <p className="mx-auto max-w-2xl font-serif text-heading text-cream">
+          <h2 className="mx-auto max-w-2xl font-serif text-title text-cream">
+            Ready to begin your <i>healing journey?</i>
+          </h2>
+          <p className="mx-auto mt-6 max-w-md leading-relaxed text-cream/60">
+            Whether you&apos;re seeking pain relief, hormone balance, or overall
+            well-being, acupuncture and herbal medicine offer time-tested
+            solutions rooted in nature.
+          </p>
+          <p className="mx-auto mt-10 max-w-2xl font-serif text-heading text-cream">
             &ldquo;When you harmonize the body, the body knows{" "}
             <i>how to heal.</i>&rdquo;
           </p>
@@ -230,12 +256,12 @@ export default function Services() {
             <PillLink href={SITE.bookingUrl} external variant="gold">
               Book a Consultation
             </PillLink>
-            <a
+            <Link
               href="/request-an-appointment"
               className="underline-link text-sm text-cream"
             >
               New patient? Request your first appointment
-            </a>
+            </Link>
           </div>
         </Reveal>
       </section>

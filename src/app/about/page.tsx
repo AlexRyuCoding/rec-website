@@ -25,6 +25,13 @@ const UNIQUE = [
   "Collaborative, integrative approach",
 ];
 
+const SPECIALTIES = [
+  "Infertility & Women's Health",
+  "Allergy & Asthma Relief",
+  "Back, Neck & Joint Pain Management",
+  "Hormonal Imbalance & Stress Support",
+];
+
 export default function About() {
   return (
     <>
@@ -45,6 +52,12 @@ export default function About() {
             What began as a small, family-run clinic has become a community
             cornerstone—offering compassionate, results-driven care rooted in
             the wisdom of Traditional Chinese Medicine.
+          </p>
+          <p className="mt-6 leading-relaxed text-cream/60">
+            Over the years, we&apos;ve helped thousands of patients reduce pain,
+            restore balance, and reconnect with their body&apos;s natural
+            healing process. Our mission remains simple: to provide exceptional
+            care with heart, skill, and respect.
           </p>
         </Reveal>
       </section>
@@ -103,12 +116,17 @@ export default function About() {
             just the symptoms. We take time to listen, diagnose thoughtfully,
             and treat holistically.
           </p>
+          <p className="mt-4 max-w-md leading-relaxed text-cream/60">
+            Our team uses the ancient principles of TCM alongside a modern
+            understanding of the body to restore harmony, prevent illness, and
+            support lifelong wellness.
+          </p>
         </Reveal>
         <div className="mt-16 grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Reveal className="media-ramp">
             <Parallax
               src="/pic-w-pt.jpg"
-              alt="Dr. Ryu with his patients"
+              alt="Dr. Ryu treating a patient"
               className="aspect-[4/3] rounded-card"
               sizes="(min-width: 1024px) 50vw, 100vw"
             />
@@ -116,12 +134,39 @@ export default function About() {
           <Reveal delay={0.15} className="media-ramp">
             <Parallax
               src="/pic-w-pt2.jpg"
-              alt="Dr. Ryu with his patients"
+              alt="Dr. Ryu with a longtime patient"
               className="aspect-[4/3] rounded-card"
               sizes="(min-width: 1024px) 50vw, 100vw"
             />
           </Reveal>
         </div>
+      </section>
+
+      <section className="px-4 py-24 lg:px-8 lg:py-40">
+        <Reveal>
+          <h2 className="max-w-4xl font-serif text-title text-cream">
+            Areas of <i>specialty</i>
+          </h2>
+        </Reveal>
+        <ul className="mt-16 max-w-3xl">
+          {SPECIALTIES.map((s) => (
+            <li
+              key={s}
+              className="border-t py-6 font-serif text-card text-cream"
+              style={{ borderColor: "var(--hairline-on-dark)" }}
+            >
+              {s}
+            </li>
+          ))}
+        </ul>
+        <Reveal className="mt-16 media-ramp">
+          <Parallax
+            src="/dr-jay-ryu-candid-office.jpg"
+            alt="Dr. Jay J. Ryu at work in his Burbank office"
+            className="aspect-[4/3] rounded-card"
+            sizes="100vw"
+          />
+        </Reveal>
       </section>
 
       <section className="px-4 pb-24 lg:px-8 lg:pb-40">
