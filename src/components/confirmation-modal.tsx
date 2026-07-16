@@ -1,3 +1,4 @@
+// src/components/confirmation-modal.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -5,10 +6,13 @@ import { useEffect, useState } from "react";
 interface ConfirmationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  // Performs the check-in. "duplicate" = already checked in recently.
+  onConfirm: () => Promise<"ok" | "duplicate" | "error">;
   onDeny: () => void;
-  name: string;
-  errorMessage?: string;
+  firstName: string;
+  lastName: string;
+  appointmentTime: string | null;
+  practitioner: string | null;
 }
 
 export default function ConfirmationModal({
@@ -16,19 +20,26 @@ export default function ConfirmationModal({
   onClose,
   onConfirm,
   onDeny,
-  name,
-  errorMessage,
+  firstName,
+  lastName,
+  appointmentTime,
+  practitioner,
 }: ConfirmationModalProps) {
   const [showSuccess, setShowSuccess] = useState(false);
+  const [wasDuplicate, setWasDuplicate] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setIsVisible(true);
+      setShowSuccess(false);
+      setWasDuplicate(false);
+      setSaving(false);
+      setFailed(false);
     } else {
-      const timer = setTimeout(() => {
-        setIsVisible(false);
-      }, 300); // Match the CSS transition duration
+      const timer = setTimeout(() => setIsVisible(false), 300);
       return () => clearTimeout(timer);
     }
   }, [isOpen]);
@@ -43,80 +54,131 @@ export default function ConfirmationModal({
     }
   }, [showSuccess, onClose]);
 
+  const handleConfirm = async () => {
+    setSaving(true);
+    const result = await onConfirm();
+    setSaving(false);
+    if (result === "error") {
+      setFailed(true);
+    } else {
+      setWasDuplicate(result === "duplicate");
+      setShowSuccess(true);
+    }
+  };
+
+  // Numpad-only check-in: Enter confirms, Escape declines. Re-subscribes
+  // every render so the handler sees current state.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (saving || showSuccess) return;
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (failed) onClose();
+        else handleConfirm();
+      } else if (e.key === "Escape") {
+        if (failed) onClose();
+        else onDeny();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
   if (!isVisible && !isOpen) return null;
 
-  const handleConfirm = () => {
-    setShowSuccess(true);
-    setTimeout(() => {
-      onConfirm();
-    }, 3000);
-  };
+  const displayName = lastName
+    ? `${firstName} ${lastName.charAt(0)}.`
+    : firstName;
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm transition-opacity duration-300 ${
+      className={`fixed inset-0 z-50 flex items-center justify-center backdrop-blur-md transition-opacity duration-300 ${
         isOpen ? "opacity-100" : "opacity-0"
       }`}
     >
       <div
-        className={`fixed inset-0 bg-black/30 backdrop-blur-sm transition-all duration-300 ${
-          isOpen
-            ? "opacity-100 backdrop-blur-sm"
-            : "opacity-0 backdrop-blur-none"
+        className={`fixed inset-0 bg-canvas/60 backdrop-blur-md transition-all duration-300 ${
+          isOpen ? "opacity-100" : "opacity-0 backdrop-blur-none"
         }`}
-        onClick={onClose}
+        onClick={saving ? undefined : onClose}
       />
-      {/* Modal */}
       <div
-        className={`relative bg-[var(--background)] dark:bg-gray-800 border border-gray-200 dark:border-gray-400 p-6 mx-4 sm:mx-auto rounded-lg max-w-md w-full z-10 transition-all duration-300 ${
+        role="dialog"
+        aria-modal="true"
+        aria-label="Check-in confirmation"
+        className={`relative bg-island text-ink border border-ink/10 p-6 mx-4 sm:mx-auto rounded-card max-w-md w-full z-10 transition-all duration-300 ${
           isOpen ? "translate-y-0 opacity-100" : "translate-y-24 opacity-0"
         }`}
       >
-        <div className="text-center mb-10">
-          {errorMessage ? (
-            <p className="text-2xl text-red-600 dark:text-red-400">
-              {errorMessage}
+        {/* aria-live announces the thank-you / error text when it appears */}
+        <div className="text-center mb-10" aria-live="polite">
+          {failed ? (
+            <p className="text-2xl text-error">
+              We couldn&apos;t record your check-in. Please see the front desk.
             </p>
           ) : showSuccess ? (
-            <p className="text-4xl gap-8">
-              Welcome,
-              <br />
-              <br />
-              <strong>{name}</strong>
-              <br />
-              <br />
-              You&apos;ve successfully signed in!
+            <p className="font-serif text-4xl text-ink">
+              {wasDuplicate ? (
+                <>
+                  You&apos;re already checked in, <strong>{firstName}</strong>!
+                  <br />
+                  <br />
+                  Please have a seat.
+                </>
+              ) : (
+                <>
+                  Thank you, <strong>{firstName}</strong>!
+                  <br />
+                  <br />
+                  You&apos;re checked in.
+                </>
+              )}
             </p>
-          ) : name ? (
+          ) : firstName ? (
             <>
-              <h2 className="text-4xl font-semibold mb-8">Is this you?</h2>
-              <p className="text-4xl">Name: {name}</p>
+              <h2 className="font-serif text-4xl text-ink mb-6">
+                {appointmentTime ? "Is this your appointment?" : "Is this you?"}
+              </h2>
+              <p className="text-3xl mb-3">{displayName}</p>
+              {appointmentTime ? (
+                <p className="text-2xl">
+                  Today at <strong>{appointmentTime}</strong>
+                  {practitioner ? ` with ${practitioner}` : ""}
+                </p>
+              ) : (
+                <p className="text-lg text-ink/60">
+                  We couldn&apos;t find a booked appointment for today — you can
+                  still sign in.
+                </p>
+              )}
             </>
           ) : null}
         </div>
 
-        {/* Buttons */}
-        {!showSuccess && !errorMessage && name && (
-          <div className="flex items-center text-2xl">
+        {!showSuccess && !failed && firstName && (
+          <div className="flex items-center justify-center gap-4 text-2xl">
             <button
               onClick={handleConfirm}
-              className="w-fit mx-auto px-6 py-2 bg-[#2A9E8F] hover:bg-[#238B7E] text-white rounded-full transition-colors text-center"
+              disabled={saving}
+              className="px-6 py-2 bg-surface text-cream active:scale-95 rounded-full disabled:opacity-50 transition"
             >
-              Yes, Sign In
+              {saving ? "Signing in..." : "Yes, Sign In"}
             </button>
             <button
               onClick={onDeny}
-              className="w-fit mx-auto px-6 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-400 dark:hover:bg-gray-600 rounded-full transition-colors text-center"
+              disabled={saving}
+              className="px-6 py-2 border border-ink/20 text-ink active:scale-95 rounded-full disabled:opacity-50 transition"
             >
               No
             </button>
           </div>
         )}
-        {errorMessage && (
+        {failed && (
           <div className="flex justify-center">
             <button
               onClick={onClose}
-              className="w-fit px-6 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-400 dark:hover:bg-gray-600 rounded-full transition-colors text-center"
+              className="px-6 py-2 border border-ink/20 text-ink active:scale-95 rounded-full transition"
             >
               Close
             </button>
