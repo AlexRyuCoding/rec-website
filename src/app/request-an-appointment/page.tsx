@@ -1,113 +1,128 @@
-"use client";
-
-import Link from "next/link";
+import type { Metadata } from "next";
+import SplitReveal from "@/components/motion/split-reveal";
+import Reveal from "@/components/motion/reveal";
+import PillLink from "@/components/ui/pill-link";
 import { SITE } from "@/lib/site";
+
+export const metadata: Metadata = {
+  title: "Request an Appointment",
+  description:
+    "New patients: request your first appointment. Returning patients: book your follow-up visit online with Ryu Acupuncture Clinic in Burbank, CA.",
+};
+
+const FIRST_VISIT = [
+  "Holistic intake and assessment",
+  "Pulse and tongue diagnosis",
+  "Personalized treatment session",
+  "Plenty of time for your questions",
+];
 
 export default function RequestAnAppointment() {
   return (
-    <div className="max-w-6xl mx-auto mt-40 px-6 pb-16 space-y-12">
-      <main className="flex flex-col gap-4 max-w-4xl mx-auto">
-        <section className="max-w-4xl mx-auto pb-10 space-y-10">
-          <p className="text-3xl font-semibold">
-            Personalized Healing Starts Here
-          </p>
+    <>
+      <section className="flex min-h-[60svh] flex-col justify-end px-4 pb-12 pt-28 lg:px-8">
+        <p className="mb-6 text-sm font-medium text-cream/40">Appointments:</p>
+        <SplitReveal
+          as="h1"
+          className="max-w-6xl font-serif text-display text-cream"
+          segments={[
+            { text: "Personalized healing" },
+            { text: "starts here.", italic: true },
+          ]}
+        />
+      </section>
 
-          <div className="space-y-8">
-            <div>
-              <h2 className="text-2xl font-semibold">New to Our Clinic?</h2>
-              <p className="mt-2 text-lg">
-                Welcome—you&apos;re in great hands. Your first visit includes a
-                full health intake, pulse and tongue diagnosis, and a customized
-                treatment plan.
-              </p>
-              <ul className="list-disc list-inside mt-4 space-y-1 text-base">
-                <li>Holistic intake and assessment</li>
-                <li>Personalized treatment session</li>
-                <li>Plenty of time for your questions</li>
-              </ul>
-              <Link
-                href="/request-an-appointment/request-form"
-                className="inline-block mt-4 px-6 py-2 bg-brand-primary text-white font-semibold rounded-lg hover:bg-blue-500 transition"
-              >
-                Request Your First Appointment
-              </Link>
-            </div>
-
-            <div>
-              <h2 className="text-2xl font-semibold">
-                Returning or Existing Patient?
-              </h2>
-              <p className="mt-2 text-lg">
-                We&apos;re glad to have you back. Follow-up sessions help
-                maintain your results and support your ongoing wellness journey.
-                <br />
-                Sign in and book your appointment below.
-              </p>
-              <a
-                href={SITE.bookingUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block mt-4 px-6 py-2 bg-brand-primary text-white font-semibold rounded-lg hover:bg-blue-500 transition"
-              >
-                Book Your Follow-Up Visit
-              </a>
-            </div>
-
-            <div className="text-lg border-t pt-6 space-y-4">
-              <h2 className="text-xl font-semibold">Clinic Hours & Location</h2>
-              <div>
-                <div className="flex items-start gap-2">
-                  <strong>Hours:</strong>{" "}
-                  <div>
-                    Monday, Wednesday, Friday: 9:30 AM - 5:00 PM
-                    <br />
-                    Saturday: 9:00 AM - 1:00 PM
-                  </div>
-                </div>
-              </div>
-              <div>
-                <strong>Address:</strong> 3808 W Riverside Dr., Burbank, CA
-                91505
-              </div>
-              <a
-                href="https://www.google.com/maps/dir/?api=1&destination=3808+West+Riverside+Dr+Burbank+CA+91505"
-                className="text-brand-primary underline hover:text-brand-secondary"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Get Directions
-              </a>
-              <p className="mt-2">
-                <strong>Phone:</strong>{" "}
-                <a href="tel:818-841-9790" className="hover:underline">
-                  (818) 841-9790
-                </a>
-              </p>
-            </div>
-
-            <div className="text-center border-t pt-6">
-              <p className="text-lg">
-                Have questions before you book?{" "}
-                <a
-                  href="#"
-                  className="text-brand-primary underline hover:text-brand-secondary"
+      <section className="px-4 pb-16 lg:px-8">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Reveal className="rounded-card bg-island p-8 text-ink lg:p-12">
+            <h2 className="font-serif text-title">
+              New to <i>our clinic?</i>
+            </h2>
+            <p className="mt-4 max-w-md leading-relaxed text-ink/70">
+              Welcome—you&apos;re in great hands. Your first visit includes a
+              full health intake, pulse and tongue diagnosis, and a customized
+              treatment plan.
+            </p>
+            <ul className="mt-6">
+              {FIRST_VISIT.map((f) => (
+                <li
+                  key={f}
+                  className="border-t py-3 text-sm text-ink/70"
+                  style={{ borderColor: "var(--hairline-on-light)" }}
                 >
-                  Contact us here
-                </a>
-                .
-              </p>
-              <a
-                href={SITE.bookingUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block mt-4 px-6 py-2 bg-brand-primary text-white font-semibold rounded-lg hover:bg-blue-500 transition"
-              >
-                Book an Appointment With Us Today!
+                  {f}
+                </li>
+              ))}
+            </ul>
+            <PillLink
+              href="/request-an-appointment/request-form"
+              variant="dark"
+              className="mt-8"
+            >
+              Request Your First Appointment
+            </PillLink>
+          </Reveal>
+
+          <Reveal
+            delay={0.15}
+            className="rounded-card bg-surface p-8 text-cream lg:p-12"
+          >
+            <h2 className="font-serif text-title">
+              Returning <i>patient?</i>
+            </h2>
+            <p className="mt-4 max-w-md leading-relaxed text-cream/70">
+              We&apos;re glad to have you back. Follow-up sessions help maintain
+              your results and support your ongoing wellness journey. Book your
+              appointment online below.
+            </p>
+            <PillLink href={SITE.bookingUrl} external className="mt-8">
+              Book Your Follow-Up Visit
+            </PillLink>
+            <p className="mt-6 text-sm text-cream/50">
+              Prefer to call?{" "}
+              <a href={SITE.phone.href} className="underline-link text-cream">
+                {SITE.phone.display}
               </a>
-            </div>
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="px-4 pb-24 lg:px-8 lg:pb-40">
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-3">
+          <div className="flex flex-col gap-3">
+            <p className="text-sm font-bold text-cream/40">Hours</p>
+            {SITE.hours.map((h) => (
+              <p key={h.days} className="text-sm text-cream/70">
+                {h.days} · {h.time}
+              </p>
+            ))}
           </div>
-        </section>
-      </main>
-    </div>
+          <div className="flex flex-col gap-3">
+            <p className="text-sm font-bold text-cream/40">Location</p>
+            <p className="max-w-xs text-sm text-cream/70">
+              {SITE.address.line}
+            </p>
+            <a
+              href={SITE.address.mapsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline-link w-fit text-sm text-cream"
+            >
+              Get directions
+            </a>
+          </div>
+          <div className="flex flex-col gap-3">
+            <p className="text-sm font-bold text-cream/40">Phone</p>
+            <a
+              href={SITE.phone.href}
+              className="underline-link w-fit font-serif text-card text-cream"
+            >
+              {SITE.phone.display}
+            </a>
+          </div>
+        </div>
+      </section>
+    </>
   );
 }

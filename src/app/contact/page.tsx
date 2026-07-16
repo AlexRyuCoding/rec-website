@@ -1,51 +1,92 @@
-import Image from "next/image";
-import Link from "next/link";
+import type { Metadata } from "next";
+import SplitReveal from "@/components/motion/split-reveal";
+import Reveal from "@/components/motion/reveal";
+import PillLink from "@/components/ui/pill-link";
 import { SITE } from "@/lib/site";
+
+export const metadata: Metadata = {
+  title: "Contact",
+  description:
+    "Contact Ryu Acupuncture Clinic in Burbank, CA — phone, email, hours, and directions.",
+};
 
 export default function Contact() {
   return (
-    <div className="grid grid-rows-[40px_1fr_40px] items-center justify-items-center min-h-screen p-1 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)] relative">
-      <div className="row-start-2">
-        <main className="flex flex-col gap-4 max-w-4xl mx-auto">
-          <p className="text-center text-2xl pb-4">
-            We are always here to help you. Please feel free to contact us
-            through the following channels:
-          </p>
-          <div className="flex flex-col items-center space-y-2 text-lg">
+    <>
+      <section className="flex min-h-[60svh] flex-col justify-end px-4 pb-12 pt-28 lg:px-8">
+        <p className="mb-6 text-sm font-medium text-cream/40">Contact:</p>
+        <SplitReveal
+          as="h1"
+          className="font-serif text-display text-cream"
+          segments={[
+            { text: "We're here" },
+            { text: "to help.", italic: true },
+          ]}
+        />
+      </section>
+
+      <section className="px-4 pb-24 lg:px-8 lg:pb-40">
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-3">
+          <Reveal className="flex flex-col gap-4">
+            <p className="text-sm font-bold text-cream/40">Reach us</p>
             <a
-              href="mailto:ryuacupuncture@yahoo.com"
-              className="hover:font-bold"
+              href={SITE.phone.href}
+              className="underline-link w-fit font-serif text-card text-cream"
             >
-              ryuacupuncture@yahoo.com
+              {SITE.phone.display}
             </a>
-            <br />
-            <a href="tel:+18188419790" className="hover:font-bold">
-              (818) 841-9790
-            </a>
-          </div>
-          <div className="flex justify-center">
             <a
-              href={SITE.bookingUrl}
+              href={`mailto:${SITE.email}`}
+              className="underline-link w-fit text-cream/70"
+            >
+              {SITE.email}
+            </a>
+            <p className="text-sm text-cream/40">Fax: {SITE.fax.display}</p>
+          </Reveal>
+
+          <Reveal delay={0.1} className="flex flex-col gap-4">
+            <p className="text-sm font-bold text-cream/40">Visit us</p>
+            <p className="max-w-xs text-cream/70">{SITE.address.line}</p>
+            <a
+              href={SITE.address.mapsUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-block mt-4 px-6 py-3 max-w-fit text-brand-background hover:bg-brand-gray-300 bg-brand-foreground rounded-md p-2 transition"
+              className="underline-link w-fit text-sm font-medium text-cream"
             >
-              Book an Appointment With Us!
+              Get directions
             </a>
-          </div>
-        </main>
-      </div>
-      <div className="absolute bottom-2 right-2 md:right-8 md:bottom-8">
-        <Link href="/about">
-          <Image
-            src="/dr-jay-avatar.png"
-            alt="Dr. Jay Avatar"
-            className="w-36 h-36 md:w-48 md:h-48"
-            width={200}
-            height={200}
-          />
-        </Link>
-      </div>
-    </div>
+          </Reveal>
+
+          <Reveal delay={0.2} className="flex flex-col gap-4">
+            <p className="text-sm font-bold text-cream/40">Hours</p>
+            {SITE.hours.map((h) => (
+              <div
+                key={h.days}
+                className="border-t pt-3"
+                style={{ borderColor: "var(--hairline-on-dark)" }}
+              >
+                <p className="text-sm text-cream">{h.days}</p>
+                <p className="text-sm text-cream/50">{h.time}</p>
+              </div>
+            ))}
+          </Reveal>
+        </div>
+
+        <Reveal className="mt-20 flex flex-col items-start gap-4">
+          <PillLink href={SITE.bookingUrl} external variant="gold">
+            Book an Appointment
+          </PillLink>
+          <p className="text-sm text-cream/40">
+            Questions before you book?{" "}
+            <a
+              href="/request-an-appointment/request-form"
+              className="underline-link text-cream"
+            >
+              Send us a message
+            </a>
+          </p>
+        </Reveal>
+      </section>
+    </>
   );
 }
