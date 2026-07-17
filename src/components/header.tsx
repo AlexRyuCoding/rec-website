@@ -6,6 +6,12 @@ import { usePathname } from "next/navigation";
 import PillLink from "@/components/ui/pill-link";
 import MobileMenu from "@/components/mobile-menu";
 import { SITE } from "@/lib/site";
+import {
+  generateDisplacementMap,
+  supportsBackdropDisplacement,
+} from "@/lib/liquid-glass";
+
+let lgSeq = 0;
 
 const NAV_ITEMS = [
   { href: "/about", label: "About" },
@@ -52,6 +58,64 @@ export default function Header() {
       if (raf) cancelAnimationFrame(raf);
     };
   }, [pathname]);
+
+  // Aave-style refraction (liquid-glass-aave.md): a runtime displacement map
+  // drives an SVG feDisplacementMap applied via backdrop-filter, bending the
+  // page behind the bar like curved glass. Chromium-only; other engines keep
+  // the CSS frosted fallback. Map rebuilds only on resize (shape change),
+  // never on scroll — moving is free, reshaping is not.
+  useEffect(() => {
+    if (!supportsBackdropDisplacement()) return;
+    const bar = barRef.current;
+    if (!bar) return;
+    let svg: SVGSVGElement | null = null;
+    let timer: number | undefined;
+
+    const build = () => {
+      const rect = bar.getBoundingClientRect();
+      const w = Math.round(rect.width);
+      const h = Math.round(rect.height);
+      if (!w || !h) return;
+      const { url, maxScale } = generateDisplacementMap({
+        width: w,
+        height: h,
+        borderRadius: 26,
+        depth: 0.12,
+        curvature: 0.8,
+      });
+      if (!url) return;
+      // Fresh filter id per rebuild (filter output is cached by id)
+      const id = `lg-header-${++lgSeq}`;
+      const next = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "svg"
+      );
+      next.setAttribute("width", "0");
+      next.setAttribute("height", "0");
+      next.setAttribute("aria-hidden", "true");
+      next.style.position = "absolute";
+      next.innerHTML = `<defs><filter id="${id}" x="0" y="0" width="${w}" height="${h}" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feImage href="${url}" x="0" y="0" width="${w}" height="${h}" result="map"/><feDisplacementMap in="SourceGraphic" in2="map" scale="${maxScale.toFixed(1)}" xChannelSelector="R" yChannelSelector="G"/></filter></defs>`;
+      document.body.appendChild(next);
+      // Refraction + light frost: the lens bend stays visible at the rim
+      // while the blur keeps nav text legible over light-island headlines.
+      bar.style.backdropFilter = `url(#${id}) blur(6px) saturate(1.4)`;
+      svg?.remove();
+      svg = next;
+    };
+
+    build();
+    const onResize = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(build, 150);
+    };
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.clearTimeout(timer);
+      svg?.remove();
+      bar.style.backdropFilter = "";
+    };
+  }, []);
 
   const ink = overLight ? "text-ink" : "text-cream";
 
