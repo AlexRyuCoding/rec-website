@@ -437,7 +437,7 @@ export default function SignInKeypad() {
             </div>
             <button
               onClick={() => setScreen("new_contact")}
-              className="text-lg text-brand-primary underline underline-offset-2 hover:text-brand-secondary transition-colors"
+              className="px-8 py-4 rounded-full bg-brand-primary text-white text-xl hover:bg-brand-secondary active:scale-95 transition"
             >
               First visit? Set up your PIN
             </button>

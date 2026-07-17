@@ -1,16 +1,16 @@
-"use client";
-import Image from "next/image";
-import Link from "next/link";
-import { useRef } from "react";
-import { KeyRound, LayoutDashboard } from "lucide-react";
-import { gsap, useGSAP } from "@/lib/gsap";
-import { useMotionPrefs } from "@/components/motion/motion-provider";
-import { SITE } from "@/lib/site";
+'use client';
+import Image from 'next/image';
+import Link from 'next/link';
+import { useRef } from 'react';
+import { KeyRound, LayoutDashboard } from 'lucide-react';
+import { gsap, useGSAP } from '@/lib/gsap';
+import { useMotionPrefs } from '@/components/motion/motion-provider';
+import { SITE } from '@/lib/site';
 
 const SOCIALS = [
-  { href: SITE.socials.facebook, src: "/facebook.png", alt: "Facebook" },
-  { href: SITE.socials.instagram, src: "/instagram.svg", alt: "Instagram" },
-  { href: SITE.socials.yelp, src: "/yelp_burst.svg", alt: "Yelp" },
+  { href: SITE.socials.facebook, src: '/facebook.png', alt: 'Facebook' },
+  { href: SITE.socials.instagram, src: '/instagram.svg', alt: 'Instagram' },
+  { href: SITE.socials.yelp, src: '/yelp_burst.svg', alt: 'Yelp' },
 ];
 
 export default function Footer() {
@@ -21,21 +21,21 @@ export default function Footer() {
     () => {
       if (reduced || !root.current) return;
       gsap.fromTo(
-        root.current.querySelector("[data-disc]"),
+        root.current.querySelector('[data-disc]'),
         { scale: 1 },
         {
           scale: 2.4,
-          ease: "none",
+          ease: 'none',
           scrollTrigger: {
             trigger: root.current,
-            start: "top bottom",
-            end: "bottom bottom",
+            start: 'top bottom',
+            end: 'bottom bottom',
             scrub: 0.4,
           },
-        }
+        },
       );
     },
-    { scope: root, dependencies: [reduced] }
+    { scope: root, dependencies: [reduced] },
   );
 
   return (
@@ -47,7 +47,7 @@ export default function Footer() {
         className="absolute left-1/2 top-1/3 size-[130vw] -translate-x-1/2 rounded-full lg:size-[70vw]"
         style={{
           background:
-            "radial-gradient(circle at 50% 25%, #22404b 0%, #101b21 55%, #010203 100%)",
+            'radial-gradient(circle at 50% 25%, #22404b 0%, #101b21 55%, #010203 100%)',
         }}
       />
 
@@ -66,7 +66,7 @@ export default function Footer() {
 
         <div
           className="grid grid-cols-1 gap-10 border-t pt-10 lg:grid-cols-3"
-          style={{ borderColor: "var(--hairline-on-dark)" }}
+          style={{ borderColor: 'var(--hairline-on-dark)' }}
         >
           <div className="flex flex-col gap-3 text-sm text-cream">
             <p className="font-bold">Contact</p>
@@ -144,14 +144,14 @@ export default function Footer() {
                 aria-label="Staff dashboard"
                 className="text-cream/20 transition-colors duration-300 hover:text-cream/60"
               >
-                <LayoutDashboard className="size-4" />
+                <LayoutDashboard className="size-6" />
               </Link>
               <Link
                 href="/admin/patient-signin"
                 aria-label="Patient check-in kiosk"
                 className="text-cream/20 transition-colors duration-300 hover:text-cream/60"
               >
-                <KeyRound className="size-4" />
+                <KeyRound className="size-6" />
               </Link>
             </div>
           </div>
@@ -159,7 +159,7 @@ export default function Footer() {
 
         <p
           className="mt-12 border-t pt-6 text-center text-xs text-cream/50"
-          style={{ borderColor: "var(--hairline-on-dark)" }}
+          style={{ borderColor: 'var(--hairline-on-dark)' }}
         >
           © {new Date().getFullYear()} Ryu Acupuncture Clinic. All rights
           reserved.
