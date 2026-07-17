@@ -1,4 +1,6 @@
 "use client";
+import Link from "next/link";
+import { LayoutDashboard } from "lucide-react";
 import SignInKeypad from "@/components/signin-keypad";
 
 export default function Page() {
@@ -9,6 +11,13 @@ export default function Page() {
       <main className="flex flex-col items-center">
         <SignInKeypad />
       </main>
+      <Link
+        href="/admin/dashboard"
+        aria-label="Staff dashboard"
+        className="fixed bottom-4 right-4 text-cream/20 transition-colors duration-300 hover:text-cream/60"
+      >
+        <LayoutDashboard className="size-5" />
+      </Link>
     </div>
   );
 }

@@ -32,10 +32,10 @@ export default function Footer() {
             end: "bottom bottom",
             scrub: 0.4,
           },
-        }
+        },
       );
     },
-    { scope: root, dependencies: [reduced] }
+    { scope: root, dependencies: [reduced] },
   );
 
   return (
@@ -144,14 +144,14 @@ export default function Footer() {
                 aria-label="Staff dashboard"
                 className="text-cream/20 transition-colors duration-300 hover:text-cream/60"
               >
-                <LayoutDashboard className="size-4" />
+                <LayoutDashboard className="size-6" />
               </Link>
               <Link
                 href="/admin/patient-signin"
                 aria-label="Patient check-in kiosk"
                 className="text-cream/20 transition-colors duration-300 hover:text-cream/60"
               >
-                <KeyRound className="size-4" />
+                <KeyRound className="size-6" />
               </Link>
             </div>
           </div>
