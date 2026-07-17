@@ -32,10 +32,10 @@ export default function Footer() {
             end: "bottom bottom",
             scrub: 0.4,
           },
-        },
+        }
       );
     },
-    { scope: root, dependencies: [reduced] },
+    { scope: root, dependencies: [reduced] }
   );
 
   return (
