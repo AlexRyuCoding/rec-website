@@ -17,7 +17,10 @@ export async function formSubmissionsExhausted(ip: string): Promise<boolean> {
     .eq("ip", ip)
     .gte("submitted_at", cutoff);
   if (error || count === null) {
-    console.error("Form rate-limit counter unreadable — failing closed");
+    console.error(
+      "Form rate-limit counter unreadable — failing closed:",
+      error ? `${error.code} ${error.message}` : "null count"
+    );
     return true;
   }
   return count >= MAX_PER_WINDOW;
@@ -28,7 +31,11 @@ export async function recordFormSubmission(ip: string): Promise<void> {
   const { error } = await supabase
     .from("form_submission_events")
     .insert({ ip, submitted_at: new Date().toISOString() });
-  if (error) console.error("Failed to record form submission:", error.code);
+  if (error)
+    console.error(
+      "Failed to record form submission:",
+      `${error.code} ${error.message}`
+    );
   await supabase
     .from("form_submission_events")
     .delete()
