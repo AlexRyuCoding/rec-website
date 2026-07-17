@@ -19,7 +19,7 @@ export async function formSubmissionsExhausted(ip: string): Promise<boolean> {
   if (error || count === null) {
     console.error(
       "Form rate-limit counter unreadable — failing closed:",
-      error ? `${error.code} ${error.message}` : "null count"
+      error ? `${error.code} ${error.message}` : "null count",
     );
     return true;
   }
@@ -34,7 +34,7 @@ export async function recordFormSubmission(ip: string): Promise<void> {
   if (error)
     console.error(
       "Failed to record form submission:",
-      `${error.code} ${error.message}`
+      `${error.code} ${error.message}`,
     );
   await supabase
     .from("form_submission_events")
