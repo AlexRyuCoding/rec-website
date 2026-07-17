@@ -80,8 +80,8 @@ export default function Header() {
         width: w,
         height: h,
         borderRadius: 26,
-        depth: 0.12,
-        curvature: 0.8,
+        depth: 0.22,
+        curvature: 0.9,
       });
       if (!url) return;
       // Fresh filter id per rebuild (filter output is cached by id)
@@ -94,7 +94,10 @@ export default function Header() {
       next.setAttribute("height", "0");
       next.setAttribute("aria-hidden", "true");
       next.style.position = "absolute";
-      next.innerHTML = `<defs><filter id="${id}" x="0" y="0" width="${w}" height="${h}" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feImage href="${url}" x="0" y="0" width="${w}" height="${h}" result="map"/><feDisplacementMap in="SourceGraphic" in2="map" scale="${maxScale.toFixed(1)}" xChannelSelector="R" yChannelSelector="G"/></filter></defs>`;
+      // 1.4× overshoot past the round-trip-neutral scale = stronger bend
+      // (doc's "Depth" knob; keep the product under ~150 to avoid banding)
+      const strength = Math.min(maxScale * 1.4, 150);
+      next.innerHTML = `<defs><filter id="${id}" x="0" y="0" width="${w}" height="${h}" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feImage href="${url}" x="0" y="0" width="${w}" height="${h}" result="map"/><feDisplacementMap in="SourceGraphic" in2="map" scale="${strength.toFixed(1)}" xChannelSelector="R" yChannelSelector="G"/></filter></defs>`;
       document.body.appendChild(next);
       // Refraction + light frost: the lens bend stays visible at the rim
       // while the blur keeps nav text legible over light-island headlines.
