@@ -80,8 +80,8 @@ export default function Header() {
         width: w,
         height: h,
         borderRadius: 26,
-        depth: 0.22,
-        curvature: 0.9,
+        depth: 0.36,
+        curvature: 1.0,
       });
       if (!url) return;
       // Fresh filter id per rebuild (filter output is cached by id)
@@ -101,7 +101,7 @@ export default function Header() {
       document.body.appendChild(next);
       // Refraction + light frost: the lens bend stays visible at the rim
       // while the blur keeps nav text legible over light-island headlines.
-      bar.style.backdropFilter = `url(#${id}) blur(6px) saturate(1.4)`;
+      bar.style.backdropFilter = `url(#${id}) blur(3px) saturate(1.2)`;
       svg?.remove();
       svg = next;
     };
