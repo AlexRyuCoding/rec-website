@@ -1,18 +1,16 @@
-import localFont from "next/font/local";
+import { Instrument_Serif, Inter_Tight } from "next/font/google";
 
-export const generalSans = localFont({
-  src: [
-    {
-      path: "../../../public/fonts/GeneralSans-Variable.woff2",
-      weight: "200 700",
-      style: "normal",
-    },
-    {
-      path: "../../../public/fonts/GeneralSans-VariableItalic.woff2",
-      weight: "200 700",
-      style: "italic",
-    },
-  ],
-  variable: "--font-general-sans",
+export const instrumentSerif = Instrument_Serif({
+  weight: "400",
+  style: ["normal", "italic"],
+  subsets: ["latin"],
+  variable: "--font-serif",
+  display: "swap",
+});
+
+export const interTight = Inter_Tight({
+  weight: ["400", "500", "600", "700"],
+  subsets: ["latin"],
+  variable: "--font-sans",
   display: "swap",
 });

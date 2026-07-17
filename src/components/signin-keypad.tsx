@@ -2,7 +2,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
 import ConfirmationModal from "./confirmation-modal";
 
 type Screen =
@@ -360,7 +359,7 @@ export default function SignInKeypad() {
       {Array.from({ length: 4 }, (_, i) => (
         <div
           key={i}
-          className={`w-6 h-6 rounded-full border-2 border-brand-foreground dark:border-white transition-colors ${
+          className={`w-6 h-6 rounded-full border-2 border-brand-foreground transition-colors ${
             i < value.length ? "bg-brand-primary" : "bg-transparent"
           }`}
         />
@@ -384,7 +383,7 @@ export default function SignInKeypad() {
   ].includes(screen);
 
   const Keypad = () => (
-    <motion.div layout className="grid grid-cols-3 gap-4 mb-4">
+    <div className="grid grid-cols-3 gap-4 mb-4">
       {["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map((num) => (
         <button
           key={num}
@@ -394,7 +393,7 @@ export default function SignInKeypad() {
               : handleNewPinDigit(num)
           }
           disabled={keypadDisabled || currentPinValue.length >= 4}
-          className="py-3 text-5xl bg-brand-background dark:bg-[var(--background)] hover:bg-brand-muted dark:hover:bg-gray-600 active:bg-brand-muted dark:active:bg-gray-600 active:scale-95 border border-brand-foreground dark:border-brand-background rounded-xl disabled:opacity-50 transition"
+          className="py-3 text-5xl bg-brand-background hover:bg-brand-muted active:bg-brand-muted active:scale-95 border border-cream/15 text-cream rounded-full disabled:opacity-50 transition"
         >
           {num}
         </button>
@@ -405,7 +404,7 @@ export default function SignInKeypad() {
         }
         disabled={keypadDisabled}
         aria-label="Delete last digit"
-        className="col-span-1 text-5xl bg-brand-accent-light dark:bg-brand-accent hover:bg-brand-accent dark:hover:bg-brand-accent-dark active:scale-95 border rounded-xl disabled:opacity-50 transition"
+        className="col-span-1 text-5xl bg-brand-accent-light hover:bg-brand-accent active:scale-95 border rounded-xl disabled:opacity-50 transition"
       >
         <span aria-hidden="true">⌫</span>
       </button>
@@ -413,60 +412,47 @@ export default function SignInKeypad() {
         onClick={screen === "pin_entry" ? handlePinClear : handleNewPinClear}
         disabled={keypadDisabled}
         aria-label="Clear all digits"
-        className="col-span-1 py-3 text-2xl bg-red-300 dark:bg-red-400 hover:bg-red-400 dark:hover:bg-red-600 active:scale-95 border rounded-xl disabled:opacity-50 transition"
+        className="col-span-1 py-3 text-2xl bg-error hover:bg-error/80 active:scale-95 border rounded-xl disabled:opacity-50 transition"
       >
         CLEAR
       </button>
-    </motion.div>
+    </div>
   );
 
   return (
     <div className="flex flex-col items-center justify-center gap-8">
-      <AnimatePresence mode="wait">
+      <>
         {/* PIN entry — returning patient */}
         {screen === "pin_entry" && (
-          <motion.div
+          <div
             key="pin_entry"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex flex-col items-center gap-8 w-full"
+            className="flex flex-col items-center gap-8 w-full animate-fade-in"
           >
             <p className="text-2xl text-center">
               Enter your 4-digit PIN to sign in.
             </p>
-            <motion.div
-              layout
-              className="w-full max-w-[380px] sm:max-w-[480px] p-4 rounded-lg shadow-lg bg-brand-background dark:bg-[var(--background)] border border-brand-foreground dark:border-white"
-            >
+            <div className="w-full max-w-[380px] sm:max-w-[480px] p-4 rounded-lg bg-brand-background border border-brand-foreground">
               {pinDots(pin)}
               <Keypad />
-            </motion.div>
+            </div>
             <button
               onClick={() => setScreen("new_contact")}
               className="text-lg text-brand-primary underline underline-offset-2 hover:text-brand-secondary transition-colors"
             >
               First visit? Set up your PIN
             </button>
-          </motion.div>
+          </div>
         )}
 
         {/* Verifying / loading */}
         {(screen === "verifying" ||
           screen === "new_contact_lookup" ||
           screen === "new_pin_saving") && (
-          <motion.div
+          <div
             key="loading"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex flex-col items-center gap-4"
+            className="flex flex-col items-center gap-4 animate-fade-in"
           >
-            <motion.div
-              className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full"
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            />
+            <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spin" />
             <p className="text-2xl">
               {screen === "verifying"
                 ? "Verifying PIN..."
@@ -474,38 +460,30 @@ export default function SignInKeypad() {
                   ? "Setting up your PIN..."
                   : "Looking you up..."}
             </p>
-          </motion.div>
+          </div>
         )}
 
         {/* Error */}
         {screen === "error" && (
-          <motion.div
+          <div
             key="error"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex flex-col items-center gap-6 max-w-sm text-center"
+            className="flex flex-col items-center gap-6 max-w-sm text-center animate-fade-in"
           >
-            <p className="text-2xl text-red-600 dark:text-red-400">
-              {errorMessage}
-            </p>
+            <p className="text-2xl text-error">{errorMessage}</p>
             <button
               onClick={reset}
               className="px-8 py-3 rounded-full bg-brand-primary text-white text-xl hover:bg-brand-secondary active:scale-95 transition"
             >
               Try Again
             </button>
-          </motion.div>
+          </div>
         )}
 
         {/* New patient: contact entry */}
         {screen === "new_contact" && (
-          <motion.div
+          <div
             key="new_contact"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex flex-col items-center gap-6 w-full max-w-sm"
+            className="flex flex-col items-center gap-6 w-full max-w-sm animate-fade-in"
           >
             <p className="text-2xl text-center">
               Enter your phone number or email.
@@ -534,17 +512,14 @@ export default function SignInKeypad() {
                 Continue
               </button>
             </div>
-          </motion.div>
+          </div>
         )}
 
         {/* New patient: shared contact — pick your name */}
         {screen === "new_select_name" && (
-          <motion.div
+          <div
             key="new_select_name"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex flex-col items-center gap-6 w-full max-w-sm"
+            className="flex flex-col items-center gap-6 w-full max-w-sm animate-fade-in"
           >
             <p className="text-2xl text-center">
               Select your name to set up your PIN.
@@ -554,7 +529,7 @@ export default function SignInKeypad() {
                 <button
                   key={option.patient_id}
                   onClick={() => handleNameSelect(option)}
-                  className="py-4 px-6 rounded-xl border border-brand-foreground text-2xl bg-brand-background dark:bg-[var(--background)] hover:bg-brand-muted dark:hover:bg-gray-600 active:scale-95 transition"
+                  className="py-4 px-6 rounded-xl border border-brand-foreground text-2xl bg-brand-background hover:bg-brand-muted active:scale-95 transition"
                 >
                   {option.first_name}
                   {option.last_initial ? ` ${option.last_initial}.` : ""}
@@ -563,21 +538,18 @@ export default function SignInKeypad() {
             </div>
             <button
               onClick={reset}
-              className="text-lg text-gray-500 underline underline-offset-2 hover:text-gray-700 transition-colors"
+              className="text-lg text-cream/50 underline underline-offset-2 hover:text-cream transition-colors"
             >
               Cancel
             </button>
-          </motion.div>
+          </div>
         )}
 
         {/* New patient: PIN creation */}
         {(screen === "new_pin_create" || screen === "new_pin_confirm") && (
-          <motion.div
+          <div
             key="new_pin"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex flex-col items-center gap-6 w-full"
+            className="flex flex-col items-center gap-6 w-full animate-fade-in"
           >
             <p className="text-2xl text-center">
               {screen === "new_pin_create"
@@ -585,17 +557,14 @@ export default function SignInKeypad() {
                 : "Re-enter your PIN to confirm."}
             </p>
             {errorMessage && screen === "new_pin_create" && (
-              <p className="text-lg text-red-600 dark:text-red-400 text-center max-w-sm">
+              <p className="text-lg text-error text-center max-w-sm">
                 {errorMessage}
               </p>
             )}
-            <motion.div
-              layout
-              className="w-full max-w-[380px] sm:max-w-[480px] p-4 rounded-lg shadow-lg bg-brand-background dark:bg-[var(--background)] border border-brand-foreground dark:border-white"
-            >
+            <div className="w-full max-w-[380px] sm:max-w-[480px] p-4 rounded-lg bg-brand-background border border-brand-foreground">
               {pinDots(currentPinValue)}
               <Keypad />
-            </motion.div>
+            </div>
             <button
               onClick={() => {
                 if (screen === "new_pin_confirm") {
@@ -606,13 +575,13 @@ export default function SignInKeypad() {
                   reset();
                 }
               }}
-              className="text-lg text-gray-500 underline underline-offset-2 hover:text-gray-700 transition-colors"
+              className="text-lg text-cream/50 underline underline-offset-2 hover:text-cream transition-colors"
             >
               {screen === "new_pin_confirm" ? "Back" : "Cancel"}
             </button>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      </>
 
       <ConfirmationModal
         isOpen={isModalOpen}

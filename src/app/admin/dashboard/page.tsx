@@ -327,17 +327,17 @@ export default function AdminDashboard() {
               </button>
             </div>
 
-            {error && <p className="text-red-500">{error}</p>}
+            {error && <p className="text-error">{error}</p>}
             {truncated && (
-              <p className="text-amber-600">
+              <p className="text-gold">
                 Showing the most recent 500 of {total} check-ins — narrow the
                 range or export in chunks.
               </p>
             )}
             {loading ? (
-              <p className="py-8 text-center text-gray-500">Loading...</p>
+              <p className="py-8 text-center text-cream/50">Loading...</p>
             ) : rows.length === 0 && !error ? (
-              <p className="py-8 text-center text-gray-500">
+              <p className="py-8 text-center text-cream/50">
                 No check-ins in this range.
               </p>
             ) : (
@@ -362,7 +362,7 @@ export default function AdminDashboard() {
                     ))}
                   </tbody>
                 </table>
-                <p className="mt-3 text-sm text-gray-500">
+                <p className="mt-3 text-sm text-cream/50">
                   {total} check-in{total === 1 ? "" : "s"}
                 </p>
               </div>
@@ -390,7 +390,7 @@ export default function AdminDashboard() {
               </button>
             </div>
 
-            {searchError && <p className="text-gray-500">{searchError}</p>}
+            {searchError && <p className="text-cream/50">{searchError}</p>}
 
             <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-brand-muted">
               <button
@@ -407,7 +407,7 @@ export default function AdminDashboard() {
               >
                 {syncing ? "Syncing…" : "Full sync from Practice Better"}
               </button>
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-cream/50">
                 {syncMsg ||
                   "New and updated patients normally arrive automatically. Quick sync catches recently added patients; full sync re-pulls every record."}
               </span>
@@ -447,7 +447,7 @@ export default function AdminDashboard() {
                               <span className="flex gap-2 justify-end">
                                 <button
                                   onClick={() => resetPin(p.id)}
-                                  className="px-3 py-1 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors"
+                                  className="px-3 py-1 rounded-full bg-error text-white hover:bg-error/80 transition-colors"
                                 >
                                   Confirm reset
                                 </button>

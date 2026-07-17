@@ -93,12 +93,12 @@ export default function ConfirmationModal({
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm transition-opacity duration-300 ${
+      className={`fixed inset-0 z-50 flex items-center justify-center backdrop-blur-md transition-opacity duration-300 ${
         isOpen ? "opacity-100" : "opacity-0"
       }`}
     >
       <div
-        className={`fixed inset-0 bg-black/30 backdrop-blur-sm transition-all duration-300 ${
+        className={`fixed inset-0 bg-canvas/60 backdrop-blur-md transition-all duration-300 ${
           isOpen ? "opacity-100" : "opacity-0 backdrop-blur-none"
         }`}
         onClick={saving ? undefined : onClose}
@@ -107,18 +107,18 @@ export default function ConfirmationModal({
         role="dialog"
         aria-modal="true"
         aria-label="Check-in confirmation"
-        className={`relative bg-[var(--background)] dark:bg-gray-800 border border-gray-200 dark:border-gray-400 p-6 mx-4 sm:mx-auto rounded-lg max-w-md w-full z-10 transition-all duration-300 ${
+        className={`relative bg-island text-ink border border-ink/10 p-6 mx-4 sm:mx-auto rounded-card max-w-md w-full z-10 transition-all duration-300 ${
           isOpen ? "translate-y-0 opacity-100" : "translate-y-24 opacity-0"
         }`}
       >
         {/* aria-live announces the thank-you / error text when it appears */}
         <div className="text-center mb-10" aria-live="polite">
           {failed ? (
-            <p className="text-2xl text-red-600 dark:text-red-400">
+            <p className="text-2xl text-error">
               We couldn&apos;t record your check-in. Please see the front desk.
             </p>
           ) : showSuccess ? (
-            <p className="text-4xl">
+            <p className="font-serif text-4xl text-ink">
               {wasDuplicate ? (
                 <>
                   You&apos;re already checked in, <strong>{firstName}</strong>!
@@ -137,7 +137,7 @@ export default function ConfirmationModal({
             </p>
           ) : firstName ? (
             <>
-              <h2 className="text-4xl font-semibold mb-6">
+              <h2 className="font-serif text-4xl text-ink mb-6">
                 {appointmentTime ? "Is this your appointment?" : "Is this you?"}
               </h2>
               <p className="text-3xl mb-3">{displayName}</p>
@@ -147,7 +147,7 @@ export default function ConfirmationModal({
                   {practitioner ? ` with ${practitioner}` : ""}
                 </p>
               ) : (
-                <p className="text-lg text-gray-600 dark:text-gray-300">
+                <p className="text-lg text-ink/60">
                   We couldn&apos;t find a booked appointment for today — you can
                   still sign in.
                 </p>
@@ -161,14 +161,14 @@ export default function ConfirmationModal({
             <button
               onClick={handleConfirm}
               disabled={saving}
-              className="px-6 py-2 bg-brand-primary hover:bg-brand-secondary active:scale-95 text-white rounded-full disabled:opacity-50 transition"
+              className="px-6 py-2 bg-surface text-cream active:scale-95 rounded-full disabled:opacity-50 transition"
             >
               {saving ? "Signing in..." : "Yes, Sign In"}
             </button>
             <button
               onClick={onDeny}
               disabled={saving}
-              className="px-6 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-400 dark:hover:bg-gray-600 active:scale-95 rounded-full disabled:opacity-50 transition"
+              className="px-6 py-2 border border-ink/20 text-ink active:scale-95 rounded-full disabled:opacity-50 transition"
             >
               No
             </button>
@@ -178,7 +178,7 @@ export default function ConfirmationModal({
           <div className="flex justify-center">
             <button
               onClick={onClose}
-              className="px-6 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-400 dark:hover:bg-gray-600 active:scale-95 rounded-full transition"
+              className="px-6 py-2 border border-ink/20 text-ink active:scale-95 rounded-full transition"
             >
               Close
             </button>

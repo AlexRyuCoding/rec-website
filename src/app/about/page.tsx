@@ -1,156 +1,201 @@
-"use client";
+import type { Metadata } from "next";
+import SplitReveal from "@/components/motion/split-reveal";
+import Reveal from "@/components/motion/reveal";
+import Parallax from "@/components/motion/parallax";
+import PillLink from "@/components/ui/pill-link";
 
-import Image from "next/image";
-import Link from "next/link";
+export const metadata: Metadata = {
+  title: "About",
+  description:
+    "Family-run acupuncture clinic in Burbank since 1997. Meet Dr. Jay J. Ryu, L.Ac., Ph.D. — nearly 30 years of clinical experience in Traditional Chinese Medicine.",
+};
 
-export default function Page() {
+const CREDENTIALS = [
+  "Ph.D. in Oriental Medicine – Yuin University",
+  "Master's in Traditional Oriental Medicine – Dongguk Royal University",
+  "Former Professor – Dongguk Royal University",
+  "Core Member – Hongik Oriental Medical Association",
+  "Instructor – Acupuncturist Continuing Education Programs",
+];
+
+const UNIQUE = [
+  "Over 25 years of clinical experience",
+  "Fully personalized treatment plans",
+  "Warm, clean, and peaceful clinic space",
+  "Collaborative, integrative approach",
+];
+
+const SPECIALTIES = [
+  "Infertility & Women's Health",
+  "Allergy & Asthma Relief",
+  "Back, Neck & Joint Pain Management",
+  "Hormonal Imbalance & Stress Support",
+];
+
+export default function About() {
   return (
-    <section className="max-w-5xl mt-32 mx-auto px-6 py-16 space-y-16 dark:text-gray-100">
-      <div className="space-y-6">
-        <h1 className="text-4xl font-bold text-center">
-          About Ryu Acupuncture Clinic
-        </h1>
-        <p className="text-lg text-center max-w-3xl mx-auto">
-          <strong>
-            Healing That Honors Tradition. Care That Feels Like Family.
-          </strong>
-        </p>
-        <p className="text-lg leading-relaxed">
-          Since opening our doors in <strong>1997</strong>, Ryu Acupuncture
-          Clinic has grown into one of Burbank&apos;s most trusted holistic
-          healing centers. What began as a small, family-run clinic has become a
-          community cornerstone—offering compassionate, results-driven care
-          rooted in the wisdom of Traditional Chinese Medicine (TCM).
-        </p>
-        <p className="text-lg leading-relaxed">
-          Over the years, we&apos;ve helped thousands of patients reduce pain,
-          restore balance, and reconnect with their body&apos;s natural healing
-          process. Our mission remains simple: to provide exceptional care with
-          heart, skill, and respect.
-        </p>
-      </div>
+    <main>
+      <section className="flex min-h-[70svh] flex-col justify-end px-4 pb-12 pt-28 lg:px-8">
+        <p className="mb-6 text-sm font-medium text-cream/50">About us:</p>
+        <SplitReveal
+          as="h1"
+          className="max-w-6xl font-serif text-display text-cream"
+          segments={[
+            { text: "Healing that honors" },
+            { text: "tradition.", italic: true },
+          ]}
+        />
+        <Reveal delay={0.3} className="mt-10 max-w-md">
+          <p className="leading-relaxed text-cream/60">
+            Since opening our doors in 1997, Ryu Acupuncture Clinic has grown
+            into one of Burbank&apos;s most trusted holistic healing centers.
+            What began as a small, family-run clinic has become a community
+            cornerstone—offering compassionate, results-driven care rooted in
+            the wisdom of Traditional Chinese Medicine.
+          </p>
+          <p className="mt-6 leading-relaxed text-cream/60">
+            Over the years, we&apos;ve helped thousands of patients reduce pain,
+            restore balance, and reconnect with their body&apos;s natural
+            healing process. Our mission remains simple: to provide exceptional
+            care with heart, skill, and respect.
+          </p>
+        </Reveal>
+      </section>
 
-      <div className="grid sm:grid-cols-2 gap-10 items-center">
-        <div className="space-y-4">
-          <h2 className="text-2xl font-semibold">
-            Meet Dr. Jay J. Ryu, L.Ac., Ph.D.
+      <section className="px-4 py-12 lg:px-8">
+        <div className="rounded-card bg-island px-6 py-16 text-ink lg:px-16 lg:py-24">
+          <div className="flex flex-col gap-10 lg:flex-row lg:justify-between">
+            <Reveal className="lg:w-[38%]">
+              <Parallax
+                src="/dr-jay-ryu-profile.png"
+                alt="Dr. Jay Ryu profile picture"
+                className="aspect-[0.8] rounded-chip"
+                sizes="(min-width: 1024px) 38vw, 100vw"
+              />
+            </Reveal>
+            <div className="flex max-w-lg flex-col gap-6">
+              <h2 className="font-serif text-title">
+                Meet Dr. Jay J. Ryu, <i>L.Ac., Ph.D.</i>
+              </h2>
+              <p className="leading-relaxed text-ink/70">
+                With nearly 30 years of clinical experience, Dr. Jay J. Ryu
+                brings deep expertise and a patient-first philosophy to every
+                treatment. His background blends academic excellence with
+                cultural wisdom, making him a highly respected practitioner in
+                the field of Eastern medicine.
+              </p>
+              <ul>
+                {CREDENTIALS.map((c) => (
+                  <li
+                    key={c}
+                    className="border-t py-3 text-sm text-ink/70"
+                    style={{ borderColor: "var(--hairline-on-light)" }}
+                  >
+                    {c}
+                  </li>
+                ))}
+              </ul>
+              <p className="leading-relaxed text-ink/70">
+                Dr. Ryu is fluent in both English and Korean, and is especially
+                known for his compassionate approach and ability to treat
+                complex cases with clarity and care.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="px-4 py-24 lg:px-8 lg:py-40">
+        <Reveal>
+          <h2 className="max-w-4xl font-serif text-title text-cream">
+            Our <i>philosophy</i>
           </h2>
-          <p className="text-lg">
-            With nearly <strong>30 years of clinical experience</strong>, Dr.
-            Jay J. Ryu brings deep expertise and a patient-first philosophy to
-            every treatment. His background blends academic excellence with
-            cultural wisdom, making him a highly respected practitioner in the
-            field of Eastern medicine.
+          <p className="mt-8 max-w-md leading-relaxed text-cream/60">
+            We believe true healing happens when expertise meets empathy. Every
+            treatment plan is custom-tailored to support the whole person—not
+            just the symptoms. We take time to listen, diagnose thoughtfully,
+            and treat holistically.
           </p>
-          <ul className="list-disc list-inside space-y-1 text-base">
-            <li>Ph.D. in Oriental Medicine – Yuin University</li>
-            <li>
-              Master&apos;s in Traditional Oriental Medicine – Dongguk Royal
-              University
+          <p className="mt-4 max-w-md leading-relaxed text-cream/60">
+            Our team uses the ancient principles of TCM alongside a modern
+            understanding of the body to restore harmony, prevent illness, and
+            support lifelong wellness.
+          </p>
+        </Reveal>
+        <div className="mt-16 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Reveal className="media-ramp">
+            <Parallax
+              src="/pic-w-pt.jpg"
+              alt="Dr. Ryu treating a patient"
+              className="aspect-[4/3] rounded-card"
+              sizes="(min-width: 1024px) 50vw, 100vw"
+            />
+          </Reveal>
+          <Reveal delay={0.15} className="media-ramp">
+            <Parallax
+              src="/pic-w-pt2.jpg"
+              alt="Dr. Ryu with a longtime patient"
+              className="aspect-[4/3] rounded-card"
+              sizes="(min-width: 1024px) 50vw, 100vw"
+            />
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="px-4 py-24 lg:px-8 lg:py-40">
+        <Reveal>
+          <h2 className="max-w-4xl font-serif text-title text-cream">
+            Areas of <i>specialty</i>
+          </h2>
+        </Reveal>
+        <ul className="mt-16 max-w-3xl">
+          {SPECIALTIES.map((s) => (
+            <li
+              key={s}
+              className="border-t py-6 font-serif text-card text-cream"
+              style={{ borderColor: "var(--hairline-on-dark)" }}
+            >
+              {s}
             </li>
-            <li>Former Professor – Dongguk Royal University</li>
-            <li>Core Member – Hongik Oriental Medical Association</li>
-            <li>Instructor – Acupuncturist Continuing Education Programs</li>
-          </ul>
-          <p className="text-lg">
-            Dr. Ryu is fluent in both English and Korean, and is especially
-            known for his compassionate approach and ability to treat complex
-            cases with clarity and care.
-          </p>
-        </div>
-        <div className="flex items-center justify-center w-full">
-          <Image
-            src="/dr-jay-ryu-profile.png"
-            alt="Dr. Jay Ryu profile picture"
-            title="Profile photo of Dr. Jay Ryu"
-            width="400"
-            height="400"
-            priority={true}
-            className="rounded-3xl shadow-2xl"
-          />
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <h2 className="text-2xl font-semibold text-center">
-          Areas of Specialty
-        </h2>
-        <ul className="grid sm:grid-cols-2 gap-4 text-base list-disc list-inside max-w-3xl mx-auto">
-          <li>Infertility & Women&apos;s Health</li>
-          <li>Allergy & Asthma Relief</li>
-          <li>Back, Neck & Joint Pain Management</li>
-          <li>Hormonal Imbalance & Stress Support</li>
+          ))}
         </ul>
-        <div className="w-full flex justify-center py-6 ">
-          <Image
+        <Reveal className="mt-16 media-ramp">
+          <Parallax
             src="/dr-jay-ryu-candid-office.jpg"
-            alt="Dr. Jay J. Ryu, L.Ac., Ph.D."
-            className="w-full rounded-xl shadow-lg object-cover"
-            width={1200}
-            height={1200}
+            alt="Dr. Jay J. Ryu at work in his Burbank office"
+            className="aspect-[4/3] rounded-card"
+            sizes="100vw"
           />
-        </div>
-      </div>
+        </Reveal>
+      </section>
 
-      <div className="space-y-6">
-        <h2 className="text-2xl font-semibold">Our Philosophy</h2>
-        <p className="text-lg leading-relaxed">
-          We believe true healing happens when expertise meets empathy. At Ryu
-          Acupuncture Clinic, every treatment plan is custom-tailored to support
-          the whole person—not just the symptoms. We take time to listen,
-          diagnose thoughtfully, and treat holistically.
+      <section className="px-4 pb-24 lg:px-8 lg:pb-40">
+        <p className="mb-6 text-sm font-medium text-cream/50">
+          What makes our clinic unique:
         </p>
-        <p className="text-lg leading-relaxed">
-          Our team uses the ancient principles of TCM alongside a modern
-          understanding of the body to restore harmony, prevent illness, and
-          support lifelong wellness.
-        </p>
-        <div className="w-full flex justify-center py-6 gap-4">
-          <Image
-            aria-hidden
-            src="/pic-w-pt.jpg"
-            alt="Dr. Ryu with his patients"
-            title="Dr. Ryu with his patients"
-            width={400}
-            height={400}
-            className="rounded-3xl shadow-2xl"
-          />
-          <Image
-            aria-hidden
-            src="/pic-w-pt2.jpg"
-            alt="Dr. Ryu with his patients"
-            title="Dr. Ryu with his patients"
-            width={500}
-            height={400}
-            className="rounded-3xl shadow-2xl"
-          />
-        </div>
-      </div>
-
-      <h2 className="text-2xl font-semibold">
-        ✨ What Makes Our Clinic Unique?
-      </h2>
-      <ul className="text-lg list-disc list-inside space-y-1">
-        <li>✅ Over 25 years of clinical experience</li>
-        <li>✅ Fully personalized treatment plans</li>
-        <li>✅ Warm, clean, and peaceful clinic space</li>
-        <li>✅ Collaborative, integrative approach</li>
-      </ul>
-
-      <div className="text-center border-t pt-10">
-        <h2 className="text-2xl font-semibold">A Legacy of Healing</h2>
-        <p className="mt-2 text-lg max-w-xl mx-auto">
-          Whether you&apos;re beginning your journey toward wellness or
-          continuing a path of healing, our team is here to support you every
-          step of the way.
-        </p>
-        <Link
-          href="/request-an-appointment"
-          className="mt-4 inline-block px-8 py-3 bg-brand-primary text-white font-semibold rounded-lg hover:bg-brand-secondary transition"
-        >
-          Request an Appointment
-        </Link>
-      </div>
-    </section>
+        <ul className="max-w-3xl">
+          {UNIQUE.map((u, i) => (
+            <li
+              key={u}
+              className="flex items-baseline gap-6 border-t py-6 font-serif text-card text-cream"
+              style={{ borderColor: "var(--hairline-on-dark)" }}
+            >
+              <span className="text-sm text-gold">0{i + 1}</span>
+              {u}
+            </li>
+          ))}
+        </ul>
+        <Reveal className="mt-16">
+          <p className="max-w-md leading-relaxed text-cream/60">
+            Whether you&apos;re beginning your journey toward wellness or
+            continuing a path of healing, our team is here to support you every
+            step of the way.
+          </p>
+          <PillLink href="/request-an-appointment" className="mt-6">
+            Request an Appointment
+          </PillLink>
+        </Reveal>
+      </section>
+    </main>
   );
 }

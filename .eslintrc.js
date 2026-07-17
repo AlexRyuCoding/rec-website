@@ -42,4 +42,20 @@ module.exports = {
     ],
     "react-hooks/exhaustive-deps": "warn",
   },
+  overrides: [
+    {
+      // Standalone Node CLI scripts (scripts/sync-patients.js,
+      // scripts/setup-pb-webhook.js) — run directly via `node scripts/x.js`,
+      // not part of the Next.js app. CommonJS + console output by design.
+      files: ["scripts/**/*.js"],
+      parserOptions: {
+        sourceType: "script",
+      },
+      rules: {
+        "@typescript-eslint/no-require-imports": "off",
+        "no-console": "off",
+        "no-constant-condition": ["error", { checkLoops: false }],
+      },
+    },
+  ],
 };

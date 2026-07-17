@@ -14,6 +14,11 @@ throughout the day unassisted.
 - EHR: Practice Better API (REST, OAuth2)
 - PIN hashing: bcryptjs
 - All secrets in .env.local — never hardcoded
+- Frontend: single dark theme (no light/dark toggle); GSAP + ScrollTrigger +
+  Lenis for public-page motion; Instrument Serif + Inter Tight via next/font
+- Public forms (/api/request-form, /api/grievance-form): zod-validated,
+  honeypot field `company`, per-IP rate limit (5/hour) in Supabase
+  (form_submission_events table, migration 0006 — must be applied)
 
 ## Environment Variables (.env.local)
 
