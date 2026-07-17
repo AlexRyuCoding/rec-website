@@ -16,7 +16,7 @@ export default function DoctorBand() {
             { text: "holistic healing.", italic: true },
           ]}
         />
-        <div className="mt-12 flex flex-col gap-10 lg:flex-row lg:items-start lg:justify-between">
+        <div className="mt-12 flex flex-col gap-10 lg:flex-row lg:items-center lg:justify-between">
           <Reveal className="lg:w-[38%]">
             <Parallax
               src="/dr-jay-ryu-profile.png"
@@ -39,6 +39,12 @@ export default function DoctorBand() {
               environment where each patient is treated with care, respect, and
               clinical expertise.
             </p>
+            <Parallax
+              src="/pic-w-pt3.jpg"
+              alt="Dr. Ryu holding a smiling infant patient at the clinic"
+              className="aspect-[0.8] rounded-chip"
+              sizes="(min-width: 1024px) 28rem, 100vw"
+            />
             <PillLink href="/about" variant="dark" className="w-fit">
               About the clinic
             </PillLink>
