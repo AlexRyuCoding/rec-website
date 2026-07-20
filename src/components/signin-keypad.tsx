@@ -1,7 +1,9 @@
 // src/components/signin-keypad.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { gsap, useGSAP } from "@/lib/gsap";
+import { useMotionPrefs } from "./motion/motion-provider";
 import ConfirmationModal from "./confirmation-modal";
 
 type Screen =
@@ -31,10 +33,17 @@ interface PatientInfo {
 
 interface AppointmentInfo {
   time: string | null;
+  date: string | null;
   practitioner: string | null;
 }
 
+// New-patient flow steps, shown above the flow so patients always know
+// where they are. new_select_name is part of "Your info".
+const NEW_FLOW_STEPS = ["Your info", "Choose PIN", "Confirm PIN"] as const;
+
 export default function SignInKeypad() {
+  const { reduced } = useMotionPrefs();
+  const newFlowRef = useRef<HTMLDivElement>(null);
   const [screen, setScreen] = useState<Screen>("pin_entry");
   const [pin, setPin] = useState("");
   const [contact, setContact] = useState("");
@@ -382,6 +391,87 @@ export default function SignInKeypad() {
     "new_pin_confirm",
   ].includes(screen);
 
+  // --- New-patient flow chrome ---
+
+  const isNewFlow = [
+    "new_contact",
+    "new_select_name",
+    "new_pin_create",
+    "new_pin_confirm",
+  ].includes(screen);
+  const newFlowStep =
+    screen === "new_pin_confirm" ? 2 : screen === "new_pin_create" ? 1 : 0;
+
+  // Slide each new-patient step in and pop its indicator dot so moving
+  // between steps is unmissable on the kiosk.
+  useGSAP(
+    () => {
+      if (reduced || !newFlowRef.current) return;
+      const content = newFlowRef.current.querySelector("[data-step-content]");
+      if (content) {
+        gsap.fromTo(
+          content,
+          { autoAlpha: 0, x: 40 },
+          { autoAlpha: 1, x: 0, duration: 0.45, ease: "house" }
+        );
+      }
+      const active = newFlowRef.current.querySelector(
+        '[data-step-active="true"]'
+      );
+      if (active) {
+        gsap.fromTo(
+          active,
+          { scale: 0.4 },
+          { scale: 1, duration: 0.5, ease: "back.out(2.2)" }
+        );
+      }
+    },
+    { dependencies: [screen], scope: newFlowRef }
+  );
+
+  const stepIndicator = (
+    <ol
+      className="flex items-center"
+      aria-label={`Step ${newFlowStep + 1} of ${NEW_FLOW_STEPS.length}: ${
+        NEW_FLOW_STEPS[newFlowStep]
+      }`}
+    >
+      {NEW_FLOW_STEPS.map((label, i) => (
+        <li key={label} className="flex items-center">
+          {i > 0 && (
+            <span
+              aria-hidden="true"
+              className={`mx-2 h-px w-6 sm:w-10 transition-colors ${
+                i <= newFlowStep ? "bg-brand-primary" : "bg-brand-muted"
+              }`}
+            />
+          )}
+          <span className="flex items-center gap-2">
+            <span
+              data-step-active={i === newFlowStep}
+              className={`flex size-9 items-center justify-center rounded-full border text-base transition-colors ${
+                i < newFlowStep
+                  ? "border-brand-primary text-brand-primary"
+                  : i === newFlowStep
+                    ? "border-brand-primary bg-brand-primary text-white"
+                    : "border-brand-muted text-cream/40"
+              }`}
+            >
+              {i < newFlowStep ? "✓" : i + 1}
+            </span>
+            <span
+              className={`hidden text-sm sm:inline ${
+                i === newFlowStep ? "text-cream" : "text-cream/40"
+              }`}
+            >
+              {label}
+            </span>
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+
   const Keypad = () => (
     <div className="grid grid-cols-3 gap-4 mb-4">
       {["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map((num) => (
@@ -479,106 +569,129 @@ export default function SignInKeypad() {
           </div>
         )}
 
-        {/* New patient: contact entry */}
-        {screen === "new_contact" && (
+        {/* New patient flow: step indicator + GSAP-animated step content */}
+        {isNewFlow && (
           <div
-            key="new_contact"
-            className="flex flex-col items-center gap-6 w-full max-w-sm animate-fade-in"
+            ref={newFlowRef}
+            className="flex w-full flex-col items-center gap-8 animate-fade-in"
           >
-            <p className="text-2xl text-center">
-              Enter your phone number or email.
-            </p>
-            <input
-              type="text"
-              value={contact}
-              onChange={(e) => setContact(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleContactSubmit()}
-              placeholder="555-123-4567 or email"
-              className="w-full px-4 py-3 border border-brand-foreground rounded-lg text-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-primary"
-              autoFocus
-            />
-            <div className="flex gap-4 w-full">
-              <button
-                onClick={reset}
-                className="flex-1 py-3 rounded-full border border-brand-foreground text-xl hover:bg-brand-muted active:scale-95 transition"
-              >
-                Back
-              </button>
-              <button
-                onClick={handleContactSubmit}
-                disabled={!contact.trim()}
-                className="flex-1 py-3 rounded-full bg-brand-primary text-white text-xl hover:bg-brand-secondary active:scale-95 disabled:opacity-50 transition"
-              >
-                Continue
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* New patient: shared contact — pick your name */}
-        {screen === "new_select_name" && (
-          <div
-            key="new_select_name"
-            className="flex flex-col items-center gap-6 w-full max-w-sm animate-fade-in"
-          >
-            <p className="text-2xl text-center">
-              Select your name to set up your PIN.
-            </p>
-            <div className="flex flex-col gap-4 w-full">
-              {nameOptions.map((option) => (
-                <button
-                  key={option.patient_id}
-                  onClick={() => handleNameSelect(option)}
-                  className="py-4 px-6 rounded-xl border border-brand-foreground text-2xl bg-brand-background hover:bg-brand-muted active:scale-95 transition"
+            {stepIndicator}
+            <div
+              data-step-content
+              className="flex w-full flex-col items-center"
+            >
+              {/* New patient: contact entry */}
+              {screen === "new_contact" && (
+                <div
+                  key="new_contact"
+                  className="flex flex-col items-center gap-6 w-full max-w-sm mx-auto"
                 >
-                  {option.first_name}
-                  {option.last_initial ? ` ${option.last_initial}.` : ""}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={reset}
-              className="text-lg text-cream/50 underline underline-offset-2 hover:text-cream transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        )}
+                  <p className="text-2xl text-center">
+                    Enter your phone number or email.
+                  </p>
+                  <input
+                    type="text"
+                    value={contact}
+                    onChange={(e) => setContact(e.target.value)}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" && handleContactSubmit()
+                    }
+                    placeholder="555-123-4567 or email"
+                    className="w-full px-4 py-3 border border-brand-foreground rounded-lg text-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                    autoFocus
+                  />
+                  <div className="flex gap-4 w-full">
+                    <button
+                      onClick={reset}
+                      className="flex-1 py-3 rounded-full border border-brand-foreground text-xl hover:bg-brand-muted active:scale-95 transition"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={handleContactSubmit}
+                      disabled={!contact.trim()}
+                      className="flex-1 py-3 rounded-full bg-brand-primary text-white text-xl hover:bg-brand-secondary active:scale-95 disabled:opacity-50 transition"
+                    >
+                      Continue
+                    </button>
+                  </div>
+                </div>
+              )}
 
-        {/* New patient: PIN creation */}
-        {(screen === "new_pin_create" || screen === "new_pin_confirm") && (
-          <div
-            key="new_pin"
-            className="flex flex-col items-center gap-6 w-full animate-fade-in"
-          >
-            <p className="text-2xl text-center">
-              {screen === "new_pin_create"
-                ? `Hi ${patient?.first_name}! Choose a 4-digit PIN.`
-                : "Re-enter your PIN to confirm."}
-            </p>
-            {errorMessage && screen === "new_pin_create" && (
-              <p className="text-lg text-error text-center max-w-sm">
-                {errorMessage}
-              </p>
-            )}
-            <div className="w-full max-w-[380px] sm:max-w-[480px] p-4 rounded-lg bg-brand-background border border-brand-foreground">
-              {pinDots(currentPinValue)}
-              <Keypad />
+              {/* New patient: shared contact — pick your name */}
+              {screen === "new_select_name" && (
+                <div
+                  key="new_select_name"
+                  className="flex flex-col items-center gap-6 w-full max-w-sm"
+                >
+                  <p className="text-2xl text-center">
+                    Select your name to set up your PIN.
+                  </p>
+                  <div className="flex flex-col gap-4 w-full">
+                    {nameOptions.map((option) => (
+                      <button
+                        key={option.patient_id}
+                        onClick={() => handleNameSelect(option)}
+                        className="py-4 px-6 rounded-xl border border-brand-foreground text-2xl bg-brand-background hover:bg-brand-muted active:scale-95 transition"
+                      >
+                        {option.first_name}
+                        {option.last_initial ? ` ${option.last_initial}.` : ""}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={reset}
+                    className="text-lg text-cream/50 underline underline-offset-2 hover:text-cream transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              {/* New patient: PIN creation */}
+              {(screen === "new_pin_create" ||
+                screen === "new_pin_confirm") && (
+                <div
+                  key="new_pin"
+                  className="flex flex-col items-center gap-6 w-full"
+                >
+                  <p className="text-2xl text-center">
+                    {screen === "new_pin_create"
+                      ? `Hi ${patient?.first_name}! Choose a 4-digit PIN.`
+                      : "Re-enter your PIN to confirm."}
+                  </p>
+                  {errorMessage && screen === "new_pin_create" && (
+                    <p className="text-lg text-error text-center max-w-sm">
+                      {errorMessage}
+                    </p>
+                  )}
+                  <div
+                    className={`w-full max-w-[380px] sm:max-w-[480px] p-4 rounded-lg bg-brand-background border transition-colors ${
+                      screen === "new_pin_confirm"
+                        ? "border-brand-primary"
+                        : "border-brand-foreground"
+                    }`}
+                  >
+                    {pinDots(currentPinValue)}
+                    <Keypad />
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (screen === "new_pin_confirm") {
+                        setNewPin("");
+                        setConfirmPin("");
+                        setScreen("new_pin_create");
+                      } else {
+                        reset();
+                      }
+                    }}
+                    className="text-lg text-cream/50 underline underline-offset-2 hover:text-cream transition-colors"
+                  >
+                    {screen === "new_pin_confirm" ? "Back" : "Cancel"}
+                  </button>
+                </div>
+              )}
             </div>
-            <button
-              onClick={() => {
-                if (screen === "new_pin_confirm") {
-                  setNewPin("");
-                  setConfirmPin("");
-                  setScreen("new_pin_create");
-                } else {
-                  reset();
-                }
-              }}
-              className="text-lg text-cream/50 underline underline-offset-2 hover:text-cream transition-colors"
-            >
-              {screen === "new_pin_confirm" ? "Back" : "Cancel"}
-            </button>
           </div>
         )}
       </>
@@ -591,6 +704,7 @@ export default function SignInKeypad() {
         firstName={patient?.first_name ?? ""}
         lastName={patient?.last_name ?? ""}
         appointmentTime={appointment?.time ?? null}
+        appointmentDate={appointment?.date ?? null}
         practitioner={appointment?.practitioner ?? null}
       />
     </div>

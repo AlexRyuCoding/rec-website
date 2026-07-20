@@ -22,9 +22,10 @@ export async function GET(req: Request) {
   const supabase = createServiceClient();
   const { data, error, count } = await supabase
     .from("checkins")
-    .select("id, checked_in_at, patients(first_name, last_name)", {
-      count: "exact",
-    })
+    .select(
+      "id, checked_in_at, appointment_at, service_name, patients(first_name, last_name)",
+      { count: "exact" }
+    )
     .gte("checked_in_at", from)
     .lt("checked_in_at", to)
     .order("checked_in_at", { ascending: false })
@@ -40,6 +41,8 @@ export async function GET(req: Request) {
       return {
         id: c.id,
         checked_in_at: c.checked_in_at,
+        appointment_at: c.appointment_at,
+        service_name: c.service_name,
         first_name: p?.first_name ?? "",
         last_name: p?.last_name ?? "",
       };

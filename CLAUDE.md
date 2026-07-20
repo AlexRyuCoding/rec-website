@@ -41,7 +41,8 @@ throughout the day unassisted.
 
 - /admin/patient-signin — the kiosk page (protected by middleware)
 - /admin/dashboard — staff dashboard: check-ins viewer (Today/Yesterday/
-  week/month/custom + CSV export) and patient search with Reset PIN
+  week/month/custom + Refresh + CSV export; shows appointment time and
+  service per check-in) and patient search with Reset PIN
 - /api/auth/[...nextauth] — NextAuth (Google sign-in, session, callbacks)
 - /api/admin/checkins — GET check-ins in a from/to range, joined with names
 - /api/admin/patients — GET staff patient search (returns has_pin, never the hash)
@@ -56,7 +57,9 @@ throughout the day unassisted.
 - /api/patients/lookup — matches PIN, returns patient record
 - /api/patients/setup-pin — creates PIN for new patient
 - /api/appointments/today — fetches today's appointment from Practice Better
-- /api/checkins — writes check-in record (patient_id + timestamp only) to Supabase
+- /api/checkins — writes check-in record to Supabase (patient_id + timestamp,
+  plus a snapshot of today's PB appointment time and service name; nullable,
+  fails open if PB is unreachable)
 - /api/webhooks/practice-better — PB webhook: GET = verification handshake, POST = signed client.record.created/updated events → upsert patient into Supabase (PB is the source of truth for contact info; staff fix wrong numbers/emails in PB, never in Supabase)
 
 ## Auth (Google sign-in via NextAuth)
@@ -99,15 +102,18 @@ policies on both tables; all access goes through the service-role key.
 
 ### checkins table
 
-| column        | type      | notes                     |
-| ------------- | --------- | ------------------------- |
-| id            | uuid      | primary key               |
-| patient_id    | uuid      | foreign key → patients.id |
-| checked_in_at | timestamp | auto-set on insert        |
+| column         | type      | notes                                         |
+| -------------- | --------- | --------------------------------------------- |
+| id             | uuid      | primary key                                   |
+| patient_id     | uuid      | foreign key → patients.id                     |
+| checked_in_at  | timestamp | auto-set on insert                            |
+| appointment_at | timestamp | nullable; today's PB session time, snapshotted at check-in (migration 0007) |
+| service_name   | text      | nullable; PB service name, snapshotted at check-in (migration 0007) |
 
-Data minimization: a check-in logs who + when ONLY. Appointment time and
-practitioner are displayed on the kiosk confirm screen (live from PB) but
-never written to the log — they already live in Practice Better.
+A check-in logs who + when + a snapshot of the appointment (time + service
+name, fetched live from PB at check-in; null if PB is unreachable or there
+is no session that day). Practitioner is shown on the kiosk confirm screen
+but not logged.
 
 ## Practice Better API
 

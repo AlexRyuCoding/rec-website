@@ -1,7 +1,9 @@
 // src/components/confirmation-modal.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { gsap, useGSAP } from "@/lib/gsap";
+import { useMotionPrefs } from "./motion/motion-provider";
 
 interface ConfirmationModalProps {
   isOpen: boolean;
@@ -12,6 +14,7 @@ interface ConfirmationModalProps {
   firstName: string;
   lastName: string;
   appointmentTime: string | null;
+  appointmentDate: string | null;
   practitioner: string | null;
 }
 
@@ -23,8 +26,11 @@ export default function ConfirmationModal({
   firstName,
   lastName,
   appointmentTime,
+  appointmentDate,
   practitioner,
 }: ConfirmationModalProps) {
+  const { reduced } = useMotionPrefs();
+  const successRef = useRef<HTMLDivElement>(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [wasDuplicate, setWasDuplicate] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -49,10 +55,50 @@ export default function ConfirmationModal({
       const timer = setTimeout(() => {
         setShowSuccess(false);
         onClose();
-      }, 3000);
+      }, 4000);
       return () => clearTimeout(timer);
     }
   }, [showSuccess, onClose]);
+
+  // Checked-in celebration: draw the circled checkmark, then pop the
+  // thank-you text in. Static (pre-drawn) under reduced motion.
+  useGSAP(
+    () => {
+      if (!showSuccess || reduced || !successRef.current) return;
+      const circle = successRef.current.querySelector("circle");
+      const check = successRef.current.querySelector("path");
+      const text = successRef.current.querySelector("[data-success-text]");
+      if (!circle || !check || !text) return;
+      for (const el of [circle, check]) {
+        const len = (el as SVGGeometryElement).getTotalLength();
+        gsap.set(el, { strokeDasharray: len, strokeDashoffset: len });
+      }
+      gsap
+        .timeline()
+        .fromTo(
+          successRef.current,
+          { autoAlpha: 0, scale: 0.92 },
+          { autoAlpha: 1, scale: 1, duration: 0.25, ease: "house" }
+        )
+        .to(
+          circle,
+          { strokeDashoffset: 0, duration: 0.5, ease: "power2.inOut" },
+          "-=0.05"
+        )
+        .to(
+          check,
+          { strokeDashoffset: 0, duration: 0.35, ease: "power2.out" },
+          "-=0.2"
+        )
+        .fromTo(
+          text,
+          { autoAlpha: 0, y: 16 },
+          { autoAlpha: 1, y: 0, duration: 0.4, ease: "house" },
+          "-=0.15"
+        );
+    },
+    { dependencies: [showSuccess, reduced], scope: successRef }
+  );
 
   const handleConfirm = async () => {
     setSaving(true);
@@ -118,32 +164,61 @@ export default function ConfirmationModal({
               We couldn&apos;t record your check-in. Please see the front desk.
             </p>
           ) : showSuccess ? (
-            <p className="font-serif text-4xl text-ink">
-              {wasDuplicate ? (
-                <>
-                  You&apos;re already checked in, <strong>{firstName}</strong>!
-                  <br />
-                  <br />
-                  Please have a seat.
-                </>
-              ) : (
-                <>
-                  Thank you, <strong>{firstName}</strong>!
-                  <br />
-                  <br />
-                  You&apos;re checked in.
-                </>
-              )}
-            </p>
+            <div ref={successRef} className="flex flex-col items-center">
+              <svg
+                viewBox="0 0 52 52"
+                className="mb-6 size-24 text-brand-primary"
+                aria-hidden="true"
+              >
+                <circle
+                  cx="26"
+                  cy="26"
+                  r="24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                />
+                <path
+                  d="M15 27l8 8 15-16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <p data-success-text className="font-serif text-4xl text-ink">
+                {wasDuplicate ? (
+                  <>
+                    You&apos;re already checked in, <strong>{firstName}</strong>
+                    !
+                    <br />
+                    <br />
+                    Please have a seat.
+                  </>
+                ) : (
+                  <>
+                    Thank you, <strong>{firstName}</strong>!
+                    <br />
+                    <br />
+                    You&apos;re checked in.
+                  </>
+                )}
+              </p>
+            </div>
           ) : firstName ? (
             <>
-              <h2 className="font-serif text-4xl text-ink mb-6">
+              <h2 className="text-lg uppercase tracking-widest text-ink/60 mb-4">
                 {appointmentTime ? "Is this your appointment?" : "Is this you?"}
               </h2>
-              <p className="text-3xl mb-3">{displayName}</p>
+              <p className="font-serif text-5xl sm:text-6xl text-ink mb-6">
+                {displayName}
+              </p>
               {appointmentTime ? (
                 <p className="text-2xl">
-                  Today at <strong>{appointmentTime}</strong>
+                  {appointmentDate ?? "Today"}
+                  <br />
+                  at <strong>{appointmentTime}</strong>
                   {practitioner ? ` with ${practitioner}` : ""}
                 </p>
               ) : (

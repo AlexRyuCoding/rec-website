@@ -1,9 +1,13 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { LogIn, RefreshCw } from "lucide-react";
 
 interface CheckinRow {
   id: string;
   checked_in_at: string;
+  appointment_at: string | null;
+  service_name: string | null;
   first_name: string;
   last_name: string;
 }
@@ -49,6 +53,9 @@ const fmtTime = (iso: string) =>
     hour: "numeric",
     minute: "2-digit",
   });
+
+// YYYY-MM-DD in the browser's timezone, for <input type="date"> values
+const dateInputValue = (d: Date) => d.toLocaleDateString("en-CA");
 
 export default function AdminDashboard() {
   const [tab, setTab] = useState<"checkins" | "patients">("checkins");
@@ -102,11 +109,13 @@ export default function AdminDashboard() {
   }, [loadCheckins]);
 
   const exportCsv = () => {
-    const header = "Checked in,Patient";
+    const header = "Checked in,Patient,Appointment,Service";
     const lines = rows.map((r) =>
       [
         new Date(r.checked_in_at).toLocaleString(),
         `${r.first_name} ${r.last_name}`,
+        r.appointment_at ? new Date(r.appointment_at).toLocaleString() : "",
+        r.service_name ?? "",
       ]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)
         .join(",")
@@ -291,7 +300,20 @@ export default function AdminDashboard() {
               ).map(([p, label]) => (
                 <button
                   key={p}
-                  onClick={() => setPreset(p)}
+                  onClick={() => {
+                    // Custom starts prefilled: today through a year out,
+                    // so the range loads without both fields typed in.
+                    if (p === "custom") {
+                      const now = new Date();
+                      if (!customFrom) setCustomFrom(dateInputValue(now));
+                      if (!customTo) {
+                        const yearOut = new Date(now);
+                        yearOut.setFullYear(yearOut.getFullYear() + 1);
+                        setCustomTo(dateInputValue(yearOut));
+                      }
+                    }
+                    setPreset(p);
+                  }}
                   className={`px-4 py-2 rounded-full border transition-colors ${
                     preset === p
                       ? "bg-brand-primary text-white border-brand-primary"
@@ -319,9 +341,20 @@ export default function AdminDashboard() {
                 </span>
               )}
               <button
+                onClick={loadCheckins}
+                disabled={loading}
+                aria-label="Refresh check-ins"
+                className="ml-auto flex items-center gap-2 px-4 py-2 rounded-full border border-brand-foreground hover:bg-brand-muted disabled:opacity-50 transition-colors"
+              >
+                <RefreshCw
+                  className={`size-4 ${loading ? "animate-spin" : ""}`}
+                />
+                Refresh
+              </button>
+              <button
                 onClick={exportCsv}
                 disabled={rows.length === 0}
-                className="ml-auto px-4 py-2 rounded-full border border-brand-foreground hover:bg-brand-muted disabled:opacity-50 transition-colors"
+                className="px-4 py-2 rounded-full border border-brand-foreground hover:bg-brand-muted disabled:opacity-50 transition-colors"
               >
                 Export CSV
               </button>
@@ -346,7 +379,9 @@ export default function AdminDashboard() {
                   <thead>
                     <tr className="border-b border-brand-foreground">
                       <th className="py-2 pr-4">Checked in</th>
-                      <th className="py-2">Patient</th>
+                      <th className="py-2 pr-4">Patient</th>
+                      <th className="py-2 pr-4">Appointment</th>
+                      <th className="py-2">Service</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -355,9 +390,13 @@ export default function AdminDashboard() {
                         <td className="py-2 pr-4 whitespace-nowrap">
                           {fmtTime(r.checked_in_at)}
                         </td>
-                        <td className="py-2">
+                        <td className="py-2 pr-4">
                           {r.first_name} {r.last_name}
                         </td>
+                        <td className="py-2 pr-4 whitespace-nowrap">
+                          {r.appointment_at ? fmtTime(r.appointment_at) : "—"}
+                        </td>
+                        <td className="py-2">{r.service_name ?? "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -477,6 +516,14 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+
+      <Link
+        href="/admin/patient-signin"
+        aria-label="Patient sign-in kiosk"
+        className="fixed bottom-4 right-4 text-cream/20 transition-colors duration-300 hover:text-cream/60"
+      >
+        <LogIn className="size-5" />
+      </Link>
     </div>
   );
 }

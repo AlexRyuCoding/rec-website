@@ -1,14 +1,6 @@
 import { NextResponse } from "next/server";
-import { PB_BASE, getPbToken } from "@/lib/practice-better";
+import { CLINIC_TZ, fetchTodaySession } from "@/lib/practice-better";
 import { isAdminAuthorized } from "@/lib/admin-auth";
-
-interface PbSession {
-  sessionDate?: string;
-  cancelled?: boolean;
-  consultant?: {
-    profile?: { firstName?: string; lastName?: string };
-  };
-}
 
 export async function GET(req: Request) {
   if (!(await isAdminAuthorized())) {
@@ -26,53 +18,29 @@ export async function GET(req: Request) {
   }
 
   try {
-    const token = await getPbToken();
-    // Clinic-local date — server may run in UTC
-    const today = new Date().toLocaleDateString("en-CA", {
-      timeZone: "America/Los_Angeles",
-    });
-
-    const params = new URLSearchParams({
-      records: pb_client_id,
-      date_eq: today,
-    });
-    const res = await fetch(`${PB_BASE}/consultant/sessions?${params}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (!res.ok) {
-      console.error("PB sessions fetch failed:", res.status);
+    const session = await fetchTodaySession(pb_client_id);
+    if (!session) {
       return NextResponse.json({ appointment: null });
     }
 
-    const data = await res.json();
-    const sessions = ((data.items ?? []) as PbSession[])
-      .filter((s) => !s.cancelled && s.sessionDate)
-      .sort((a, b) => a.sessionDate!.localeCompare(b.sessionDate!));
-
-    if (sessions.length === 0) {
-      return NextResponse.json({ appointment: null });
-    }
-
-    const appt = sessions[0];
-    const profile = appt.consultant?.profile;
-    const practitionerName = profile
-      ? `${profile.firstName ?? ""} ${profile.lastName ?? ""}`.trim() || null
-      : null;
-
-    const appointmentTime = new Date(appt.sessionDate!).toLocaleTimeString(
-      "en-US",
-      {
-        hour: "numeric",
-        minute: "2-digit",
-        timeZone: "America/Los_Angeles",
-      }
-    );
+    const start = new Date(session.sessionDate);
+    const appointmentTime = start.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: CLINIC_TZ,
+    });
+    const appointmentDate = start.toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      timeZone: CLINIC_TZ,
+    });
 
     return NextResponse.json({
       appointment: {
         time: appointmentTime,
-        practitioner: practitionerName,
+        date: appointmentDate,
+        practitioner: session.practitioner,
       },
     });
   } catch (err) {
