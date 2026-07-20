@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { LogIn, RefreshCw } from "lucide-react";
+import { KeyRound, RefreshCw } from "lucide-react";
 
 interface CheckinRow {
   id: string;
@@ -522,7 +522,7 @@ export default function AdminDashboard() {
         aria-label="Patient sign-in kiosk"
         className="fixed bottom-4 right-4 text-cream/20 transition-colors duration-300 hover:text-cream/60"
       >
-        <LogIn className="size-5" />
+        <KeyRound className="size-5" />
       </Link>
     </div>
   );
