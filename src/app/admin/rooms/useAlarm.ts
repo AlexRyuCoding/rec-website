@@ -27,8 +27,11 @@ function playChime(ctx: AudioContext) {
   note(659.25, 0.35);
 }
 
+const SOUND_PREF_KEY = "rooms-chime-enabled";
+
 export function useAlarm(rooms: RoomRow[], serverNowMs: number) {
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const [audioReady, setAudioReady] = useState(false);
   const ctxRef = useRef<AudioContext | null>(null);
   // Count, not boolean: a second room completing while one is already
   // alarming restarts the chime cycle so it gets heard too.
@@ -37,20 +40,55 @@ export function useAlarm(rooms: RoomRow[], serverNowMs: number) {
     return status === "complete" || status === "overtime";
   }).length;
 
-  const enableSound = useCallback(() => {
+  const ensureAudio = useCallback(() => {
     if (!ctxRef.current) {
       ctxRef.current = new AudioContext();
     }
-    ctxRef.current.resume();
-    setSoundEnabled(true);
+    ctxRef.current.resume().catch(() => {});
+    setAudioReady(true);
   }, []);
+
+  const enableSound = useCallback(() => {
+    try {
+      localStorage.setItem(SOUND_PREF_KEY, "1");
+    } catch {
+      // Storage unavailable (private mode) — banner returns next session.
+    }
+    ensureAudio();
+    setSoundEnabled(true);
+  }, [ensureAudio]);
+
+  // The enable choice is remembered per device, so the banner only ever
+  // appears once. Browsers still require one user gesture per page load
+  // before audio may start — with the preference saved, the first tap
+  // anywhere on the page (any timer button) unlocks the audio context.
+  // The listeners stay attached to re-resume a context the browser
+  // suspends later (e.g. after a tab switch).
+  useEffect(() => {
+    let saved = false;
+    try {
+      saved = localStorage.getItem(SOUND_PREF_KEY) === "1";
+    } catch {
+      // Storage unavailable — fall back to the banner.
+    }
+    if (!saved) return;
+    setSoundEnabled(true);
+    const unlock = () => ensureAudio();
+    document.addEventListener("pointerdown", unlock);
+    document.addEventListener("keydown", unlock);
+    return () => {
+      document.removeEventListener("pointerdown", unlock);
+      document.removeEventListener("keydown", unlock);
+    };
+  }, [ensureAudio]);
 
   // Chime up to 5 times, 20 s apart, per alarm episode — then stay quiet
   // until the room is cleared (which stops the cycle early) or another
   // room completes (which starts a fresh cycle).
   useEffect(() => {
-    if (alarmingCount === 0 || !soundEnabled || !ctxRef.current) return;
+    if (alarmingCount === 0 || !soundEnabled || !audioReady) return;
     const ctx = ctxRef.current;
+    if (!ctx) return;
     let plays = 0;
     const play = () => {
       playChime(ctx);
@@ -60,7 +98,7 @@ export function useAlarm(rooms: RoomRow[], serverNowMs: number) {
     const interval = setInterval(play, CHIME_REPEAT_MS);
     play();
     return () => clearInterval(interval);
-  }, [alarmingCount, soundEnabled]);
+  }, [alarmingCount, soundEnabled, audioReady]);
 
   // Keep the display awake where the browser allows it (tablets on a wall).
   useEffect(() => {
