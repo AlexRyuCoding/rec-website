@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { deriveRoomState, RoomRow } from "@/lib/room-status";
 
-const CHIME_REPEAT_MS = 45_000;
+const CHIME_REPEAT_MS = 20_000;
+const CHIME_MAX_PLAYS = 5;
 
 // Gentle two-tone chime (A5 → E5 sine, soft envelope) generated with the
 // Web Audio API — no audio asset. Browsers block audio until the user
@@ -29,10 +30,12 @@ function playChime(ctx: AudioContext) {
 export function useAlarm(rooms: RoomRow[], serverNowMs: number) {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const ctxRef = useRef<AudioContext | null>(null);
-  const alarming = rooms.some((room) => {
+  // Count, not boolean: a second room completing while one is already
+  // alarming restarts the chime cycle so it gets heard too.
+  const alarmingCount = rooms.filter((room) => {
     const status = deriveRoomState(room, serverNowMs).status;
     return status === "complete" || status === "overtime";
-  });
+  }).length;
 
   const enableSound = useCallback(() => {
     if (!ctxRef.current) {
@@ -42,13 +45,22 @@ export function useAlarm(rooms: RoomRow[], serverNowMs: number) {
     setSoundEnabled(true);
   }, []);
 
+  // Chime up to 5 times, 20 s apart, per alarm episode — then stay quiet
+  // until the room is cleared (which stops the cycle early) or another
+  // room completes (which starts a fresh cycle).
   useEffect(() => {
-    if (!alarming || !soundEnabled || !ctxRef.current) return;
+    if (alarmingCount === 0 || !soundEnabled || !ctxRef.current) return;
     const ctx = ctxRef.current;
-    playChime(ctx);
-    const interval = setInterval(() => playChime(ctx), CHIME_REPEAT_MS);
+    let plays = 0;
+    const play = () => {
+      playChime(ctx);
+      plays += 1;
+      if (plays >= CHIME_MAX_PLAYS) clearInterval(interval);
+    };
+    const interval = setInterval(play, CHIME_REPEAT_MS);
+    play();
     return () => clearInterval(interval);
-  }, [alarming, soundEnabled]);
+  }, [alarmingCount, soundEnabled]);
 
   // Keep the display awake where the browser allows it (tablets on a wall).
   useEffect(() => {

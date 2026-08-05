@@ -103,10 +103,14 @@ export function useRooms() {
   );
 
   const timerAction = useCallback(
-    (roomId: string, action: TimerAction, deltaSeconds?: number) =>
+    (roomId: string, action: TimerAction, valueSeconds?: number) =>
       mutate(roomId, `/api/admin/rooms/${roomId}/timer`, {
         method: "POST",
-        body: JSON.stringify({ action, deltaSeconds }),
+        body: JSON.stringify(
+          action === "set"
+            ? { action, setSeconds: valueSeconds }
+            : { action, deltaSeconds: valueSeconds }
+        ),
       }),
     [mutate]
   );

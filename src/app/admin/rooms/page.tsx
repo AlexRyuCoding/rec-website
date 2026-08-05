@@ -2,7 +2,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Bell, Pencil, X } from "lucide-react";
-import { deriveRoomState, GRID_COLS } from "@/lib/room-status";
+import { deriveRoomState } from "@/lib/room-status";
+import { gridStyle } from "./grid";
 import { useRooms } from "./useRooms";
 import { useAlarm } from "./useAlarm";
 import RoomTile from "./RoomTile";
@@ -85,16 +86,12 @@ export default function RoomsPage() {
         />
       ) : rooms.length === 0 ? (
         <p className="mx-auto max-w-5xl text-white/60">
-          No rooms yet — tap &quot;Edit layout&quot; to add your first room.
+          No rooms yet — tap &quot;Edit layout&quot;, then &quot;Create
+          room&quot;.
         </p>
       ) : (
         <div className="mx-auto max-w-5xl overflow-x-auto pb-2">
-          <div
-            className="grid gap-3"
-            style={{
-              gridTemplateColumns: `repeat(${GRID_COLS}, minmax(150px, 1fr))`,
-            }}
-          >
+          <div className="grid gap-3" style={gridStyle}>
             {rooms.map((room) => (
               <div
                 key={room.id}
