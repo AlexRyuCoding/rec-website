@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { KeyRound, RefreshCw } from "lucide-react";
+import { KeyRound, RefreshCw, Timer } from "lucide-react";
 
 interface CheckinRow {
   id: string;
@@ -268,7 +268,16 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen p-6 sm:p-10 mt-12 max-w-5xl mx-auto">
-      <h1 className="text-3xl font-semibold mb-6">Office Dashboard</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-semibold">Office Dashboard</h1>
+        <Link
+          href="/admin/rooms"
+          className="flex items-center gap-2 px-4 py-2 rounded-full border border-brand-foreground hover:bg-brand-muted transition-colors"
+        >
+          <Timer className="size-4" />
+          Rooms
+        </Link>
+      </div>
 
       <div className="flex gap-2">
         <button
