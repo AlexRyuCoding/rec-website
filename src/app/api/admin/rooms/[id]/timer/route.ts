@@ -6,14 +6,32 @@ import { broadcastRoomsUpdated } from "@/lib/rooms-realtime";
 import {
   timerActionUpdate,
   ADJUST_STEP_SECONDS,
+  MAX_DURATION_SECONDS,
+  MIN_DURATION_SECONDS,
   RoomRow,
 } from "@/lib/room-status";
 
 const bodySchema = z.object({
-  action: z.enum(["start", "pause", "resume", "reset", "adjust", "clear"]),
+  action: z.enum([
+    "start",
+    "pause",
+    "resume",
+    "reset",
+    "adjust",
+    "set",
+    "clear",
+  ]),
   deltaSeconds: z
     .literal(ADJUST_STEP_SECONDS)
     .or(z.literal(-ADJUST_STEP_SECONDS))
+    .optional(),
+  // "set": absolute seconds typed by staff (new default, or new remaining
+  // on an active session)
+  setSeconds: z
+    .number()
+    .int()
+    .min(MIN_DURATION_SECONDS)
+    .max(MAX_DURATION_SECONDS)
     .optional(),
 });
 
@@ -54,7 +72,9 @@ export async function POST(
     room as RoomRow,
     parsed.data.action,
     Date.now(),
-    parsed.data.deltaSeconds
+    parsed.data.action === "set"
+      ? parsed.data.setSeconds
+      : parsed.data.deltaSeconds
   );
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 409 });

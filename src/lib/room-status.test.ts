@@ -150,6 +150,36 @@ describe("timerActionUpdate", () => {
     expect(timerActionUpdate(baseRoom, "adjust", T0).ok).toBe(false);
   });
 
+  it("set on an available room sets the persisted default", () => {
+    const r = timerActionUpdate(baseRoom, "set", T0, 1200);
+    expect(r).toEqual({ ok: true, fields: { default_duration_seconds: 1200 } });
+  });
+
+  it("set clamps to the 60-3600 s range", () => {
+    const r = timerActionUpdate(baseRoom, "set", T0, 30);
+    expect(r).toEqual({ ok: true, fields: { default_duration_seconds: 60 } });
+  });
+
+  it("set on a running room makes the value the new remaining time", () => {
+    const r = timerActionUpdate(running(), "set", T0 + 300_000, 600);
+    expect(r).toEqual({ ok: true, fields: { timer_duration_seconds: 900 } });
+  });
+
+  it("set on a paused room uses the frozen elapsed time", () => {
+    const paused = running({ timer_paused_at: iso(T0 + 120_000) });
+    const r = timerActionUpdate(paused, "set", T0 + 900_000, 300);
+    expect(r).toEqual({ ok: true, fields: { timer_duration_seconds: 420 } });
+  });
+
+  it("set on a completed room brings it back to in_use remaining", () => {
+    const r = timerActionUpdate(running(), "set", T0 + 950_000, 120);
+    expect(r).toEqual({ ok: true, fields: { timer_duration_seconds: 1070 } });
+  });
+
+  it("set requires a value", () => {
+    expect(timerActionUpdate(baseRoom, "set", T0).ok).toBe(false);
+  });
+
   it.each(["reset", "clear"] as const)("%s clears all session fields", (a) => {
     const paused = running({ timer_paused_at: iso(T0 + 100_000) });
     expect(timerActionUpdate(paused, a, T0 + 200_000)).toEqual({
