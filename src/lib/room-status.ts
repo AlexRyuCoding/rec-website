@@ -64,6 +64,7 @@ export type TimerAction =
   | "resume"
   | "reset"
   | "adjust"
+  | "set"
   | "clear";
 
 export type TimerUpdate =
@@ -73,11 +74,14 @@ export type TimerUpdate =
 const clampDuration = (s: number) =>
   Math.min(MAX_DURATION_SECONDS, Math.max(MIN_DURATION_SECONDS, s));
 
+// valueSeconds: for "adjust" it is the signed delta; for "set" it is the
+// absolute value typed by staff — the new default on an available room, or
+// the new remaining time on an active session.
 export function timerActionUpdate(
   room: RoomRow,
   action: TimerAction,
   nowMs: number,
-  deltaSeconds?: number
+  valueSeconds?: number
 ): TimerUpdate {
   const state = deriveRoomState(room, nowMs);
 
@@ -120,7 +124,7 @@ export function timerActionUpdate(
     }
 
     case "adjust": {
-      if (deltaSeconds === undefined || deltaSeconds === 0) {
+      if (valueSeconds === undefined || valueSeconds === 0) {
         return { ok: false, error: "deltaSeconds required" };
       }
       if (state.status === "available") {
@@ -128,19 +132,33 @@ export function timerActionUpdate(
           ok: true,
           fields: {
             default_duration_seconds: clampDuration(
-              room.default_duration_seconds + deltaSeconds
+              room.default_duration_seconds + valueSeconds
             ),
           },
         };
       }
       const next = Math.min(
-        room.timer_duration_seconds! + deltaSeconds,
+        room.timer_duration_seconds! + valueSeconds,
         MAX_DURATION_SECONDS
       );
       if (next < elapsedSeconds(room, nowMs)) {
         return { ok: false, error: "Cannot reduce below elapsed time" };
       }
       return { ok: true, fields: { timer_duration_seconds: next } };
+    }
+
+    case "set": {
+      if (valueSeconds === undefined) {
+        return { ok: false, error: "setSeconds required" };
+      }
+      const value = clampDuration(valueSeconds);
+      if (state.status === "available") {
+        return { ok: true, fields: { default_duration_seconds: value } };
+      }
+      return {
+        ok: true,
+        fields: { timer_duration_seconds: elapsedSeconds(room, nowMs) + value },
+      };
     }
 
     case "reset":

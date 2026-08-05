@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./ui/globals.css";
-import Header from "@/components/header";
+import ConditionalHeader from "@/components/conditional-header";
 import ConditionalFooter from "@/components/conditional-footer";
 import MotionProvider from "@/components/motion/motion-provider";
 import { instrumentSerif, interTight } from "./ui/fonts";
@@ -31,7 +31,7 @@ export default function RootLayout({
         className={`${instrumentSerif.variable} ${interTight.variable} antialiased`}
       >
         <MotionProvider>
-          <Header />
+          <ConditionalHeader />
           {children}
           <ConditionalFooter />
         </MotionProvider>

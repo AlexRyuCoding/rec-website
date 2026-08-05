@@ -1,18 +1,99 @@
 "use client";
 import { useState } from "react";
-import { Move, Trash2 } from "lucide-react";
+import {
+  DndContext,
+  DragEndEvent,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { Plus, Trash2 } from "lucide-react";
 import {
   GRID_COLS,
   MAX_DURATION_SECONDS,
   MIN_DURATION_SECONDS,
   RoomRow,
 } from "@/lib/room-status";
+import { gridStyle } from "./grid";
 
 interface PanelState {
   mode: "create" | "edit";
   room?: RoomRow;
+  // Cell preselected by clicking an empty slot; absent when using the
+  // Create room button (first free cell is used at save time).
+  cell?: { gridRow: number; gridCol: number };
+}
+
+// Rooms are dragged; empty cells are drop targets. A small pointer
+// threshold keeps plain clicks (open the edit panel) distinct from drags.
+function DraggableRoom({
+  room,
+  disabled,
+  onEdit,
+}: {
+  room: RoomRow;
+  disabled: boolean;
+  onEdit: (room: RoomRow) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({ id: room.id, disabled });
+  return (
+    <button
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      disabled={disabled}
+      onClick={() => onEdit(room)}
+      style={
+        transform
+          ? {
+              transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+            }
+          : undefined
+      }
+      className={`relative flex h-full w-full touch-none flex-col items-center justify-center gap-1 rounded-2xl bg-neutral-700 p-3 text-center hover:bg-neutral-600 ${
+        isDragging ? "z-10 opacity-80 ring-2 ring-sky-300" : ""
+      }`}
+    >
+      <span className="w-full truncate font-medium">{room.name}</span>
+      {room.practitioner_name && (
+        <span className="w-full truncate text-xs text-white/60">
+          {room.practitioner_name}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function DroppableCell({
+  gridRow,
+  gridCol,
+  disabled,
+  onClick,
+}: {
   gridRow: number;
   gridCol: number;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `cell-${gridRow}-${gridCol}`,
+  });
+  return (
+    <button
+      ref={setNodeRef}
+      disabled={disabled}
+      onClick={onClick}
+      aria-label={`Empty cell row ${gridRow + 1} column ${gridCol + 1}`}
+      className={`h-full w-full rounded-2xl border-2 border-dashed ${
+        isOver
+          ? "border-sky-400 bg-sky-950/40"
+          : "border-neutral-800 hover:border-neutral-600"
+      }`}
+    />
+  );
 }
 
 export default function LayoutEditor({
@@ -41,53 +122,60 @@ export default function LayoutEditor({
   onDelete: (roomId: string) => Promise<void>;
 }) {
   const [panel, setPanel] = useState<PanelState | null>(null);
-  const [movingRoom, setMovingRoom] = useState<RoomRow | null>(null);
   const [name, setName] = useState("");
   const [practitioner, setPractitioner] = useState("");
   const [minutes, setMinutes] = useState(15);
   const [saving, setSaving] = useState(false);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
 
   const maxRow = rooms.reduce((m, r) => Math.max(m, r.grid_row), 0);
   const rowCount = maxRow + 2;
   const byCell = new Map(rooms.map((r) => [`${r.grid_row}:${r.grid_col}`, r]));
 
-  const openCreate = (gridRow: number, gridCol: number) => {
+  const firstFreeCell = () => {
+    for (let gridRow = 0; gridRow < rowCount; gridRow++) {
+      for (let gridCol = 0; gridCol < GRID_COLS; gridCol++) {
+        if (!byCell.has(`${gridRow}:${gridCol}`)) return { gridRow, gridCol };
+      }
+    }
+    return { gridRow: rowCount, gridCol: 0 };
+  };
+
+  const openCreate = (cell?: { gridRow: number; gridCol: number }) => {
     setName("");
     setPractitioner("");
-    setPanel({ mode: "create", gridRow, gridCol });
+    setPanel({ mode: "create", cell });
   };
 
   const openEdit = (room: RoomRow) => {
     setName(room.name);
     setPractitioner(room.practitioner_name ?? "");
     setMinutes(Math.round(room.default_duration_seconds / 60));
-    setPanel({
-      mode: "edit",
-      room,
-      gridRow: room.grid_row,
-      gridCol: room.grid_col,
-    });
+    setPanel({ mode: "edit", room });
   };
 
-  const tapEmptyCell = async (gridRow: number, gridCol: number) => {
-    if (movingRoom) {
-      setSaving(true);
-      await onUpdate(movingRoom.id, { gridRow, gridCol });
-      setSaving(false);
-      setMovingRoom(null);
-      return;
-    }
-    openCreate(gridRow, gridCol);
+  const onDragEnd = async (event: DragEndEvent) => {
+    const match = /^cell-(\d+)-(\d+)$/.exec(String(event.over?.id ?? ""));
+    if (!match || saving) return;
+    setSaving(true);
+    await onUpdate(String(event.active.id), {
+      gridRow: Number(match[1]),
+      gridCol: Number(match[2]),
+    });
+    setSaving(false);
   };
 
   const submitPanel = async () => {
     if (!panel || !name.trim()) return;
     setSaving(true);
     if (panel.mode === "create") {
+      const cell = panel.cell ?? firstFreeCell();
       await onCreate({
         name: name.trim(),
-        gridRow: panel.gridRow,
-        gridCol: panel.gridCol,
+        gridRow: cell.gridRow,
+        gridCol: cell.gridCol,
         practitionerName: practitioner.trim() || undefined,
       });
     } else if (panel.room) {
@@ -106,61 +194,49 @@ export default function LayoutEditor({
 
   return (
     <div className="mx-auto max-w-5xl">
-      {movingRoom && (
-        <p className="mb-3 rounded-lg bg-sky-900/60 px-4 py-2 text-sm">
-          Moving &quot;{movingRoom.name}&quot; — tap an empty cell, or{" "}
-          <button className="underline" onClick={() => setMovingRoom(null)}>
-            cancel
-          </button>
-        </p>
-      )}
-
-      <div className="overflow-x-auto pb-2">
-        <div
-          className="grid gap-3"
-          style={{
-            gridTemplateColumns: `repeat(${GRID_COLS}, minmax(120px, 1fr))`,
-          }}
+      <div className="mb-4 flex items-center gap-3">
+        <button
+          disabled={saving}
+          onClick={() => openCreate()}
+          className="flex items-center gap-1.5 rounded-lg bg-white px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-white/90 disabled:opacity-40"
         >
-          {Array.from({ length: rowCount * GRID_COLS }, (_, i) => {
-            const gridRow = Math.floor(i / GRID_COLS);
-            const gridCol = i % GRID_COLS;
-            const room = byCell.get(`${gridRow}:${gridCol}`);
-            if (room) {
-              return (
-                <button
-                  key={i}
-                  disabled={saving}
-                  onClick={() => openEdit(room)}
-                  className={`min-h-24 rounded-2xl p-3 text-left ${
-                    movingRoom?.id === room.id
-                      ? "bg-sky-700 ring-2 ring-sky-300"
-                      : "bg-neutral-700 hover:bg-neutral-600"
-                  }`}
-                >
-                  <span className="block truncate font-medium">
-                    {room.name}
-                  </span>
-                  {room.practitioner_name && (
-                    <span className="block truncate text-xs text-white/60">
-                      {room.practitioner_name}
-                    </span>
-                  )}
-                </button>
-              );
-            }
-            return (
-              <button
-                key={i}
-                disabled={saving}
-                aria-label={`Empty cell row ${gridRow + 1} column ${gridCol + 1}`}
-                onClick={() => tapEmptyCell(gridRow, gridCol)}
-                className="min-h-24 rounded-2xl border-2 border-dashed border-neutral-800 hover:border-neutral-600"
-              />
-            );
-          })}
-        </div>
+          <Plus className="h-4 w-4" /> Create room
+        </button>
+        <p className="text-xs text-white/50">
+          Drag rooms into position. Click a room to edit it.
+        </p>
       </div>
+
+      <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+        <div className="overflow-x-auto pb-2">
+          <div className="grid gap-3" style={gridStyle}>
+            {Array.from({ length: rowCount * GRID_COLS }, (_, i) => {
+              const gridRow = Math.floor(i / GRID_COLS);
+              const gridCol = i % GRID_COLS;
+              const room = byCell.get(`${gridRow}:${gridCol}`);
+              if (room) {
+                return (
+                  <DraggableRoom
+                    key={room.id}
+                    room={room}
+                    disabled={saving}
+                    onEdit={openEdit}
+                  />
+                );
+              }
+              return (
+                <DroppableCell
+                  key={`empty-${i}`}
+                  gridRow={gridRow}
+                  gridCol={gridCol}
+                  disabled={saving}
+                  onClick={() => openCreate({ gridRow, gridCol })}
+                />
+              );
+            })}
+          </div>
+        </div>
+      </DndContext>
 
       {panel && (
         <div className="fixed inset-0 z-10 flex items-end justify-center bg-black/60 p-4 sm:items-center">
@@ -215,31 +291,19 @@ export default function LayoutEditor({
                 Cancel
               </button>
               {panel.mode === "edit" && panel.room && (
-                <>
-                  <button
-                    aria-label="Move room"
-                    onClick={() => {
-                      setMovingRoom(panel.room!);
-                      setPanel(null);
-                    }}
-                    className="ml-auto rounded-lg bg-white/10 p-2.5"
-                  >
-                    <Move className="h-4 w-4" />
-                  </button>
-                  <button
-                    aria-label="Delete room"
-                    disabled={saving}
-                    onClick={async () => {
-                      setSaving(true);
-                      await onDelete(panel.room!.id);
-                      setSaving(false);
-                      setPanel(null);
-                    }}
-                    className="rounded-lg bg-rose-900/70 p-2.5"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </>
+                <button
+                  aria-label="Delete room"
+                  disabled={saving}
+                  onClick={async () => {
+                    setSaving(true);
+                    await onDelete(panel.room!.id);
+                    setSaving(false);
+                    setPanel(null);
+                  }}
+                  className="ml-auto rounded-lg bg-rose-900/70 p-2.5"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               )}
             </div>
           </div>
