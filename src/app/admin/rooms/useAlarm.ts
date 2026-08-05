@@ -2,14 +2,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { deriveRoomState, RoomRow } from "@/lib/room-status";
 
-const CHIME_REPEAT_MS = 20_000;
-const CHIME_MAX_PLAYS = 5;
+// Each alarm "instance" is a burst of 3 chimes; instances repeat with a
+// 20 s pause in between, forever, until the room is cleared.
+const CHIMES_PER_INSTANCE = 3;
+const CHIME_SPACING_S = 1.6;
+const INSTANCE_PAUSE_MS = 20_000;
+const INSTANCE_LENGTH_MS = CHIMES_PER_INSTANCE * CHIME_SPACING_S * 1000;
 
 // Gentle two-tone chime (A5 → E5 sine, soft envelope) generated with the
 // Web Audio API — no audio asset. Browsers block audio until the user
 // interacts with the page, so the page shows an enable-sound button that
 // calls enableSound() (creating the AudioContext inside the tap handler).
-function playChime(ctx: AudioContext) {
+function playChime(ctx: AudioContext, atSeconds: number) {
   const note = (freq: number, at: number) => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -23,8 +27,15 @@ function playChime(ctx: AudioContext) {
     osc.start(ctx.currentTime + at);
     osc.stop(ctx.currentTime + at + 1.3);
   };
-  note(880, 0);
-  note(659.25, 0.35);
+  note(880, atSeconds);
+  note(659.25, atSeconds + 0.35);
+}
+
+// One instance = 3 chimes back to back, scheduled on the audio clock.
+function playInstance(ctx: AudioContext) {
+  for (let i = 0; i < CHIMES_PER_INSTANCE; i++) {
+    playChime(ctx, i * CHIME_SPACING_S);
+  }
 }
 
 const SOUND_PREF_KEY = "rooms-chime-enabled";
@@ -82,21 +93,19 @@ export function useAlarm(rooms: RoomRow[], serverNowMs: number) {
     };
   }, [ensureAudio]);
 
-  // Chime up to 5 times, 20 s apart, per alarm episode — then stay quiet
-  // until the room is cleared (which stops the cycle early) or another
-  // room completes (which starts a fresh cycle).
+  // Ring a 3-chime instance immediately, then again after every 20 s
+  // pause, indefinitely — the only thing that stops it is the alarm
+  // condition ending (staff clears the room). A second room completing
+  // restarts the rhythm so it gets heard too.
   useEffect(() => {
     if (alarmingCount === 0 || !soundEnabled || !audioReady) return;
     const ctx = ctxRef.current;
     if (!ctx) return;
-    let plays = 0;
-    const play = () => {
-      playChime(ctx);
-      plays += 1;
-      if (plays >= CHIME_MAX_PLAYS) clearInterval(interval);
-    };
-    const interval = setInterval(play, CHIME_REPEAT_MS);
-    play();
+    playInstance(ctx);
+    const interval = setInterval(
+      () => playInstance(ctx),
+      INSTANCE_LENGTH_MS + INSTANCE_PAUSE_MS
+    );
     return () => clearInterval(interval);
   }, [alarmingCount, soundEnabled, audioReady]);
 

@@ -104,6 +104,7 @@ export default function RoomsPage() {
                   room={room}
                   state={deriveRoomState(room, serverNowMs)}
                   busy={busyRoomIds.has(room.id)}
+                  nowMs={serverNowMs}
                   onAction={(action, deltaSeconds) =>
                     timerAction(room.id, action, deltaSeconds)
                   }

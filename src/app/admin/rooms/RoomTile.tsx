@@ -23,11 +23,13 @@ export default function RoomTile({
   room,
   state,
   busy,
+  nowMs,
   onAction,
 }: {
   room: RoomRow;
   state: RoomState;
   busy: boolean;
+  nowMs: number;
   onAction: (action: TimerAction, valueSeconds?: number) => void;
 }) {
   const [editingTime, setEditingTime] = useState(false);
@@ -36,6 +38,17 @@ export default function RoomTile({
   const displaySeconds =
     state.remainingSeconds ?? room.default_duration_seconds;
   const sessionActive = state.status !== "available";
+  const timeUp = state.status === "complete" || state.status === "overtime";
+  // Time's up: flash the label, alternating each second between the room
+  // name and the instruction. The page rerenders every second (nowMs
+  // ticks), so no local timer is needed.
+  const label = timeUp
+    ? Math.floor(nowMs / 1000) % 2 === 0
+      ? `${room.name} done`
+      : "Remove needles"
+    : state.paused
+      ? "Paused"
+      : style.label;
 
   const openTimeEditor = () => {
     if (busy) return;
@@ -159,8 +172,12 @@ export default function RoomTile({
         )}
       </div>
 
-      <p className="w-full truncate text-[11px] font-semibold uppercase tracking-widest text-white/80">
-        {state.paused ? "Paused" : style.label}
+      <p
+        className={`w-full truncate text-[11px] font-semibold uppercase tracking-widest ${
+          timeUp ? "text-white" : "text-white/80"
+        }`}
+      >
+        {label}
       </p>
     </div>
   );
