@@ -21,6 +21,10 @@ export function useRooms() {
   const refresh = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/rooms");
+      if (res.status === 401) {
+        window.location.href = "/admin/login";
+        return;
+      }
       if (!res.ok) throw new Error();
       const data = (await res.json()) as {
         rooms: RoomRow[];
@@ -72,6 +76,10 @@ export function useRooms() {
           headers: { "Content-Type": "application/json" },
           ...init,
         });
+        if (res.status === 401) {
+          window.location.href = "/admin/login";
+          return;
+        }
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
           setActionError(data.error ?? "Something went wrong");
