@@ -91,6 +91,6 @@ export async function POST(
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
 
-  await broadcastRoomsUpdated();
+  await broadcastRoomsUpdated({ room: data });
   return NextResponse.json({ room: data });
 }

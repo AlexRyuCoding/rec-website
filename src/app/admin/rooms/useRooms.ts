@@ -1,14 +1,24 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RoomRow, TimerAction } from "@/lib/room-status";
+import { RoomRow, TimerAction, timerActionUpdate } from "@/lib/room-status";
 import { createBrowserClient } from "@/lib/supabase-browser";
-import { ROOMS_CHANNEL, ROOMS_EVENT } from "@/lib/rooms-realtime";
+import {
+  ROOMS_CHANNEL,
+  ROOMS_EVENT,
+  RoomsBroadcastPayload,
+} from "@/lib/rooms-realtime";
 
 const POLL_MS = 60_000;
 
-// Data layer for the room timer board. Server rows + a skew-corrected
-// 1 s clock; realtime broadcast triggers refetch, with polling and
-// focus/online refetch as fallback. Display math stays in room-status.ts.
+// Data layer for the room timer board. Server rows + a skew-corrected 1 s
+// clock. Sync is layered for speed with a safety net underneath:
+// - the acting device applies timer actions optimistically (instant),
+//   then replaces them with the row the API returns (authoritative)
+// - other devices apply the row carried in the realtime broadcast
+//   (no refetch round trip)
+// - a 60 s poll plus focus/online refetch reconciles anything missed or
+//   forged (broadcast payloads are unauthenticated hints, never authority)
+// Display math stays in room-status.ts.
 export function useRooms() {
   const [rooms, setRooms] = useState<RoomRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,6 +27,29 @@ export function useRooms() {
   const [busyRoomIds, setBusyRoomIds] = useState<Set<string>>(new Set());
   const [tickMs, setTickMs] = useState(() => Date.now());
   const offsetRef = useRef(0);
+  const roomsRef = useRef<RoomRow[]>([]);
+
+  useEffect(() => {
+    roomsRef.current = rooms;
+  }, [rooms]);
+
+  // Insert or replace a row, unless the local copy is already newer
+  // (an optimistic patch keeps the old updated_at, so authoritative rows
+  // always win over it).
+  const upsertRoom = useCallback((incoming: RoomRow) => {
+    setRooms((prev) => {
+      const existing = prev.find((r) => r.id === incoming.id);
+      if (!existing) return [...prev, incoming];
+      if (Date.parse(existing.updated_at) > Date.parse(incoming.updated_at)) {
+        return prev;
+      }
+      return prev.map((r) => (r.id === incoming.id ? incoming : r));
+    });
+  }, []);
+
+  const removeRoom = useCallback((roomId: string) => {
+    setRooms((prev) => prev.filter((r) => r.id !== roomId));
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -45,8 +78,15 @@ export function useRooms() {
     const supabase = createBrowserClient();
     const channel = supabase
       .channel(ROOMS_CHANNEL)
-      .on("broadcast", { event: ROOMS_EVENT }, () => {
-        refresh();
+      .on("broadcast", { event: ROOMS_EVENT }, (message) => {
+        const payload = message.payload as RoomsBroadcastPayload | undefined;
+        if (payload?.room) {
+          upsertRoom(payload.room);
+        } else if (payload?.deletedId) {
+          removeRoom(payload.deletedId);
+        } else {
+          refresh();
+        }
       })
       .subscribe();
     const poll = setInterval(refresh, POLL_MS);
@@ -59,15 +99,22 @@ export function useRooms() {
       window.removeEventListener("online", onWake);
       document.removeEventListener("visibilitychange", onWake);
     };
-  }, [refresh]);
+  }, [refresh, upsertRoom, removeRoom]);
 
   useEffect(() => {
     const t = setInterval(() => setTickMs(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
 
+  // Returns the parsed response body on success, null on failure.
+  // Success paths apply the returned row locally instead of refetching;
+  // failures refetch to roll back any optimistic state.
   const mutate = useCallback(
-    async (roomId: string | null, path: string, init: RequestInit) => {
+    async (
+      roomId: string | null,
+      path: string,
+      init: RequestInit
+    ): Promise<{ room?: RoomRow; success?: boolean } | null> => {
       if (roomId) {
         setBusyRoomIds((prev) => new Set(prev).add(roomId));
       }
@@ -78,16 +125,21 @@ export function useRooms() {
         });
         if (res.status === 401) {
           window.location.href = "/admin/login";
-          return;
+          return null;
         }
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
           setActionError(data.error ?? "Something went wrong");
           setTimeout(() => setActionError(""), 4000);
+          await refresh();
+          return null;
         }
+        return (await res.json()) as { room?: RoomRow; success?: boolean };
       } catch {
         setActionError("Connection problem");
         setTimeout(() => setActionError(""), 4000);
+        await refresh();
+        return null;
       } finally {
         if (roomId) {
           setBusyRoomIds((prev) => {
@@ -96,41 +148,61 @@ export function useRooms() {
             return next;
           });
         }
-        await refresh();
       }
     },
     [refresh]
   );
 
   const timerAction = useCallback(
-    (roomId: string, action: TimerAction, valueSeconds?: number) =>
-      mutate(roomId, `/api/admin/rooms/${roomId}/timer`, {
+    async (roomId: string, action: TimerAction, valueSeconds?: number) => {
+      // Optimistic: apply the same pure logic the server runs, so the
+      // acting device updates instantly. The old updated_at is kept, so
+      // the authoritative row (response or broadcast) replaces it.
+      const room = roomsRef.current.find((r) => r.id === roomId);
+      if (room) {
+        const result = timerActionUpdate(
+          room,
+          action,
+          Date.now() + offsetRef.current,
+          valueSeconds
+        );
+        if (result.ok) {
+          setRooms((prev) =>
+            prev.map((r) => (r.id === roomId ? { ...r, ...result.fields } : r))
+          );
+        }
+      }
+      const body = await mutate(roomId, `/api/admin/rooms/${roomId}/timer`, {
         method: "POST",
         body: JSON.stringify(
           action === "set"
             ? { action, setSeconds: valueSeconds }
             : { action, deltaSeconds: valueSeconds }
         ),
-      }),
-    [mutate]
+      });
+      if (body?.room) upsertRoom(body.room);
+    },
+    [mutate, upsertRoom]
   );
 
   const createRoom = useCallback(
-    (input: {
+    async (input: {
       name: string;
       gridRow: number;
       gridCol: number;
       practitionerName?: string;
-    }) =>
-      mutate(null, "/api/admin/rooms", {
+    }) => {
+      const body = await mutate(null, "/api/admin/rooms", {
         method: "POST",
         body: JSON.stringify(input),
-      }),
-    [mutate]
+      });
+      if (body?.room) upsertRoom(body.room);
+    },
+    [mutate, upsertRoom]
   );
 
   const updateRoom = useCallback(
-    (
+    async (
       roomId: string,
       input: {
         name?: string;
@@ -139,18 +211,24 @@ export function useRooms() {
         practitionerName?: string | null;
         defaultDurationSeconds?: number;
       }
-    ) =>
-      mutate(roomId, `/api/admin/rooms/${roomId}`, {
+    ) => {
+      const body = await mutate(roomId, `/api/admin/rooms/${roomId}`, {
         method: "PATCH",
         body: JSON.stringify(input),
-      }),
-    [mutate]
+      });
+      if (body?.room) upsertRoom(body.room);
+    },
+    [mutate, upsertRoom]
   );
 
   const deleteRoom = useCallback(
-    (roomId: string) =>
-      mutate(roomId, `/api/admin/rooms/${roomId}`, { method: "DELETE" }),
-    [mutate]
+    async (roomId: string) => {
+      const body = await mutate(roomId, `/api/admin/rooms/${roomId}`, {
+        method: "DELETE",
+      });
+      if (body?.success) removeRoom(roomId);
+    },
+    [mutate, removeRoom]
   );
 
   return {

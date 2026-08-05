@@ -1,13 +1,25 @@
+import type { RoomRow } from "@/lib/room-status";
+
 // Cross-device sync for the room timer board. After any rooms mutation the
 // server posts to Supabase Realtime's REST broadcast endpoint (no websocket
-// needed server-side); subscribed browsers refetch on the message.
-// Best-effort by design: if a broadcast is lost, the clients' 60 s poll
-// catches them up, and countdown accuracy never depends on it.
+// needed server-side). The message carries the changed row (or deleted id)
+// so subscribed browsers apply it directly without a refetch round trip.
+// Best-effort by design: broadcast payloads are unauthenticated hints, so
+// the clients' 60 s poll of the API remains the authority — a lost or
+// forged message is corrected on the next poll, and countdown accuracy
+// never depends on the channel at all.
 
 export const ROOMS_CHANNEL = "room-timers";
 export const ROOMS_EVENT = "rooms-updated";
 
-export async function broadcastRoomsUpdated(): Promise<void> {
+export interface RoomsBroadcastPayload {
+  room?: RoomRow;
+  deletedId?: string;
+}
+
+export async function broadcastRoomsUpdated(
+  payload: RoomsBroadcastPayload = {}
+): Promise<void> {
   try {
     await fetch(
       `${process.env.NEXT_PUBLIC_SUPABASE_URL}/realtime/v1/api/broadcast`,
@@ -19,7 +31,7 @@ export async function broadcastRoomsUpdated(): Promise<void> {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          messages: [{ topic: ROOMS_CHANNEL, event: ROOMS_EVENT, payload: {} }],
+          messages: [{ topic: ROOMS_CHANNEL, event: ROOMS_EVENT, payload }],
         }),
       }
     );
