@@ -1,9 +1,10 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Pencil, X } from "lucide-react";
+import { ArrowLeft, Bell, Pencil, X } from "lucide-react";
 import { deriveRoomState, GRID_COLS } from "@/lib/room-status";
 import { useRooms } from "./useRooms";
+import { useAlarm } from "./useAlarm";
 import RoomTile from "./RoomTile";
 
 export default function RoomsPage() {
@@ -17,6 +18,7 @@ export default function RoomsPage() {
     timerAction,
   } = useRooms();
   const [editMode, setEditMode] = useState(false);
+  const { soundEnabled, enableSound } = useAlarm(rooms, serverNowMs);
 
   return (
     <main className="min-h-screen bg-neutral-950 p-4 text-white sm:p-6">
@@ -51,6 +53,16 @@ export default function RoomsPage() {
           </button>
         </div>
       </header>
+
+      {!soundEnabled && (
+        <button
+          onClick={enableSound}
+          className="mx-auto mb-4 flex w-full max-w-5xl items-center gap-2 rounded-lg bg-sky-900/60 px-4 py-2 text-sm hover:bg-sky-900"
+        >
+          <Bell className="h-4 w-4" /> Tap to enable the timer chime on this
+          device
+        </button>
+      )}
 
       {actionError && (
         <p className="mx-auto mb-4 max-w-5xl rounded-lg bg-rose-900/60 px-4 py-2 text-sm">
