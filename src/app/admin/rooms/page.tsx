@@ -6,6 +6,7 @@ import { deriveRoomState, GRID_COLS } from "@/lib/room-status";
 import { useRooms } from "./useRooms";
 import { useAlarm } from "./useAlarm";
 import RoomTile from "./RoomTile";
+import LayoutEditor from "./LayoutEditor";
 
 export default function RoomsPage() {
   const {
@@ -16,6 +17,9 @@ export default function RoomsPage() {
     busyRoomIds,
     actionError,
     timerAction,
+    createRoom,
+    updateRoom,
+    deleteRoom,
   } = useRooms();
   const [editMode, setEditMode] = useState(false);
   const { soundEnabled, enableSound } = useAlarm(rooms, serverNowMs);
@@ -72,7 +76,14 @@ export default function RoomsPage() {
 
       {loading ? (
         <p className="mx-auto max-w-5xl text-white/60">Loading…</p>
-      ) : rooms.length === 0 && !editMode ? (
+      ) : editMode ? (
+        <LayoutEditor
+          rooms={rooms}
+          onCreate={createRoom}
+          onUpdate={updateRoom}
+          onDelete={deleteRoom}
+        />
+      ) : rooms.length === 0 ? (
         <p className="mx-auto max-w-5xl text-white/60">
           No rooms yet — tap &quot;Edit layout&quot; to add your first room.
         </p>
