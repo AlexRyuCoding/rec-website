@@ -81,7 +81,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
 
-  await broadcastRoomsUpdated();
+  await broadcastRoomsUpdated({ room: data });
   return NextResponse.json({ room: data });
 }
 
@@ -109,6 +109,6 @@ export async function DELETE(
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
 
-  await broadcastRoomsUpdated();
+  await broadcastRoomsUpdated({ deletedId: id });
   return NextResponse.json({ success: true });
 }
