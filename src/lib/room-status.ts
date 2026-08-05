@@ -1,0 +1,165 @@
+// Pure timer math for the room timer board. A running session is stored as
+// timestamps + a duration; everything else (status, remaining, what a
+// button press changes) is derived here so server routes and every client
+// device agree without any ticking state.
+
+export const OVERTIME_GRACE_SECONDS = 300;
+export const ADJUST_STEP_SECONDS = 60;
+export const MIN_DURATION_SECONDS = 60;
+export const MAX_DURATION_SECONDS = 3600;
+export const GRID_COLS = 6;
+
+export interface RoomRow {
+  id: string;
+  name: string;
+  grid_row: number;
+  grid_col: number;
+  practitioner_name: string | null;
+  default_duration_seconds: number;
+  timer_started_at: string | null;
+  timer_duration_seconds: number | null;
+  timer_paused_at: string | null;
+  updated_at: string;
+}
+
+export type RoomStatus = "available" | "in_use" | "complete" | "overtime";
+
+export interface RoomState {
+  status: RoomStatus;
+  paused: boolean;
+  // Seconds left; negative counts up past zero. Null when available.
+  remainingSeconds: number | null;
+}
+
+function elapsedSeconds(room: RoomRow, nowMs: number): number {
+  const startedMs = Date.parse(room.timer_started_at!);
+  const effectiveNow = room.timer_paused_at
+    ? Date.parse(room.timer_paused_at)
+    : nowMs;
+  return Math.floor((effectiveNow - startedMs) / 1000);
+}
+
+export function deriveRoomState(room: RoomRow, nowMs: number): RoomState {
+  if (room.timer_started_at === null || room.timer_duration_seconds === null) {
+    return { status: "available", paused: false, remainingSeconds: null };
+  }
+  const remaining = room.timer_duration_seconds - elapsedSeconds(room, nowMs);
+  if (remaining > 0) {
+    return {
+      status: "in_use",
+      paused: room.timer_paused_at !== null,
+      remainingSeconds: remaining,
+    };
+  }
+  return {
+    status: remaining > -OVERTIME_GRACE_SECONDS ? "complete" : "overtime",
+    paused: false,
+    remainingSeconds: remaining,
+  };
+}
+
+export type TimerAction =
+  | "start"
+  | "pause"
+  | "resume"
+  | "reset"
+  | "adjust"
+  | "clear";
+
+export type TimerUpdate =
+  | { ok: true; fields: Partial<RoomRow> }
+  | { ok: false; error: string };
+
+const clampDuration = (s: number) =>
+  Math.min(MAX_DURATION_SECONDS, Math.max(MIN_DURATION_SECONDS, s));
+
+export function timerActionUpdate(
+  room: RoomRow,
+  action: TimerAction,
+  nowMs: number,
+  deltaSeconds?: number
+): TimerUpdate {
+  const state = deriveRoomState(room, nowMs);
+
+  switch (action) {
+    case "start":
+      if (state.status !== "available") {
+        return { ok: false, error: "Timer already running" };
+      }
+      return {
+        ok: true,
+        fields: {
+          timer_started_at: new Date(nowMs).toISOString(),
+          timer_duration_seconds: room.default_duration_seconds,
+          timer_paused_at: null,
+        },
+      };
+
+    case "pause":
+      if (state.status !== "in_use" || state.paused) {
+        return { ok: false, error: "No running timer to pause" };
+      }
+      return {
+        ok: true,
+        fields: { timer_paused_at: new Date(nowMs).toISOString() },
+      };
+
+    case "resume": {
+      if (state.status !== "in_use" || !state.paused) {
+        return { ok: false, error: "Timer is not paused" };
+      }
+      const elapsedMs =
+        Date.parse(room.timer_paused_at!) - Date.parse(room.timer_started_at!);
+      return {
+        ok: true,
+        fields: {
+          timer_started_at: new Date(nowMs - elapsedMs).toISOString(),
+          timer_paused_at: null,
+        },
+      };
+    }
+
+    case "adjust": {
+      if (deltaSeconds === undefined || deltaSeconds === 0) {
+        return { ok: false, error: "deltaSeconds required" };
+      }
+      if (state.status === "available") {
+        return {
+          ok: true,
+          fields: {
+            default_duration_seconds: clampDuration(
+              room.default_duration_seconds + deltaSeconds
+            ),
+          },
+        };
+      }
+      const next = Math.min(
+        room.timer_duration_seconds! + deltaSeconds,
+        MAX_DURATION_SECONDS
+      );
+      if (next < elapsedSeconds(room, nowMs)) {
+        return { ok: false, error: "Cannot reduce below elapsed time" };
+      }
+      return { ok: true, fields: { timer_duration_seconds: next } };
+    }
+
+    case "reset":
+    case "clear":
+      return {
+        ok: true,
+        fields: {
+          timer_started_at: null,
+          timer_duration_seconds: null,
+          timer_paused_at: null,
+        },
+      };
+  }
+}
+
+export function formatTimerDisplay(seconds: number): string {
+  const sign = seconds < 0 ? "+" : "";
+  const abs = Math.abs(seconds);
+  const m = Math.floor(abs / 60);
+  const s = abs % 60;
+  return `${sign}${m}:${String(s).padStart(2, "0")}`;
+}
