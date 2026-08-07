@@ -75,26 +75,41 @@ export function useRooms() {
 
   useEffect(() => {
     refresh();
+    // Realtime is an accelerator, never a dependency: if the websocket
+    // cannot be opened (CSP, old browser, network appliance), the board
+    // must still work on the poll. WebKit throws synchronously from a
+    // blocked WebSocket constructor, so the subscribe is guarded.
     const supabase = createBrowserClient();
-    const channel = supabase
-      .channel(ROOMS_CHANNEL)
-      .on("broadcast", { event: ROOMS_EVENT }, (message) => {
-        const payload = message.payload as RoomsBroadcastPayload | undefined;
-        if (payload?.room) {
-          upsertRoom(payload.room);
-        } else if (payload?.deletedId) {
-          removeRoom(payload.deletedId);
-        } else {
-          refresh();
-        }
-      })
-      .subscribe();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      channel = supabase
+        .channel(ROOMS_CHANNEL)
+        .on("broadcast", { event: ROOMS_EVENT }, (message) => {
+          const payload = message.payload as RoomsBroadcastPayload | undefined;
+          if (payload?.room) {
+            upsertRoom(payload.room);
+          } else if (payload?.deletedId) {
+            removeRoom(payload.deletedId);
+          } else {
+            refresh();
+          }
+        })
+        .subscribe();
+    } catch {
+      channel = null;
+    }
     const poll = setInterval(refresh, POLL_MS);
     const onWake = () => refresh();
     window.addEventListener("online", onWake);
     document.addEventListener("visibilitychange", onWake);
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch {
+          // Channel teardown must never crash unmount either.
+        }
+      }
       clearInterval(poll);
       window.removeEventListener("online", onWake);
       document.removeEventListener("visibilitychange", onWake);

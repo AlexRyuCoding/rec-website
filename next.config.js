@@ -1,10 +1,17 @@
+// The room timer board connects from the browser to Supabase Realtime
+// (wss:// websocket + https:// fallback), so the Supabase project host
+// must be in connect-src. Without it, WebKit (every iPad browser) throws
+// synchronously from the blocked WebSocket constructor and crashes the
+// page, while Chromium just silently loses realtime.
+const supabaseHttp = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const supabaseWs = supabaseHttp.replace(/^https:/, "wss:");
 const CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self'",
-  "connect-src 'self'",
+  `connect-src 'self' ${supabaseHttp} ${supabaseWs}`.replace(/\s+/g, " ").trim(),
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
