@@ -11,6 +11,7 @@ import {
 } from "@dnd-kit/core";
 import { Plus, Trash2, X } from "lucide-react";
 import {
+  doctorColorClasses,
   DoctorRow,
   DOCTOR_NAME_MAX_LENGTH,
   GRID_COLS,
@@ -33,10 +34,12 @@ interface PanelState {
 // threshold keeps plain clicks (open the edit panel) distinct from drags.
 function DraggableRoom({
   room,
+  doctorColor,
   disabled,
   onEdit,
 }: {
   room: RoomRow;
+  doctorColor: string | null | undefined;
   disabled: boolean;
   onEdit: (room: RoomRow) => void;
 }) {
@@ -62,7 +65,11 @@ function DraggableRoom({
     >
       <span className="w-full truncate font-medium">{room.name}</span>
       {room.doctor_name && (
-        <span className="w-full truncate text-xs text-white/60">
+        <span
+          className={`inline-block max-w-full truncate rounded-full px-2 py-0.5 text-xs font-semibold ${doctorColorClasses(
+            doctorColor
+          )}`}
+        >
           {room.doctor_name}
         </span>
       )}
@@ -229,7 +236,9 @@ export default function LayoutEditor({
           {doctors.map((doctor) => (
             <span
               key={doctor.id}
-              className="flex items-center gap-1.5 rounded-full bg-white/10 py-1 pl-3 pr-1.5 text-sm"
+              className={`flex items-center gap-1.5 rounded-full py-1 pl-3 pr-1.5 text-sm font-medium ${doctorColorClasses(
+                doctor.color
+              )}`}
             >
               <span className="max-w-40 truncate">{doctor.name}</span>
               <button
@@ -240,7 +249,7 @@ export default function LayoutEditor({
                   await onDeleteDoctor(doctor.id);
                   setSaving(false);
                 }}
-                className="rounded-full bg-white/10 p-1 hover:bg-rose-900/70 disabled:opacity-40"
+                className="rounded-full bg-black/10 p-1 hover:bg-black/25 disabled:opacity-40"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -287,6 +296,9 @@ export default function LayoutEditor({
                   <DraggableRoom
                     key={room.id}
                     room={room}
+                    doctorColor={
+                      doctors.find((d) => d.name === room.doctor_name)?.color
+                    }
                     disabled={saving}
                     onEdit={openEdit}
                   />

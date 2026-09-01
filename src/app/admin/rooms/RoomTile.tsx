@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import {
   ADJUST_STEP_SECONDS,
+  doctorColorClasses,
   DoctorRow,
   formatTimerDisplay,
   RoomRow,
@@ -91,7 +92,13 @@ export default function RoomTile({
       <div className="w-full min-w-0">
         <h2 className="truncate text-base font-semibold">{room.name}</h2>
         {room.doctor_name && (
-          <p className="truncate text-xs text-white/70">{room.doctor_name}</p>
+          <span
+            className={`inline-block max-w-full truncate rounded-full px-2 py-0.5 text-xs font-semibold ${doctorColorClasses(
+              doctors.find((d) => d.name === room.doctor_name)?.color
+            )}`}
+          >
+            {room.doctor_name}
+          </span>
         )}
       </div>
 
@@ -231,10 +238,12 @@ export default function RoomTile({
                   <button
                     key={doctor.id}
                     onClick={() => assignDoctor(doctor.name)}
-                    className={`w-full truncate rounded-lg px-2 py-1.5 text-sm ${
+                    className={`w-full truncate rounded-lg px-2 py-1.5 text-sm font-medium ${doctorColorClasses(
+                      doctor.color
+                    )} ${
                       doctor.name === room.doctor_name
-                        ? "bg-white/90 font-medium text-neutral-900"
-                        : "bg-white/10 hover:bg-white/20"
+                        ? "ring-2 ring-white"
+                        : "opacity-85 hover:opacity-100"
                     }`}
                   >
                     {doctor.name}
