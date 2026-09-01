@@ -1,6 +1,11 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RoomRow, TimerAction, timerActionUpdate } from "@/lib/room-status";
+import {
+  DoctorRow,
+  RoomRow,
+  TimerAction,
+  timerActionUpdate,
+} from "@/lib/room-status";
 import { createBrowserClient } from "@/lib/supabase-browser";
 import {
   ROOMS_CHANNEL,
@@ -21,6 +26,7 @@ const POLL_MS = 60_000;
 // Display math stays in room-status.ts.
 export function useRooms() {
   const [rooms, setRooms] = useState<RoomRow[]>([]);
+  const [doctors, setDoctors] = useState<DoctorRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [connectionError, setConnectionError] = useState(false);
   const [actionError, setActionError] = useState("");
@@ -61,10 +67,12 @@ export function useRooms() {
       if (!res.ok) throw new Error();
       const data = (await res.json()) as {
         rooms: RoomRow[];
+        doctors?: DoctorRow[];
         serverTime: string;
       };
       offsetRef.current = Date.parse(data.serverTime) - Date.now();
       setRooms(data.rooms);
+      setDoctors(data.doctors ?? []);
       setConnectionError(false);
     } catch {
       setConnectionError(true);
@@ -201,12 +209,7 @@ export function useRooms() {
   );
 
   const createRoom = useCallback(
-    async (input: {
-      name: string;
-      gridRow: number;
-      gridCol: number;
-      practitionerName?: string;
-    }) => {
+    async (input: { name: string; gridRow: number; gridCol: number }) => {
       const body = await mutate(null, "/api/admin/rooms", {
         method: "POST",
         body: JSON.stringify(input),
@@ -223,7 +226,7 @@ export function useRooms() {
         name?: string;
         gridRow?: number;
         gridCol?: number;
-        practitionerName?: string | null;
+        doctorName?: string | null;
         defaultDurationSeconds?: number;
       }
     ) => {
@@ -246,8 +249,32 @@ export function useRooms() {
     [mutate, removeRoom]
   );
 
+  // Roster mutations refetch on success: adding needs the new row's id, and
+  // deleting may have un-assigned rooms server-side.
+  const addDoctor = useCallback(
+    async (name: string) => {
+      const body = await mutate(null, "/api/admin/doctors", {
+        method: "POST",
+        body: JSON.stringify({ name }),
+      });
+      if (body) await refresh();
+    },
+    [mutate, refresh]
+  );
+
+  const deleteDoctor = useCallback(
+    async (doctorId: string) => {
+      const body = await mutate(null, `/api/admin/doctors/${doctorId}`, {
+        method: "DELETE",
+      });
+      if (body?.success) await refresh();
+    },
+    [mutate, refresh]
+  );
+
   return {
     rooms,
+    doctors,
     serverNowMs: tickMs + offsetRef.current,
     loading,
     connectionError,
@@ -257,5 +284,7 @@ export function useRooms() {
     createRoom,
     updateRoom,
     deleteRoom,
+    addDoctor,
+    deleteDoctor,
   };
 }

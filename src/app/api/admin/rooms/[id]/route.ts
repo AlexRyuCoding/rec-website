@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase";
 import { isAdminAuthorized } from "@/lib/admin-auth";
 import { broadcastRoomsUpdated } from "@/lib/rooms-realtime";
 import {
+  DOCTOR_NAME_MAX_LENGTH,
   GRID_COLS,
   MAX_DURATION_SECONDS,
   MIN_DURATION_SECONDS,
@@ -18,7 +19,13 @@ const patchSchema = z.object({
     .min(0)
     .max(GRID_COLS - 1)
     .optional(),
-  practitionerName: z.string().trim().max(60).nullable().optional(),
+  doctorName: z
+    .string()
+    .trim()
+    .min(1)
+    .max(DOCTOR_NAME_MAX_LENGTH)
+    .nullable()
+    .optional(),
   defaultDurationSeconds: z
     .number()
     .int()
@@ -49,9 +56,7 @@ export async function PATCH(
   if (d.name !== undefined) fields.name = d.name;
   if (d.gridRow !== undefined) fields.grid_row = d.gridRow;
   if (d.gridCol !== undefined) fields.grid_col = d.gridCol;
-  if (d.practitionerName !== undefined) {
-    fields.practitioner_name = d.practitionerName || null;
-  }
+  if (d.doctorName !== undefined) fields.doctor_name = d.doctorName;
   if (d.defaultDurationSeconds !== undefined) {
     fields.default_duration_seconds = d.defaultDurationSeconds;
   }
@@ -61,6 +66,24 @@ export async function PATCH(
   fields.updated_at = new Date().toISOString();
 
   const supabase = createServiceClient();
+
+  // Assignment must come from the managed roster (or null to unassign).
+  if (typeof d.doctorName === "string") {
+    const { data: doctor, error: doctorError } = await supabase
+      .from("doctors")
+      .select("id")
+      .eq("name", d.doctorName)
+      .maybeSingle();
+    if (doctorError) {
+      return NextResponse.json({ error: "Database error" }, { status: 500 });
+    }
+    if (!doctor) {
+      return NextResponse.json(
+        { error: "That doctor is not on the list" },
+        { status: 400 }
+      );
+    }
+  }
   const { data, error } = await supabase
     .from("rooms")
     .update(fields)

@@ -5,25 +5,27 @@ import { isAdminAuthorized } from "@/lib/admin-auth";
 import { broadcastRoomsUpdated } from "@/lib/rooms-realtime";
 import { GRID_COLS } from "@/lib/room-status";
 
-// Room timer board data. GET returns every room plus the server clock so
-// devices with skewed clocks still render identical countdowns.
+// Room timer board data. GET returns every room, the doctor roster, and
+// the server clock so devices with skewed clocks still render identical
+// countdowns. Riding the roster on this response means the existing 60 s
+// poll and focus refresh keep it synced across devices.
 export async function GET() {
   if (!(await isAdminAuthorized())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const supabase = createServiceClient();
-  const { data, error } = await supabase
-    .from("rooms")
-    .select("*")
-    .order("grid_row")
-    .order("grid_col");
+  const [roomsResult, doctorsResult] = await Promise.all([
+    supabase.from("rooms").select("*").order("grid_row").order("grid_col"),
+    supabase.from("doctors").select("*").order("created_at"),
+  ]);
 
-  if (error) {
+  if (roomsResult.error || doctorsResult.error) {
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
   return NextResponse.json({
-    rooms: data ?? [],
+    rooms: roomsResult.data ?? [],
+    doctors: doctorsResult.data ?? [],
     serverTime: new Date().toISOString(),
   });
 }
@@ -36,7 +38,6 @@ const createSchema = z.object({
     .int()
     .min(0)
     .max(GRID_COLS - 1),
-  practitionerName: z.string().trim().max(60).optional(),
 });
 
 export async function POST(req: Request) {
@@ -57,7 +58,6 @@ export async function POST(req: Request) {
       name: parsed.data.name,
       grid_row: parsed.data.gridRow,
       grid_col: parsed.data.gridCol,
-      practitioner_name: parsed.data.practitionerName || null,
     })
     .select("*")
     .single();

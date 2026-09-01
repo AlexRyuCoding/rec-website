@@ -9,9 +9,12 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
 import {
+  DoctorRow,
+  DOCTOR_NAME_MAX_LENGTH,
   GRID_COLS,
+  MAX_DOCTORS,
   MAX_DURATION_SECONDS,
   MIN_DURATION_SECONDS,
   RoomRow,
@@ -58,9 +61,9 @@ function DraggableRoom({
       }`}
     >
       <span className="w-full truncate font-medium">{room.name}</span>
-      {room.practitioner_name && (
+      {room.doctor_name && (
         <span className="w-full truncate text-xs text-white/60">
-          {room.practitioner_name}
+          {room.doctor_name}
         </span>
       )}
     </button>
@@ -98,16 +101,19 @@ function DroppableCell({
 
 export default function LayoutEditor({
   rooms,
+  doctors,
   onCreate,
   onUpdate,
   onDelete,
+  onAddDoctor,
+  onDeleteDoctor,
 }: {
   rooms: RoomRow[];
+  doctors: DoctorRow[];
   onCreate: (input: {
     name: string;
     gridRow: number;
     gridCol: number;
-    practitionerName?: string;
   }) => Promise<void>;
   onUpdate: (
     roomId: string,
@@ -115,16 +121,17 @@ export default function LayoutEditor({
       name?: string;
       gridRow?: number;
       gridCol?: number;
-      practitionerName?: string | null;
       defaultDurationSeconds?: number;
     }
   ) => Promise<void>;
   onDelete: (roomId: string) => Promise<void>;
+  onAddDoctor: (name: string) => Promise<void>;
+  onDeleteDoctor: (doctorId: string) => Promise<void>;
 }) {
   const [panel, setPanel] = useState<PanelState | null>(null);
   const [name, setName] = useState("");
-  const [practitioner, setPractitioner] = useState("");
   const [minutes, setMinutes] = useState(15);
+  const [doctorInput, setDoctorInput] = useState("");
   const [saving, setSaving] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -145,15 +152,22 @@ export default function LayoutEditor({
 
   const openCreate = (cell?: { gridRow: number; gridCol: number }) => {
     setName("");
-    setPractitioner("");
     setPanel({ mode: "create", cell });
   };
 
   const openEdit = (room: RoomRow) => {
     setName(room.name);
-    setPractitioner(room.practitioner_name ?? "");
     setMinutes(Math.round(room.default_duration_seconds / 60));
     setPanel({ mode: "edit", room });
+  };
+
+  const submitDoctor = async () => {
+    const doctorName = doctorInput.trim();
+    if (!doctorName || saving) return;
+    setSaving(true);
+    await onAddDoctor(doctorName);
+    setSaving(false);
+    setDoctorInput("");
   };
 
   const onDragEnd = async (event: DragEndEvent) => {
@@ -176,12 +190,10 @@ export default function LayoutEditor({
         name: name.trim(),
         gridRow: cell.gridRow,
         gridCol: cell.gridCol,
-        practitionerName: practitioner.trim() || undefined,
       });
     } else if (panel.room) {
       await onUpdate(panel.room.id, {
         name: name.trim(),
-        practitionerName: practitioner.trim() || null,
         defaultDurationSeconds: Math.min(
           MAX_DURATION_SECONDS,
           Math.max(MIN_DURATION_SECONDS, minutes * 60)
@@ -206,6 +218,62 @@ export default function LayoutEditor({
           Drag rooms into position. Click a room to edit it.
         </p>
       </div>
+
+      <section className="mb-4 rounded-2xl bg-neutral-900 p-4">
+        <h2 className="mb-1 text-sm font-semibold">Doctors</h2>
+        <p className="mb-3 text-xs text-white/50">
+          Assign a doctor to a room from its pull tab on the timer board.
+          Removing a doctor here un-assigns them everywhere.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          {doctors.map((doctor) => (
+            <span
+              key={doctor.id}
+              className="flex items-center gap-1.5 rounded-full bg-white/10 py-1 pl-3 pr-1.5 text-sm"
+            >
+              <span className="max-w-40 truncate">{doctor.name}</span>
+              <button
+                aria-label={`Remove ${doctor.name}`}
+                disabled={saving}
+                onClick={async () => {
+                  setSaving(true);
+                  await onDeleteDoctor(doctor.id);
+                  setSaving(false);
+                }}
+                className="rounded-full bg-white/10 p-1 hover:bg-rose-900/70 disabled:opacity-40"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          {doctors.length < MAX_DOCTORS ? (
+            <span className="flex items-center gap-1.5">
+              <input
+                value={doctorInput}
+                maxLength={DOCTOR_NAME_MAX_LENGTH}
+                placeholder="Add doctor"
+                onChange={(e) => setDoctorInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") submitDoctor();
+                }}
+                className="w-36 rounded-lg bg-neutral-800 px-3 py-1.5 text-sm"
+              />
+              <button
+                aria-label="Add doctor"
+                disabled={saving || !doctorInput.trim()}
+                onClick={submitDoctor}
+                className="rounded-lg bg-white/10 p-2 hover:bg-white/20 disabled:opacity-40"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </span>
+          ) : (
+            <span className="text-xs text-white/50">
+              List is full (max {MAX_DOCTORS}).
+            </span>
+          )}
+        </div>
+      </section>
 
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
         <div className="overflow-x-auto pb-2">
@@ -251,15 +319,6 @@ export default function LayoutEditor({
                 value={name}
                 maxLength={40}
                 onChange={(e) => setName(e.target.value)}
-                className="mt-1 w-full rounded-lg bg-neutral-800 px-3 py-2"
-              />
-            </label>
-            <label className="mb-3 block text-sm">
-              Practitioner (optional)
-              <input
-                value={practitioner}
-                maxLength={60}
-                onChange={(e) => setPractitioner(e.target.value)}
                 className="mt-1 w-full rounded-lg bg-neutral-800 px-3 py-2"
               />
             </label>

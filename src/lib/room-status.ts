@@ -8,13 +8,21 @@ export const ADJUST_STEP_SECONDS = 60;
 export const MIN_DURATION_SECONDS = 60;
 export const MAX_DURATION_SECONDS = 3600;
 export const GRID_COLS = 6;
+export const MAX_DOCTORS = 5;
+export const DOCTOR_NAME_MAX_LENGTH = 60;
+
+export interface DoctorRow {
+  id: string;
+  name: string;
+  created_at: string;
+}
 
 export interface RoomRow {
   id: string;
   name: string;
   grid_row: number;
   grid_col: number;
-  practitioner_name: string | null;
+  doctor_name: string | null;
   default_duration_seconds: number;
   timer_started_at: string | null;
   timer_duration_seconds: number | null;

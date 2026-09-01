@@ -12,6 +12,7 @@ import LayoutEditor from "./LayoutEditor";
 export default function RoomsPage() {
   const {
     rooms,
+    doctors,
     serverNowMs,
     loading,
     connectionError,
@@ -21,6 +22,8 @@ export default function RoomsPage() {
     createRoom,
     updateRoom,
     deleteRoom,
+    addDoctor,
+    deleteDoctor,
   } = useRooms();
   const [editMode, setEditMode] = useState(false);
   const { soundEnabled, enableSound } = useAlarm(rooms, serverNowMs);
@@ -80,9 +83,12 @@ export default function RoomsPage() {
       ) : editMode ? (
         <LayoutEditor
           rooms={rooms}
+          doctors={doctors}
           onCreate={createRoom}
           onUpdate={updateRoom}
           onDelete={deleteRoom}
+          onAddDoctor={addDoctor}
+          onDeleteDoctor={deleteDoctor}
         />
       ) : rooms.length === 0 ? (
         <p className="mx-auto max-w-5xl text-white/60">
@@ -105,8 +111,12 @@ export default function RoomsPage() {
                   state={deriveRoomState(room, serverNowMs)}
                   busy={busyRoomIds.has(room.id)}
                   nowMs={serverNowMs}
+                  doctors={doctors}
                   onAction={(action, deltaSeconds) =>
                     timerAction(room.id, action, deltaSeconds)
+                  }
+                  onAssignDoctor={(doctorName) =>
+                    updateRoom(room.id, { doctorName })
                   }
                 />
               </div>
