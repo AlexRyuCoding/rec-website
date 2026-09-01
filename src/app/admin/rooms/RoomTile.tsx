@@ -1,8 +1,19 @@
 "use client";
 import { useState } from "react";
-import { Check, Minus, Pause, Play, Plus, RotateCcw } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Minus,
+  Pause,
+  Play,
+  Plus,
+  RotateCcw,
+  Stethoscope,
+} from "lucide-react";
 import {
   ADJUST_STEP_SECONDS,
+  DoctorRow,
   formatTimerDisplay,
   RoomRow,
   RoomState,
@@ -24,16 +35,21 @@ export default function RoomTile({
   state,
   busy,
   nowMs,
+  doctors,
   onAction,
+  onAssignDoctor,
 }: {
   room: RoomRow;
   state: RoomState;
   busy: boolean;
   nowMs: number;
+  doctors: DoctorRow[];
   onAction: (action: TimerAction, valueSeconds?: number) => void;
+  onAssignDoctor: (doctorName: string | null) => void;
 }) {
   const [editingTime, setEditingTime] = useState(false);
   const [minutesInput, setMinutesInput] = useState("");
+  const [doctorListOpen, setDoctorListOpen] = useState(false);
   const style = STATUS_STYLES[state.status];
   const displaySeconds =
     state.remainingSeconds ?? room.default_duration_seconds;
@@ -63,16 +79,19 @@ export default function RoomTile({
     onAction("set", Math.round(minutes) * 60);
   };
 
+  const assignDoctor = (name: string | null) => {
+    setDoctorListOpen(false);
+    if (name !== room.doctor_name) onAssignDoctor(name);
+  };
+
   return (
     <div
-      className={`${style.card} flex h-full flex-col items-center justify-between overflow-hidden rounded-2xl p-3 text-center text-white shadow-lg transition-colors duration-500 select-none`}
+      className={`${style.card} relative flex h-full flex-col items-center justify-between overflow-hidden rounded-2xl p-3 pb-0 text-center text-white shadow-lg transition-colors duration-500 select-none`}
     >
       <div className="w-full min-w-0">
         <h2 className="truncate text-base font-semibold">{room.name}</h2>
-        {room.practitioner_name && (
-          <p className="truncate text-xs text-white/70">
-            {room.practitioner_name}
-          </p>
+        {room.doctor_name && (
+          <p className="truncate text-xs text-white/70">{room.doctor_name}</p>
         )}
       </div>
 
@@ -179,6 +198,70 @@ export default function RoomTile({
       >
         {label}
       </p>
+
+      {/* Pull tab: assign a doctor from the roster without entering edit
+          mode. Expands a panel over the tile listing the roster + None. */}
+      <button
+        aria-label={doctorListOpen ? "Close doctor list" : "Assign doctor"}
+        aria-expanded={doctorListOpen}
+        disabled={busy}
+        onClick={() => setDoctorListOpen((v) => !v)}
+        className="mt-1 flex w-full items-center justify-center gap-1 rounded-t-lg bg-black/20 py-0.5 text-white/70 hover:bg-black/30 hover:text-white disabled:opacity-40"
+      >
+        {doctorListOpen ? (
+          <ChevronDown className="h-3.5 w-3.5" />
+        ) : (
+          <ChevronUp className="h-3.5 w-3.5" />
+        )}
+      </button>
+
+      {doctorListOpen && (
+        <div className="absolute inset-0 z-10 flex flex-col overflow-hidden rounded-2xl bg-neutral-900/95 p-2">
+          <p className="mb-1 flex items-center justify-center gap-1 text-[11px] font-semibold uppercase tracking-widest text-white/60">
+            <Stethoscope className="h-3.5 w-3.5" /> Doctor
+          </p>
+          <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
+            {doctors.length === 0 ? (
+              <p className="px-1 py-2 text-xs text-white/60">
+                No doctors yet — add them in Edit layout.
+              </p>
+            ) : (
+              <>
+                {doctors.map((doctor) => (
+                  <button
+                    key={doctor.id}
+                    onClick={() => assignDoctor(doctor.name)}
+                    className={`w-full truncate rounded-lg px-2 py-1.5 text-sm ${
+                      doctor.name === room.doctor_name
+                        ? "bg-white/90 font-medium text-neutral-900"
+                        : "bg-white/10 hover:bg-white/20"
+                    }`}
+                  >
+                    {doctor.name}
+                  </button>
+                ))}
+                <button
+                  onClick={() => assignDoctor(null)}
+                  className={`w-full truncate rounded-lg px-2 py-1.5 text-sm ${
+                    room.doctor_name === null
+                      ? "bg-white/90 font-medium text-neutral-900"
+                      : "bg-white/10 hover:bg-white/20"
+                  }`}
+                >
+                  None
+                </button>
+              </>
+            )}
+          </div>
+          <button
+            aria-label="Close doctor list"
+            onClick={() => setDoctorListOpen(false)}
+            className="mt-1 flex w-full items-center justify-center rounded-lg bg-white/10 py-0.5 text-white/70 hover:bg-white/20"
+          >
+            <ChevronDown className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

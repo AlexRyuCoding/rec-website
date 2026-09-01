@@ -15,7 +15,7 @@ const baseRoom: RoomRow = {
   name: "Room 1",
   grid_row: 0,
   grid_col: 0,
-  practitioner_name: null,
+  doctor_name: null,
   default_duration_seconds: 900,
   timer_started_at: null,
   timer_duration_seconds: null,
