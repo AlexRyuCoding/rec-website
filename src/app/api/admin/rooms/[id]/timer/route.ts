@@ -21,9 +21,16 @@ const bodySchema = z.object({
     "set",
     "clear",
   ]),
+  // "adjust": the client debounces rapid +/- taps and sends the summed
+  // delta, so any non-zero multiple of the step within the duration range
+  // is valid; timerActionUpdate still clamps and rejects impossible values.
   deltaSeconds: z
-    .literal(ADJUST_STEP_SECONDS)
-    .or(z.literal(-ADJUST_STEP_SECONDS))
+    .number()
+    .int()
+    .multipleOf(ADJUST_STEP_SECONDS)
+    .min(-MAX_DURATION_SECONDS)
+    .max(MAX_DURATION_SECONDS)
+    .refine((v) => v !== 0)
     .optional(),
   // "set": absolute seconds typed by staff (new default, or new remaining
   // on an active session)
