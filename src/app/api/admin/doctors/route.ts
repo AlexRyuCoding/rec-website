@@ -3,7 +3,11 @@ import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
 import { isAdminAuthorized } from "@/lib/admin-auth";
 import { broadcastRoomsUpdated } from "@/lib/rooms-realtime";
-import { DOCTOR_NAME_MAX_LENGTH, MAX_DOCTORS } from "@/lib/room-status";
+import {
+  DOCTOR_NAME_MAX_LENGTH,
+  MAX_DOCTORS,
+  pickDoctorColor,
+} from "@/lib/room-status";
 
 // Doctor roster mutations. The roster itself is read via GET
 // /api/admin/rooms so one poll keeps rooms and doctors in sync everywhere.
@@ -26,7 +30,7 @@ export async function POST(req: Request) {
   const supabase = createServiceClient();
   const { data: existing, error: listError } = await supabase
     .from("doctors")
-    .select("name");
+    .select("name, color");
   if (listError) {
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
@@ -48,7 +52,10 @@ export async function POST(req: Request) {
 
   const { data, error } = await supabase
     .from("doctors")
-    .insert({ name })
+    .insert({
+      name,
+      color: pickDoctorColor((existing ?? []).map((d) => d.color)),
+    })
     .select("*")
     .single();
   if (error) {

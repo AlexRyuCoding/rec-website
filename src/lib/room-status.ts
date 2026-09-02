@@ -11,9 +11,39 @@ export const GRID_COLS = 6;
 export const MAX_DOCTORS = 5;
 export const DOCTOR_NAME_MAX_LENGTH = 60;
 
+// One stable color per doctor. MAX_DOCTORS matches the palette size, so
+// every doctor on the roster always holds a unique color.
+export const DOCTOR_COLORS = [
+  "violet",
+  "cyan",
+  "lime",
+  "orange",
+  "pink",
+] as const;
+export type DoctorColor = (typeof DOCTOR_COLORS)[number];
+
+// Light background + very dark same-hue text stays legible on every tile
+// status color. Tailwind only compiles literal class strings, hence a map.
+const DOCTOR_COLOR_CLASSES: Record<DoctorColor, string> = {
+  violet: "bg-violet-300 text-violet-950",
+  cyan: "bg-cyan-300 text-cyan-950",
+  lime: "bg-lime-300 text-lime-950",
+  orange: "bg-orange-300 text-orange-950",
+  pink: "bg-pink-300 text-pink-950",
+};
+
+export function doctorColorClasses(color: string | null | undefined): string {
+  return DOCTOR_COLOR_CLASSES[color as DoctorColor] ?? "bg-white/10 text-white";
+}
+
+export function pickDoctorColor(usedColors: (string | null)[]): DoctorColor {
+  return DOCTOR_COLORS.find((c) => !usedColors.includes(c)) ?? DOCTOR_COLORS[0];
+}
+
 export interface DoctorRow {
   id: string;
   name: string;
+  color: string | null;
   created_at: string;
 }
 

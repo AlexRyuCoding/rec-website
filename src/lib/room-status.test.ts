@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   deriveRoomState,
+  doctorColorClasses,
   formatTimerDisplay,
+  pickDoctorColor,
   timerActionUpdate,
+  DOCTOR_COLORS,
   OVERTIME_GRACE_SECONDS,
   RoomRow,
 } from "./room-status";
@@ -190,6 +193,36 @@ describe("timerActionUpdate", () => {
         timer_paused_at: null,
       },
     });
+  });
+});
+
+describe("pickDoctorColor", () => {
+  it("picks the first palette color when none are used", () => {
+    expect(pickDoctorColor([])).toBe(DOCTOR_COLORS[0]);
+  });
+
+  it("skips colors already in use", () => {
+    expect(pickDoctorColor(["violet", "cyan"])).toBe("lime");
+  });
+
+  it("reuses a freed color in palette order", () => {
+    expect(pickDoctorColor(["violet", "lime", "orange", "pink"])).toBe("cyan");
+  });
+
+  it("ignores null colors from unmigrated rows", () => {
+    expect(pickDoctorColor([null, "violet"])).toBe("cyan");
+  });
+});
+
+describe("doctorColorClasses", () => {
+  it("maps every palette color to distinct classes", () => {
+    const classes = DOCTOR_COLORS.map(doctorColorClasses);
+    expect(new Set(classes).size).toBe(DOCTOR_COLORS.length);
+  });
+
+  it("falls back to neutral styling for unknown or missing colors", () => {
+    expect(doctorColorClasses(null)).toBe("bg-white/10 text-white");
+    expect(doctorColorClasses("plaid")).toBe("bg-white/10 text-white");
   });
 });
 
