@@ -60,7 +60,7 @@ export default function RoomTile({
   // expand to fit the new one. displayedDoctor is the lagging value that
   // drives what the pill shows; room.doctor_name is the target.
   const [displayedDoctor, setDisplayedDoctor] = useState(room.doctor_name);
-  const pillRef = useRef<HTMLSpanElement>(null);
+  const pillRef = useRef<HTMLButtonElement>(null);
   const pillTextRef = useRef<HTMLSpanElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const style = STATUS_STYLES[state.status];
@@ -181,20 +181,24 @@ export default function RoomTile({
     >
       <div className="w-full min-w-0">
         <h2 className="truncate text-base font-semibold">{room.name}</h2>
-        <span
+        <button
           ref={pillRef}
-          className={`inline-flex max-w-full items-center overflow-hidden whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${
+          aria-label={doctorListOpen ? "Close doctor list" : "Choose doctor"}
+          aria-expanded={doctorListOpen}
+          disabled={busy}
+          onClick={() => setDoctorListOpen((v) => !v)}
+          className={`inline-flex max-w-full items-center overflow-hidden whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold disabled:opacity-70 ${
             displayedDoctor
               ? doctorColorClasses(
                   doctors.find((d) => d.name === displayedDoctor)?.color
                 )
-              : "bg-white/15 text-white/60"
+              : "bg-white/15 text-white/60 hover:bg-white/25"
           }`}
         >
           <span ref={pillTextRef} className="truncate">
             {displayedDoctor ?? "No doctor"}
           </span>
-        </span>
+        </button>
       </div>
 
       <div className="flex w-full items-center justify-center gap-1.5">
