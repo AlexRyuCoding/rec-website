@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { gsap, useGSAP } from "@/lib/gsap";
 import {
   Check,
@@ -63,6 +63,20 @@ export default function RoomTile({
   const pillRef = useRef<HTMLButtonElement>(null);
   const pillTextRef = useRef<HTMLSpanElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Tapping anywhere outside this tile dismisses the doctor list, so an
+  // abandoned panel doesn't sit open on the board.
+  useEffect(() => {
+    if (!doctorListOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setDoctorListOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [doctorListOpen]);
   const style = STATUS_STYLES[state.status];
   const displaySeconds =
     state.remainingSeconds ?? room.default_duration_seconds;
@@ -177,6 +191,7 @@ export default function RoomTile({
 
   return (
     <div
+      ref={rootRef}
       className={`${style.card} relative flex h-full flex-col items-center justify-between overflow-hidden rounded-2xl p-3 pb-0 text-center text-white shadow-lg transition-colors duration-500 select-none`}
     >
       <div className="w-full min-w-0">
