@@ -14,6 +14,9 @@ import {
 } from "@/lib/rooms-realtime";
 
 const POLL_MS = 60_000;
+// Rapid +/- taps update the display instantly and accumulate; the summed
+// delta is POSTed once this long after the last tap.
+const ADJUST_FLUSH_MS = 800;
 
 // Data layer for the room timer board. Server rows + a skew-corrected 1 s
 // clock. Sync is layered for speed with a safety net underneath:
@@ -176,12 +179,36 @@ export function useRooms() {
     [refresh]
   );
 
+  // Deltas from rapid +/- taps, per room, awaiting their single POST.
+  // The flush passes roomId null to mutate so busy is never set — the
+  // buttons must not lock up between taps.
+  const pendingAdjustRef = useRef(
+    new Map<string, { delta: number; timer: ReturnType<typeof setTimeout> }>()
+  );
+
+  const flushAdjust = useCallback(
+    async (roomId: string) => {
+      const pending = pendingAdjustRef.current.get(roomId);
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      pendingAdjustRef.current.delete(roomId);
+      if (pending.delta === 0) return;
+      const body = await mutate(null, `/api/admin/rooms/${roomId}/timer`, {
+        method: "POST",
+        body: JSON.stringify({ action: "adjust", deltaSeconds: pending.delta }),
+      });
+      if (body?.room) upsertRoom(body.room);
+    },
+    [mutate, upsertRoom]
+  );
+
   const timerAction = useCallback(
     async (roomId: string, action: TimerAction, valueSeconds?: number) => {
       // Optimistic: apply the same pure logic the server runs, so the
       // acting device updates instantly. The old updated_at is kept, so
       // the authoritative row (response or broadcast) replaces it.
       const room = roomsRef.current.find((r) => r.id === roomId);
+      let optimisticOk = false;
       if (room) {
         const result = timerActionUpdate(
           room,
@@ -190,11 +217,27 @@ export function useRooms() {
           valueSeconds
         );
         if (result.ok) {
+          optimisticOk = true;
           setRooms((prev) =>
             prev.map((r) => (r.id === roomId ? { ...r, ...result.fields } : r))
           );
         }
       }
+      if (action === "adjust") {
+        // A tap the local math rejects (e.g. below elapsed time) is
+        // dropped, mirroring what the server would say.
+        if (!optimisticOk || valueSeconds === undefined) return;
+        const pending = pendingAdjustRef.current.get(roomId);
+        if (pending) clearTimeout(pending.timer);
+        pendingAdjustRef.current.set(roomId, {
+          delta: (pending?.delta ?? 0) + valueSeconds,
+          timer: setTimeout(() => void flushAdjust(roomId), ADJUST_FLUSH_MS),
+        });
+        return;
+      }
+      // Any other action first lands the pending delta so the server
+      // applies changes in the order the user made them.
+      await flushAdjust(roomId);
       const body = await mutate(roomId, `/api/admin/rooms/${roomId}/timer`, {
         method: "POST",
         body: JSON.stringify(
@@ -205,7 +248,7 @@ export function useRooms() {
       });
       if (body?.room) upsertRoom(body.room);
     },
-    [mutate, upsertRoom]
+    [mutate, upsertRoom, flushAdjust]
   );
 
   const createRoom = useCallback(

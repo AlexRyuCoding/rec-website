@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { gsap, useGSAP } from "@/lib/gsap";
 import {
   Check,
   ChevronDown,
@@ -51,6 +52,14 @@ export default function RoomTile({
   const [editingTime, setEditingTime] = useState(false);
   const [minutesInput, setMinutesInput] = useState("");
   const [doctorListOpen, setDoctorListOpen] = useState(false);
+  // The nametag pill morphs through a ball on every assignment change:
+  // collapse showing the old value, swap color/text at the smallest point,
+  // expand to fit the new one. displayedDoctor is the lagging value that
+  // drives what the pill shows; room.doctor_name is the target.
+  const [displayedDoctor, setDisplayedDoctor] = useState(room.doctor_name);
+  const pillRef = useRef<HTMLSpanElement>(null);
+  const pillTextRef = useRef<HTMLSpanElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const style = STATUS_STYLES[state.status];
   const displaySeconds =
     state.remainingSeconds ?? room.default_duration_seconds;
@@ -85,21 +94,104 @@ export default function RoomTile({
     if (name !== room.doctor_name) onAssignDoctor(name);
   };
 
+  // Phase 1 of the morph: the assignment changed (locally or via
+  // broadcast), so fade the text and shrink the pill to a ball, then let
+  // displayedDoctor catch up — that re-render swaps color and text while
+  // the pill is at its smallest.
+  useGSAP(
+    () => {
+      const pill = pillRef.current;
+      if (!pill || room.doctor_name === displayedDoctor) return;
+      gsap.killTweensOf([pill, pillTextRef.current]);
+      gsap
+        .timeline()
+        .to(pillTextRef.current, { opacity: 0, duration: 0.12 })
+        .to(
+          pill,
+          {
+            width: pill.offsetHeight,
+            opacity: 0.6,
+            duration: 0.2,
+            ease: "house",
+          },
+          "<"
+        )
+        .call(() => setDisplayedDoctor(room.doctor_name));
+    },
+    { dependencies: [room.doctor_name, displayedDoctor] }
+  );
+
+  // Phase 2: displayedDoctor just caught up mid-morph (the pill still has
+  // an inline width from phase 1 — absent on a fresh mount, which must not
+  // animate). Measure the new natural width, expand to it, fade text in.
+  useGSAP(
+    () => {
+      const pill = pillRef.current;
+      if (!pill || !pill.style.width) return;
+      const ballWidth = pill.offsetWidth;
+      gsap.set(pill, { width: "auto" });
+      const targetWidth = pill.offsetWidth;
+      gsap.set(pill, { width: ballWidth });
+      gsap
+        .timeline()
+        .to(pill, {
+          width: targetWidth,
+          opacity: 1,
+          duration: 0.25,
+          ease: "house",
+        })
+        .to(pillTextRef.current, { opacity: 1, duration: 0.15 }, "-=0.1")
+        .set(pill, { clearProps: "width" });
+    },
+    { dependencies: [displayedDoctor] }
+  );
+
+  // Doctor list entrance: the panel emerges from the pull tab at the
+  // bottom edge, options following with a slight stagger. Closing is
+  // intentionally instant.
+  useGSAP(
+    () => {
+      if (!doctorListOpen || !panelRef.current) return;
+      gsap.from(panelRef.current, {
+        opacity: 0,
+        y: 10,
+        scaleY: 0.92,
+        transformOrigin: "bottom center",
+        duration: 0.25,
+        ease: "house",
+      });
+      gsap.from(panelRef.current.querySelectorAll("[data-doctor-option]"), {
+        opacity: 0,
+        y: 6,
+        duration: 0.2,
+        ease: "house",
+        stagger: 0.03,
+        delay: 0.05,
+      });
+    },
+    { dependencies: [doctorListOpen] }
+  );
+
   return (
     <div
       className={`${style.card} relative flex h-full flex-col items-center justify-between overflow-hidden rounded-2xl p-3 pb-0 text-center text-white shadow-lg transition-colors duration-500 select-none`}
     >
       <div className="w-full min-w-0">
         <h2 className="truncate text-base font-semibold">{room.name}</h2>
-        {room.doctor_name && (
-          <span
-            className={`inline-block max-w-full truncate rounded-full px-2 py-0.5 text-xs font-semibold ${doctorColorClasses(
-              doctors.find((d) => d.name === room.doctor_name)?.color
-            )}`}
-          >
-            {room.doctor_name}
+        <span
+          ref={pillRef}
+          className={`inline-flex max-w-full items-center overflow-hidden whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${
+            displayedDoctor
+              ? doctorColorClasses(
+                  doctors.find((d) => d.name === displayedDoctor)?.color
+                )
+              : "bg-white/15 text-white/60"
+          }`}
+        >
+          <span ref={pillTextRef} className="truncate">
+            {displayedDoctor ?? "No doctor"}
           </span>
-        )}
+        </span>
       </div>
 
       <div className="flex w-full items-center justify-center gap-1.5">
@@ -223,7 +315,10 @@ export default function RoomTile({
       </button>
 
       {doctorListOpen && (
-        <div className="absolute inset-0 z-10 flex flex-col overflow-hidden rounded-2xl bg-neutral-900/95 p-2">
+        <div
+          ref={panelRef}
+          className="absolute inset-0 z-10 flex flex-col overflow-hidden rounded-2xl bg-neutral-900/95 p-2"
+        >
           <p className="mb-1 flex items-center justify-center gap-1 text-[11px] font-semibold uppercase tracking-widest text-white/60">
             <Stethoscope className="h-3.5 w-3.5" /> Doctor
           </p>
@@ -237,12 +332,13 @@ export default function RoomTile({
                 {doctors.map((doctor) => (
                   <button
                     key={doctor.id}
+                    data-doctor-option
                     onClick={() => assignDoctor(doctor.name)}
                     className={`w-full truncate rounded-lg px-2 py-1.5 text-sm font-medium ${doctorColorClasses(
                       doctor.color
                     )} ${
                       doctor.name === room.doctor_name
-                        ? "ring-2 ring-white"
+                        ? "ring-2 ring-inset ring-white"
                         : "opacity-85 hover:opacity-100"
                     }`}
                   >
@@ -250,6 +346,7 @@ export default function RoomTile({
                   </button>
                 ))}
                 <button
+                  data-doctor-option
                   onClick={() => assignDoctor(null)}
                   className={`w-full truncate rounded-lg px-2 py-1.5 text-sm ${
                     room.doctor_name === null
