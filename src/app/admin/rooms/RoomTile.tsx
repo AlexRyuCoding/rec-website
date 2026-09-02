@@ -36,6 +36,7 @@ export default function RoomTile({
   room,
   state,
   busy,
+  adjustPending,
   nowMs,
   doctors,
   onAction,
@@ -44,6 +45,8 @@ export default function RoomTile({
   room: RoomRow;
   state: RoomState;
   busy: boolean;
+  // +/- taps not yet confirmed by the server; the time is shown dimmed.
+  adjustPending: boolean;
   nowMs: number;
   doctors: DoctorRow[];
   onAction: (action: TimerAction, valueSeconds?: number) => void;
@@ -224,9 +227,9 @@ export default function RoomTile({
             aria-label="Type a time in minutes"
             disabled={busy}
             onClick={openTimeEditor}
-            className={`rounded-lg px-1 text-3xl font-bold tabular-nums hover:bg-white/10 disabled:opacity-70 ${
+            className={`rounded-lg px-1 text-3xl font-bold tabular-nums transition-opacity duration-200 hover:bg-white/10 disabled:opacity-70 ${
               state.paused ? "animate-pulse" : ""
-            }`}
+            } ${adjustPending ? "opacity-50" : ""}`}
           >
             {formatTimerDisplay(displaySeconds)}
           </button>

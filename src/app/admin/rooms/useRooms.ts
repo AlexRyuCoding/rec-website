@@ -34,6 +34,11 @@ export function useRooms() {
   const [connectionError, setConnectionError] = useState(false);
   const [actionError, setActionError] = useState("");
   const [busyRoomIds, setBusyRoomIds] = useState<Set<string>>(new Set());
+  // Rooms whose displayed time includes +/- taps not yet confirmed by the
+  // server (accumulating or mid-POST); the tile dims the number for these.
+  const [pendingAdjustRoomIds, setPendingAdjustRoomIds] = useState<Set<string>>(
+    new Set()
+  );
   const [tickMs, setTickMs] = useState(() => Date.now());
   const offsetRef = useRef(0);
   const roomsRef = useRef<RoomRow[]>([]);
@@ -192,12 +197,26 @@ export function useRooms() {
       if (!pending) return;
       clearTimeout(pending.timer);
       pendingAdjustRef.current.delete(roomId);
-      if (pending.delta === 0) return;
-      const body = await mutate(null, `/api/admin/rooms/${roomId}/timer`, {
-        method: "POST",
-        body: JSON.stringify({ action: "adjust", deltaSeconds: pending.delta }),
-      });
-      if (body?.room) upsertRoom(body.room);
+      try {
+        if (pending.delta === 0) return;
+        const body = await mutate(null, `/api/admin/rooms/${roomId}/timer`, {
+          method: "POST",
+          body: JSON.stringify({
+            action: "adjust",
+            deltaSeconds: pending.delta,
+          }),
+        });
+        if (body?.room) upsertRoom(body.room);
+      } finally {
+        // Undim only if no new taps started accumulating during the POST.
+        if (!pendingAdjustRef.current.has(roomId)) {
+          setPendingAdjustRoomIds((prev) => {
+            const next = new Set(prev);
+            next.delete(roomId);
+            return next;
+          });
+        }
+      }
     },
     [mutate, upsertRoom]
   );
@@ -233,6 +252,9 @@ export function useRooms() {
           delta: (pending?.delta ?? 0) + valueSeconds,
           timer: setTimeout(() => void flushAdjust(roomId), ADJUST_FLUSH_MS),
         });
+        setPendingAdjustRoomIds((prev) =>
+          prev.has(roomId) ? prev : new Set(prev).add(roomId)
+        );
         return;
       }
       // Any other action first lands the pending delta so the server
@@ -322,6 +344,7 @@ export function useRooms() {
     loading,
     connectionError,
     busyRoomIds,
+    pendingAdjustRoomIds,
     actionError,
     timerAction,
     createRoom,

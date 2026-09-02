@@ -17,6 +17,7 @@ export default function RoomsPage() {
     loading,
     connectionError,
     busyRoomIds,
+    pendingAdjustRoomIds,
     actionError,
     timerAction,
     createRoom,
@@ -110,6 +111,7 @@ export default function RoomsPage() {
                   room={room}
                   state={deriveRoomState(room, serverNowMs)}
                   busy={busyRoomIds.has(room.id)}
+                  adjustPending={pendingAdjustRoomIds.has(room.id)}
                   nowMs={serverNowMs}
                   doctors={doctors}
                   onAction={(action, deltaSeconds) =>
