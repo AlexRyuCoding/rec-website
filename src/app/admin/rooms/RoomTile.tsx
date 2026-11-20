@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useDroppable } from "@dnd-kit/core";
 import { gsap, useGSAP } from "@/lib/gsap";
 import {
   Check,
@@ -100,7 +101,19 @@ export default function RoomTile({
   const pillRef = useRef<HTMLButtonElement>(null);
   const pillTextRef = useRef<HTMLSpanElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  // The whole tile is where a waiting chip dragged with the mouse can be
+  // dropped (page.tsx decides what the drop does). The ref callback is
+  // memoised: the board rerenders every second, and a new callback each
+  // time would make dnd-kit forget and re-measure the tile each time.
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: room.id });
+  const setRootRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      rootRef.current = node;
+      setDropRef(node);
+    },
+    [setDropRef]
+  );
 
   // Tapping anywhere outside this tile dismisses the doctor list and the
   // patient menu, so an abandoned panel doesn't sit open on the board.
@@ -249,7 +262,7 @@ export default function RoomTile({
 
   return (
     <div
-      ref={rootRef}
+      ref={setRootRef}
       className={`${style.card} relative flex h-full flex-col items-center justify-between overflow-hidden rounded-2xl p-3 pb-0 text-center text-white shadow-lg transition-colors duration-500 select-none`}
     >
       <div className="w-full min-w-0">
@@ -562,7 +575,13 @@ export default function RoomTile({
           data-assign-keep
           disabled={assignMode === "full" || busy}
           onClick={onAssignHere}
-          className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-1 rounded-2xl bg-neutral-950/85 text-white ring-2 ring-inset ring-white/70 backdrop-blur-[2px] hover:bg-neutral-950/70 disabled:ring-white/15 disabled:hover:bg-neutral-950/85"
+          className={`absolute inset-0 z-20 flex flex-col items-center justify-center gap-1 rounded-2xl text-white ring-inset backdrop-blur-[2px] transition-[background-color,box-shadow] duration-150 disabled:ring-white/15 ${
+            // A dragged chip is over this tile: light it up, so it is
+            // plain which room the patient lands in on release.
+            isOver && assignMode !== "full" && !busy
+              ? "bg-neutral-950/55 ring-4 ring-white"
+              : "bg-neutral-950/85 ring-2 ring-white/70 hover:bg-neutral-950/70 disabled:hover:bg-neutral-950/85"
+          }`}
         >
           <span className="text-xs font-medium text-white/70">{room.name}</span>
           <span

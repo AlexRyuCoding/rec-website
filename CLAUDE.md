@@ -190,6 +190,12 @@ through src/lib/flow-server.ts.
 - STAFF choose the room (never the system): tap a waiting chip, then a
   room. A free bed → called now; busy room → lined up ("next up") and
   called automatically when the room is ready.
+- With a mouse the chip can also be dragged onto a room (@dnd-kit, in
+  page.tsx / WaitingList.tsx / RoomTile.tsx). It is the same action as
+  tap-then-tap: picking a chip up selects it, letting go over a room is
+  the tap. MouseSensor only, on purpose — a finger on the iPads must keep
+  tapping and scrolling the list. The dragged copy covers the tile's
+  label, so it says what the drop will do itself ("Send to Room 1").
 - Room status with no timer running: turnover_started_at set → Turning
   over; else any occupant not yet seen → Patient waiting; else any
   occupant → With doctor; else Available. The timer is started once the
