@@ -271,6 +271,25 @@ describe("deriveRoomState with patients and turnover", () => {
     });
   });
 
+  it("is with_doctor when idle and every occupant has been seen", () => {
+    expect(deriveRoomState(baseRoom, T0, 1, 0)).toEqual({
+      ...idle,
+      status: "with_doctor",
+    });
+  });
+
+  it("is patient_waiting while anyone in the room is still unseen", () => {
+    // Shared room: the doctor is with one patient, the partner just
+    // walked in — someone is waiting, so the room says so.
+    expect(deriveRoomState(baseRoom, T0, 2, 1).status).toBe("patient_waiting");
+  });
+
+  it("turnover and a running timer still win over with_doctor", () => {
+    const turning = { ...baseRoom, turnover_started_at: iso(T0) };
+    expect(deriveRoomState(turning, T0 + 1000, 1, 0).status).toBe("turnover");
+    expect(deriveRoomState(running(), T0 + 1000, 1, 0).status).toBe("in_use");
+  });
+
   it("stays available with no occupants (the default)", () => {
     expect(deriveRoomState(baseRoom, T0).status).toBe("available");
     expect(deriveRoomState(baseRoom, T0, 0).status).toBe("available");

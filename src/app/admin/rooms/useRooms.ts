@@ -6,7 +6,12 @@ import {
   TimerAction,
   timerActionUpdate,
 } from "@/lib/room-status";
-import { previewTimerFlow, VisitView } from "@/lib/patient-flow";
+import {
+  applyVisitUpdates,
+  doctorInUpdates,
+  previewTimerFlow,
+  VisitView,
+} from "@/lib/patient-flow";
 import { createBrowserClient } from "@/lib/supabase-browser";
 import {
   FLOW_EVENT,
@@ -15,7 +20,7 @@ import {
   RoomsBroadcastPayload,
 } from "@/lib/rooms-realtime";
 
-export type VisitAction = "assign" | "unassign" | "remove";
+export type VisitAction = "assign" | "unassign" | "remove" | "mark_waiting";
 
 interface MutationBody {
   room?: RoomRow;
@@ -371,6 +376,34 @@ export function useRooms() {
     [mutate, removeRoom]
   );
 
+  // "Doctor in": the doctor has walked into the room. Applied locally at
+  // once (the banner and the purple tile must clear the instant the
+  // button is tapped), then confirmed by the server's list.
+  const doctorIn = useCallback(
+    async (roomId: string) => {
+      const nowMs = Date.now() + offsetRef.current;
+      setVisits((prev) => {
+        const updates = doctorInUpdates(
+          roomId,
+          prev.map((v) => ({ ...v, done_at: null })),
+          nowMs
+        );
+        return updates.length === 0 ? prev : applyVisitUpdates(prev, updates);
+      });
+      const body = await mutate(
+        roomId,
+        `/api/admin/rooms/${roomId}/doctor-in`,
+        {
+          method: "POST",
+        }
+      );
+      if (!body) return;
+      if (body.visits) setVisits(body.visits);
+      for (const room of body.rooms ?? []) upsertRoom(room);
+    },
+    [mutate, upsertRoom]
+  );
+
   // Roster mutations refetch on success: adding needs the new row's id, and
   // deleting may have un-assigned rooms server-side.
   const addDoctor = useCallback(
@@ -406,6 +439,7 @@ export function useRooms() {
     actionError,
     timerAction,
     visitAction,
+    doctorIn,
     createRoom,
     updateRoom,
     deleteRoom,

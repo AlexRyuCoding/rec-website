@@ -39,35 +39,44 @@ function playInstance(ctx: AudioContext) {
   }
 }
 
-// "A patient is waiting for the doctor": one short rising two-tone (E5 →
-// A5), the mirror of the falling "remove needles" chime so the two are
-// never confused. Played once per call — the purple tile and its counter
-// carry the reminder; a repeating sound would compete with the needle
-// alarm.
-function playArrivalChime(ctx: AudioContext) {
+// "A patient is waiting for the doctor": a rising two-tone (E5 → A5), the
+// mirror of the falling "remove needles" chime so the two are never
+// confused, rung three times. It rings once per new alert and then stops —
+// the banner at the top of the board is what persists.
+const ARRIVAL_RINGS = 3;
+const ARRIVAL_RING_SPACING_S = 1.1;
+
+function playArrivalAlert(ctx: AudioContext) {
   const note = (freq: number, at: number) => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "sine";
     osc.frequency.value = freq;
     gain.gain.setValueAtTime(0, ctx.currentTime + at);
-    gain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + at + 0.05);
+    gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + at + 0.04);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + at + 0.9);
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start(ctx.currentTime + at);
     osc.stop(ctx.currentTime + at + 1);
   };
-  note(659.25, 0);
-  note(880, 0.25);
+  for (let ring = 0; ring < ARRIVAL_RINGS; ring++) {
+    const at = ring * ARRIVAL_RING_SPACING_S;
+    note(659.25, at);
+    note(880, at + 0.25);
+  }
 }
 
 const SOUND_PREF_KEY = "rooms-chime-enabled";
 
+// ready: the board has loaded its first data. Until then the visit list is
+// just empty, and treating that as "nobody waiting" would make every
+// patient already waiting look like a new arrival on page load.
 export function useAlarm(
   rooms: RoomRow[],
   serverNowMs: number,
-  visits: VisitView[] = []
+  visits: VisitView[] = [],
+  ready = true
 ) {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [audioReady, setAudioReady] = useState(false);
@@ -137,25 +146,31 @@ export function useAlarm(
     return () => clearInterval(interval);
   }, [alarmingCount, soundEnabled, audioReady]);
 
-  // Doctor alert: chime once whenever a patient is newly called to a
-  // room. Tracked by visit id, so it also fires for a late partner joining
-  // a room whose timer is already running. The first list a device loads
-  // is history, not news — it only primes the set.
-  const calledIdsRef = useRef<Set<string> | null>(null);
-  const calledKey = visits
-    .filter((v) => v.room_id !== null && v.called_at !== null)
+  // Doctor alert: three rings whenever a patient starts waiting for the
+  // doctor — newly called to a room (including a late partner joining a
+  // room whose timer is already running), or put back to "waiting" after
+  // a mistaken "Doctor in". Tracked by visit id. The first list a device
+  // loads is history, not news, and only primes the set — and "first
+  // list" means the first one after the board has data, not the empty
+  // list it renders with while loading.
+  const waitingIdsRef = useRef<Set<string> | null>(null);
+  const waitingKey = visits
+    .filter(
+      (v) => v.room_id !== null && v.called_at !== null && v.seen_at === null
+    )
     .map((v) => v.id)
     .sort()
     .join(",");
   useEffect(() => {
-    const current = new Set(calledKey ? calledKey.split(",") : []);
-    const previous = calledIdsRef.current;
-    calledIdsRef.current = current;
+    if (!ready) return;
+    const current = new Set(waitingKey ? waitingKey.split(",") : []);
+    const previous = waitingIdsRef.current;
+    waitingIdsRef.current = current;
     if (!previous) return;
-    const hasNewCall = [...current].some((id) => !previous.has(id));
-    if (!hasNewCall || !soundEnabled || !audioReady || !ctxRef.current) return;
-    playArrivalChime(ctxRef.current);
-  }, [calledKey, soundEnabled, audioReady]);
+    const hasNew = [...current].some((id) => !previous.has(id));
+    if (!hasNew || !soundEnabled || !audioReady || !ctxRef.current) return;
+    playArrivalAlert(ctxRef.current);
+  }, [waitingKey, ready, soundEnabled, audioReady]);
 
   // Keep the display awake where the browser allows it (tablets on a wall).
   useEffect(() => {

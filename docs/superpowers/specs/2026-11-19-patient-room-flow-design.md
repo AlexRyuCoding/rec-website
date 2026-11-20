@@ -429,3 +429,36 @@ CLAUDE.md gets the new routes, tables, columns and the broadcast rule.
 - Requests from the TV give up after 8 s and server broadcasts after 2 s,
   so a hung connection can neither freeze the screen nor hold up a kiosk
   check-in.
+
+## Addendum 2026-11-20 — "With doctor" and the doctor alert
+
+Requested by Alex after trying the flow: doctors start the timer once the
+needles are in, so between the doctor walking in and the timer starting
+the board wrongly kept saying "Patient waiting".
+
+- **New status `with_doctor`** (deep indigo tile): no timer, not turning
+  over, at least one occupant, none of them unseen.
+- **`seen_at` now means "the doctor is in"**, set by a new **Doctor in**
+  button (banner and purple tile) or, at the latest, by starting the
+  timer. No new column, no migration. `POST
+  /api/admin/rooms/[id]/doctor-in` marks every unseen occupant of the room
+  seen; calling it twice is harmless.
+- **Doctor alert banner**: while a room has an unseen patient, every board
+  shows a full-width banner pinned to the top, in the room's doctor color,
+  reading "<Doctor> — your patient is waiting / <Room> / <names> waiting
+  m:ss", with a Doctor in button. A new banner drops in and flashes three
+  times. It cannot be dismissed; Doctor in or Start clears it. *(call:
+  shown on every board for every doctor — a board cannot know who is
+  looking at it.)*
+- **The alert rings three times** (rising two-tone ×3) when a patient
+  starts waiting; this replaces the single chime of §6.
+- **Undo**: tapping a patient's name on a With-doctor tile offers "Doctor
+  hasn't come yet" (`mark_waiting`), which brings the banner, the rings
+  and the TV call back *(call: one stray tap must not be able to leave a
+  patient forgotten in a room)*.
+- **Reset now leaves patients seen** (tile returns to With doctor, not
+  Patient waiting) — this supersedes the "Timer reset" rule in §2.
+  Whoever started the timer was in the room; cancelling it must not raise
+  the alert again.
+- The waiting-room TV needs no change: it already hides a call once
+  `seen_at` is set, so the name now clears when the doctor walks in.

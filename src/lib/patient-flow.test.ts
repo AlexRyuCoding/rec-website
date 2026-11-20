@@ -5,16 +5,19 @@ import {
   assignUpdate,
   displayName,
   doctorForCalls,
+  doctorInUpdates,
   FlowRoom,
   FlowVisit,
   hasFreeBedNow,
   isActiveVisit,
+  markWaitingUpdate,
   matchRosterDoctor,
   previewTimerFlow,
   promotionUpdates,
   removeUpdate,
   roomNextUp,
   roomOccupants,
+  roomWaitingForDoctor,
   timerFlowUpdates,
   unassignUpdate,
   visitState,
@@ -334,11 +337,11 @@ describe("timerFlowUpdates", () => {
       { id: "late", fields: { done_at: iso(T0) } },
     ]);
   });
-  it("reset keeps the patient in the room, waiting again", () => {
+  it("reset keeps the patient in the room, still with the doctor", () => {
+    // Whoever started the timer was in the room. Cancelling it must not
+    // throw the room back to "Patient waiting" and re-raise the alert.
     const visits = [treating("a"), nextUp("n")];
-    expect(timerFlowUpdates("reset", room(), visits, T0)).toEqual([
-      { id: "a", fields: { seen_at: null } },
-    ]);
+    expect(timerFlowUpdates("reset", room(), visits, T0)).toEqual([]);
   });
   it("reset of a hand-started timer calls the lined-up patient", () => {
     expect(timerFlowUpdates("reset", room(), [nextUp("n")], T0)).toEqual([
@@ -465,5 +468,32 @@ describe("previewTimerFlow", () => {
     expect(previewTimerFlow("pause", room(timerRunning), views, T0)).toBe(
       views
     );
+  });
+});
+
+describe("doctor in / still waiting", () => {
+  it("roomWaitingForDoctor is the called patients nobody has seen yet", () => {
+    const visits = [called("a"), treating("b"), nextUp("n"), called("z", "r2")];
+    expect(roomWaitingForDoctor(visits, "r1").map((v) => v.id)).toEqual(["a"]);
+  });
+
+  it("doctor in marks every waiting patient in the room as seen", () => {
+    const visits = [called("a"), called("b"), treating("c"), nextUp("n")];
+    expect(doctorInUpdates("r1", visits, T0)).toEqual([
+      { id: "a", fields: { seen_at: iso(T0) } },
+      { id: "b", fields: { seen_at: iso(T0) } },
+    ]);
+  });
+
+  it("doctor in leaves other rooms and lined-up patients alone", () => {
+    const visits = [called("z", "r2"), nextUp("n")];
+    expect(doctorInUpdates("r1", visits, T0)).toEqual([]);
+  });
+
+  it("a mistaken 'doctor in' can be undone for one patient", () => {
+    const after = applyVisitUpdates([treating("a")], [markWaitingUpdate("a")]);
+    expect(after[0].seen_at).toBeNull();
+    expect(after[0].called_at).not.toBeNull();
+    expect(roomWaitingForDoctor(after, "r1").map((v) => v.id)).toEqual(["a"]);
   });
 });

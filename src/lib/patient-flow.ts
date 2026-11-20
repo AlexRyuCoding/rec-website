@@ -87,6 +87,16 @@ export function roomOccupants<T extends InRoom>(
   return visits.filter((v) => v.room_id === roomId && v.called_at !== null);
 }
 
+// Patients who are in (or on their way to) this room and have not been
+// seen by the doctor yet. While there are any, the room is "Patient
+// waiting" and the board shows its alert.
+export function roomWaitingForDoctor<T extends InRoom>(
+  visits: T[],
+  roomId: string
+): T[] {
+  return roomOccupants(visits, roomId).filter((v) => v.seen_at === null);
+}
+
 // Patients lined up behind this room, in the order staff lined them up.
 export function roomNextUp<T extends InRoom>(visits: T[], roomId: string): T[] {
   return visits
@@ -185,6 +195,30 @@ export function removeUpdate(visitId: string, nowMs: number): VisitUpdate {
   return { id: visitId, fields: { done_at: new Date(nowMs).toISOString() } };
 }
 
+// The doctor has walked into the room: every patient waiting there is now
+// seen. This is what "seen" means from here on — it happens when the
+// doctor taps "Doctor in", or at the latest when the timer is started
+// (needles in). Seen patients drop off the waiting-room screen and the
+// room stops alerting.
+export function doctorInUpdates(
+  roomId: string,
+  visits: FlowVisit[],
+  nowMs: number
+): VisitUpdate[] {
+  const now = new Date(nowMs).toISOString();
+  return roomWaitingForDoctor(visits, roomId).map((v) => ({
+    id: v.id,
+    fields: { seen_at: now },
+  }));
+}
+
+// Undo for a mistaken "Doctor in" (wrong tile, wrong person tapping): the
+// patient is waiting again and the alert comes back. Without this, one
+// stray tap could leave a patient sitting in a room with nobody coming.
+export function markWaitingUpdate(visitId: string): VisitUpdate {
+  return { id: visitId, fields: { seen_at: null } };
+}
+
 // The rule that keeps a lined-up patient from being stranded: whenever a
 // room is idle (no timer, not turning over) and has a free bed, the
 // people lined up for it are called, oldest first. Routes run this after
@@ -243,10 +277,9 @@ export function timerFlowUpdates(
   const occupants = roomOccupants(visits, roomAfter.id);
 
   if (action === "start") {
-    // The doctor is in: the "patient waiting" alert is over.
-    return occupants
-      .filter((v) => v.seen_at === null)
-      .map((v) => ({ id: v.id, fields: { seen_at: now } }));
+    // Starting the timer (needles in) implies the doctor is in, for
+    // anyone not already marked seen with "Doctor in".
+    return doctorInUpdates(roomAfter.id, visits, nowMs);
   }
 
   let updates: VisitUpdate[];
@@ -254,11 +287,12 @@ export function timerFlowUpdates(
     // The room is empty: everyone in it is finished.
     updates = occupants.map((v) => ({ id: v.id, fields: { done_at: now } }));
   } else if (action === "reset") {
-    // The timer was a mistake, not the end of the visit: the patient is
-    // still in the room and waiting for the doctor again.
-    updates = occupants
-      .filter((v) => v.seen_at !== null)
-      .map((v) => ({ id: v.id, fields: { seen_at: null } }));
+    // The timer was a mistake, not the end of the visit. The patients
+    // stay, and stay "seen": whoever started the timer was in the room,
+    // so cancelling it must not re-raise the "patient waiting" alert.
+    // (Only the promotion below can apply — a hand-started timer for
+    // nobody frees the room for whoever was lined up.)
+    updates = [];
   } else {
     return [];
   }
