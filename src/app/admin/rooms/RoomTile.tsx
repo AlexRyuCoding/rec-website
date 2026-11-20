@@ -5,6 +5,7 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  DoorOpen,
   Minus,
   Pause,
   Play,
@@ -21,6 +22,13 @@ import {
   RoomState,
   TimerAction,
 } from "@/lib/room-status";
+import { AssignOutcome, CALL_DISPLAY_MS, VisitView } from "@/lib/patient-flow";
+
+const ASSIGN_LABELS: Record<AssignOutcome, string> = {
+  send: "Send here",
+  next_up: "Next up here",
+  full: "Full",
+};
 
 const STATUS_STYLES: Record<
   RoomState["status"],
@@ -41,8 +49,13 @@ export default function RoomTile({
   adjustPending,
   nowMs,
   doctors,
+  occupants,
+  nextUp,
+  assignMode,
   onAction,
   onAssignDoctor,
+  onAssignHere,
+  onVisitAction,
 }: {
   room: RoomRow;
   state: RoomState;
@@ -51,12 +64,25 @@ export default function RoomTile({
   adjustPending: boolean;
   nowMs: number;
   doctors: DoctorRow[];
+  // Patients called to or being treated in this room, and those lined up
+  // behind it (called automatically once the room is ready).
+  occupants: VisitView[];
+  nextUp: VisitView[];
+  // Set while staff have a waiting patient selected: what tapping this
+  // tile would do with them. Null = normal board.
+  assignMode: AssignOutcome | null;
   onAction: (action: TimerAction, valueSeconds?: number) => void;
   onAssignDoctor: (doctorName: string | null) => void;
+  onAssignHere: () => void;
+  onVisitAction: (visitId: string, action: "unassign" | "remove") => void;
 }) {
   const [editingTime, setEditingTime] = useState(false);
   const [minutesInput, setMinutesInput] = useState("");
   const [doctorListOpen, setDoctorListOpen] = useState(false);
+  // The patient whose name was tapped (opens the move/remove menu).
+  const [menuVisitId, setMenuVisitId] = useState<string | null>(null);
+  const menuVisit =
+    [...occupants, ...nextUp].find((v) => v.id === menuVisitId) ?? null;
   // The nametag pill morphs through a ball on every assignment change:
   // collapse showing the old value, swap color/text at the smallest point,
   // expand to fit the new one. displayedDoctor is the lagging value that
@@ -67,22 +93,33 @@ export default function RoomTile({
   const panelRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  // Tapping anywhere outside this tile dismisses the doctor list, so an
-  // abandoned panel doesn't sit open on the board.
+  // Tapping anywhere outside this tile dismisses the doctor list and the
+  // patient menu, so an abandoned panel doesn't sit open on the board.
+  const panelOpen = doctorListOpen || menuVisitId !== null;
   useEffect(() => {
-    if (!doctorListOpen) return;
+    if (!panelOpen) return;
     const onPointerDown = (e: PointerEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
         setDoctorListOpen(false);
+        setMenuVisitId(null);
       }
     };
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [doctorListOpen]);
+  }, [panelOpen]);
   const style = STATUS_STYLES[state.status];
   const displaySeconds =
     state.remainingSeconds ?? room.default_duration_seconds;
-  const sessionActive = state.status !== "available";
+  const sessionActive = state.remainingSeconds !== null;
+  const turningOver = state.status === "turnover";
+  // How long the patient has been waiting for the doctor: since the
+  // earliest call nobody has answered by starting the timer.
+  const waitingSinceMs = occupants
+    .filter((v) => v.seen_at === null && v.called_at !== null)
+    .reduce<number | null>((min, v) => {
+      const t = Date.parse(v.called_at!);
+      return min === null || t < min ? t : min;
+    }, null);
   const timeUp = state.status === "complete" || state.status === "overtime";
   // Time's up: flash the label, alternating each second between the room
   // name and the instruction. The page rerenders every second (nowMs
@@ -93,7 +130,17 @@ export default function RoomTile({
       : "Remove needles"
     : state.paused
       ? "Paused"
-      : style.label;
+      : state.status === "patient_waiting" && waitingSinceMs !== null
+        ? `Patient waiting ${formatTimerDisplay(
+            Math.max(0, Math.floor((nowMs - waitingSinceMs) / 1000))
+          )}`
+        : style.label;
+  // A patient told to come in after the timer was already running (a late
+  // partner in a shared room) is marked while they are on their way.
+  const arriving = (v: VisitView) =>
+    v.seen_at === null &&
+    v.called_at !== null &&
+    nowMs - Date.parse(v.called_at) < CALL_DISPLAY_MS;
 
   const openTimeEditor = () => {
     if (busy) return;
@@ -216,103 +263,156 @@ export default function RoomTile({
             {displayedDoctor ?? "No doctor"}
           </span>
         </button>
+        {occupants.length > 0 && (
+          // One line however many share the room: each name gives up
+          // width equally and truncates; the tap menu shows it in full.
+          <p className="mt-0.5 flex min-w-0 items-center justify-center gap-x-1 text-xs font-semibold leading-tight">
+            {occupants.map((visit, i) => (
+              <span key={visit.id} className="flex min-w-0 items-center">
+                {i > 0 && <span className="mr-1 text-white/50">·</span>}
+                <button
+                  aria-label={`Options for ${visit.display_name}`}
+                  onClick={() => setMenuVisitId(visit.id)}
+                  className="flex min-w-0 items-center gap-1 rounded px-0.5 hover:bg-white/15"
+                >
+                  {arriving(visit) && sessionActive && (
+                    <span className="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-white" />
+                  )}
+                  <span className="truncate">{visit.display_name}</span>
+                </button>
+              </span>
+            ))}
+          </p>
+        )}
+        {nextUp.length > 0 && (
+          <p className="truncate text-[11px] leading-tight text-white/75">
+            Next:{" "}
+            {nextUp.map((visit, i) => (
+              <span key={visit.id}>
+                {i > 0 && ", "}
+                <button
+                  aria-label={`Options for ${visit.display_name}`}
+                  onClick={() => setMenuVisitId(visit.id)}
+                  className="rounded px-0.5 hover:bg-white/15"
+                >
+                  {visit.display_name}
+                </button>
+              </span>
+            ))}
+          </p>
+        )}
       </div>
 
-      <div className="flex w-full items-center justify-center gap-1.5">
+      {turningOver ? (
+        // Needles are out but the patient is still getting ready: nobody
+        // is called in until staff confirm the room is empty.
         <button
-          aria-label="Less time"
           disabled={busy}
-          onClick={() => onAction("adjust", -ADJUST_STEP_SECONDS)}
-          className="shrink-0 rounded-full bg-white/15 p-1.5 hover:bg-white/25 disabled:opacity-40"
+          onClick={() => onAction("ready")}
+          className="flex items-center gap-2 rounded-xl bg-white/90 px-4 py-3 text-base font-semibold text-slate-800 hover:bg-white disabled:opacity-40"
         >
-          <Minus className="h-4 w-4" />
+          <DoorOpen className="h-5 w-5" /> Room ready
         </button>
-        {editingTime ? (
-          <input
-            autoFocus
-            type="number"
-            min={1}
-            max={60}
-            value={minutesInput}
-            onChange={(e) => setMinutesInput(e.target.value)}
-            onBlur={commitTime}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commitTime();
-              if (e.key === "Escape") setEditingTime(false);
-            }}
-            aria-label="Minutes"
-            className="w-20 rounded-lg bg-white/15 px-1 py-0.5 text-center text-2xl font-bold tabular-nums outline-none ring-2 ring-white/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-          />
-        ) : (
-          <button
-            aria-label="Type a time in minutes"
-            disabled={busy}
-            onClick={openTimeEditor}
-            className={`rounded-lg px-1 text-3xl font-bold tabular-nums transition-opacity duration-200 hover:bg-white/10 disabled:opacity-70 ${
-              state.paused ? "animate-pulse" : ""
-            } ${adjustPending ? "opacity-50" : ""}`}
-          >
-            {formatTimerDisplay(displaySeconds)}
-          </button>
-        )}
-        <button
-          aria-label="More time"
-          disabled={busy}
-          onClick={() => onAction("adjust", ADJUST_STEP_SECONDS)}
-          className="shrink-0 rounded-full bg-white/15 p-1.5 hover:bg-white/25 disabled:opacity-40"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
-      </div>
-
-      <div className="flex w-full items-center justify-center gap-1.5">
-        {state.status === "available" && (
-          <button
-            disabled={busy}
-            onClick={() => onAction("start")}
-            className="flex items-center gap-1.5 rounded-xl bg-white/20 px-3 py-1.5 text-sm font-medium hover:bg-white/30 disabled:opacity-40"
-          >
-            <Play className="h-4 w-4" /> Start
-          </button>
-        )}
-        {state.status === "in_use" && (
-          <button
-            disabled={busy}
-            onClick={() => onAction(state.paused ? "resume" : "pause")}
-            className="flex items-center gap-1.5 rounded-xl bg-white/20 px-3 py-1.5 text-sm font-medium hover:bg-white/30 disabled:opacity-40"
-          >
-            {state.paused ? (
-              <>
-                <Play className="h-4 w-4" /> Resume
-              </>
+      ) : (
+        <>
+          <div className="flex w-full items-center justify-center gap-1.5">
+            <button
+              aria-label="Less time"
+              disabled={busy}
+              onClick={() => onAction("adjust", -ADJUST_STEP_SECONDS)}
+              className="shrink-0 rounded-full bg-white/15 p-1.5 hover:bg-white/25 disabled:opacity-40"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+            {editingTime ? (
+              <input
+                autoFocus
+                type="number"
+                min={1}
+                max={60}
+                value={minutesInput}
+                onChange={(e) => setMinutesInput(e.target.value)}
+                onBlur={commitTime}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitTime();
+                  if (e.key === "Escape") setEditingTime(false);
+                }}
+                aria-label="Minutes"
+                className="w-20 rounded-lg bg-white/15 px-1 py-0.5 text-center text-2xl font-bold tabular-nums outline-none ring-2 ring-white/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
             ) : (
+              <button
+                aria-label="Type a time in minutes"
+                disabled={busy}
+                onClick={openTimeEditor}
+                className={`rounded-lg px-1 text-3xl font-bold tabular-nums transition-opacity duration-200 hover:bg-white/10 disabled:opacity-70 ${
+                  state.paused ? "animate-pulse" : ""
+                } ${adjustPending ? "opacity-50" : ""}`}
+              >
+                {formatTimerDisplay(displaySeconds)}
+              </button>
+            )}
+            <button
+              aria-label="More time"
+              disabled={busy}
+              onClick={() => onAction("adjust", ADJUST_STEP_SECONDS)}
+              className="shrink-0 rounded-full bg-white/15 p-1.5 hover:bg-white/25 disabled:opacity-40"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="flex w-full items-center justify-center gap-1.5">
+            {(state.status === "available" ||
+              state.status === "patient_waiting") && (
+              <button
+                disabled={busy}
+                onClick={() => onAction("start")}
+                className="flex items-center gap-1.5 rounded-xl bg-white/20 px-3 py-1.5 text-sm font-medium hover:bg-white/30 disabled:opacity-40"
+              >
+                <Play className="h-4 w-4" /> Start
+              </button>
+            )}
+            {state.status === "in_use" && (
+              <button
+                disabled={busy}
+                onClick={() => onAction(state.paused ? "resume" : "pause")}
+                className="flex items-center gap-1.5 rounded-xl bg-white/20 px-3 py-1.5 text-sm font-medium hover:bg-white/30 disabled:opacity-40"
+              >
+                {state.paused ? (
+                  <>
+                    <Play className="h-4 w-4" /> Resume
+                  </>
+                ) : (
+                  <>
+                    <Pause className="h-4 w-4" /> Pause
+                  </>
+                )}
+              </button>
+            )}
+            {sessionActive && (
               <>
-                <Pause className="h-4 w-4" /> Pause
+                <button
+                  aria-label="Reset timer"
+                  disabled={busy}
+                  onClick={() => onAction("reset")}
+                  className="rounded-xl bg-white/15 p-2 hover:bg-white/25 disabled:opacity-40"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </button>
+                <button
+                  aria-label="Clear room"
+                  disabled={busy}
+                  onClick={() => onAction("clear")}
+                  className="rounded-xl bg-white/90 p-2 text-emerald-700 hover:bg-white disabled:opacity-40"
+                >
+                  <Check className="h-4 w-4" />
+                </button>
               </>
             )}
-          </button>
-        )}
-        {sessionActive && (
-          <>
-            <button
-              aria-label="Reset timer"
-              disabled={busy}
-              onClick={() => onAction("reset")}
-              className="rounded-xl bg-white/15 p-2 hover:bg-white/25 disabled:opacity-40"
-            >
-              <RotateCcw className="h-4 w-4" />
-            </button>
-            <button
-              aria-label="Clear room"
-              disabled={busy}
-              onClick={() => onAction("clear")}
-              className="rounded-xl bg-white/90 p-2 text-emerald-700 hover:bg-white disabled:opacity-40"
-            >
-              <Check className="h-4 w-4" />
-            </button>
-          </>
-        )}
-      </div>
+          </div>
+        </>
+      )}
 
       <p
         className={`w-full truncate text-[11px] font-semibold uppercase tracking-widest ${
@@ -391,6 +491,56 @@ export default function RoomTile({
             <ChevronDown className="h-3.5 w-3.5" />
           </button>
         </div>
+      )}
+
+      {menuVisit && (
+        <div className="absolute inset-0 z-10 flex flex-col justify-center gap-1.5 rounded-2xl bg-neutral-900/95 p-2">
+          <p className="truncate text-sm font-semibold">
+            {menuVisit.display_name}
+          </p>
+          <button
+            onClick={() => {
+              setMenuVisitId(null);
+              onVisitAction(menuVisit.id, "unassign");
+            }}
+            className="w-full rounded-lg bg-white/10 px-2 py-1.5 text-sm hover:bg-white/20"
+          >
+            Back to waiting list
+          </button>
+          <button
+            onClick={() => {
+              setMenuVisitId(null);
+              onVisitAction(menuVisit.id, "remove");
+            }}
+            className="w-full rounded-lg bg-rose-900/70 px-2 py-1.5 text-sm hover:bg-rose-900"
+          >
+            Remove
+          </button>
+          <button
+            onClick={() => setMenuVisitId(null)}
+            className="w-full rounded-lg px-2 py-1 text-xs text-white/60 hover:bg-white/10"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {assignMode && (
+        <button
+          data-assign-keep
+          disabled={assignMode === "full" || busy}
+          onClick={onAssignHere}
+          className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-1 rounded-2xl bg-neutral-950/85 text-white ring-2 ring-inset ring-white/70 backdrop-blur-[2px] hover:bg-neutral-950/70 disabled:ring-white/15 disabled:hover:bg-neutral-950/85"
+        >
+          <span className="text-xs font-medium text-white/70">{room.name}</span>
+          <span
+            className={`text-lg font-semibold ${
+              assignMode === "full" ? "text-white/40" : ""
+            }`}
+          >
+            {ASSIGN_LABELS[assignMode]}
+          </span>
+        </button>
       )}
     </div>
   );

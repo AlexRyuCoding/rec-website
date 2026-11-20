@@ -291,3 +291,32 @@ export function doctorForCalls(
   }
   return doctor;
 }
+
+// What the staff board should show right after a timer button is tapped,
+// before the server answers — the same rules the server applies, run on
+// the board's own list, so a tile never flashes a stale state (a finished
+// patient still listed after "Room ready"). The server's reply replaces
+// this either way.
+export function previewTimerFlow(
+  action: string,
+  roomAfter: FlowRoom,
+  views: VisitView[],
+  nowMs: number
+): VisitView[] {
+  const asVisits = views.map((v) => ({ ...v, done_at: null }));
+  const updates = timerFlowUpdates(action, roomAfter, asVisits, nowMs);
+  if (updates.length === 0) return views;
+  const finished = new Set<string>();
+  return views
+    .map((view) => {
+      let next = view;
+      for (const update of updates) {
+        if (update.id !== view.id) continue;
+        const { done_at: doneAt, ...fields } = update.fields;
+        if (doneAt) finished.add(view.id);
+        next = { ...next, ...fields };
+      }
+      return next;
+    })
+    .filter((view) => !finished.has(view.id));
+}

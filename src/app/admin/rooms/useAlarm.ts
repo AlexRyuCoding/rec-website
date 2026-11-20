@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { deriveRoomState, RoomRow } from "@/lib/room-status";
+import { VisitView } from "@/lib/patient-flow";
 
 // Each alarm "instance" is a burst of 3 chimes; instances repeat with a
 // 20 s pause in between, forever, until the room is cleared.
@@ -38,9 +39,36 @@ function playInstance(ctx: AudioContext) {
   }
 }
 
+// "A patient is waiting for the doctor": one short rising two-tone (E5 →
+// A5), the mirror of the falling "remove needles" chime so the two are
+// never confused. Played once per call — the purple tile and its counter
+// carry the reminder; a repeating sound would compete with the needle
+// alarm.
+function playArrivalChime(ctx: AudioContext) {
+  const note = (freq: number, at: number) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, ctx.currentTime + at);
+    gain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + at + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + at + 0.9);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(ctx.currentTime + at);
+    osc.stop(ctx.currentTime + at + 1);
+  };
+  note(659.25, 0);
+  note(880, 0.25);
+}
+
 const SOUND_PREF_KEY = "rooms-chime-enabled";
 
-export function useAlarm(rooms: RoomRow[], serverNowMs: number) {
+export function useAlarm(
+  rooms: RoomRow[],
+  serverNowMs: number,
+  visits: VisitView[] = []
+) {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [audioReady, setAudioReady] = useState(false);
   const ctxRef = useRef<AudioContext | null>(null);
@@ -108,6 +136,26 @@ export function useAlarm(rooms: RoomRow[], serverNowMs: number) {
     );
     return () => clearInterval(interval);
   }, [alarmingCount, soundEnabled, audioReady]);
+
+  // Doctor alert: chime once whenever a patient is newly called to a
+  // room. Tracked by visit id, so it also fires for a late partner joining
+  // a room whose timer is already running. The first list a device loads
+  // is history, not news — it only primes the set.
+  const calledIdsRef = useRef<Set<string> | null>(null);
+  const calledKey = visits
+    .filter((v) => v.room_id !== null && v.called_at !== null)
+    .map((v) => v.id)
+    .sort()
+    .join(",");
+  useEffect(() => {
+    const current = new Set(calledKey ? calledKey.split(",") : []);
+    const previous = calledIdsRef.current;
+    calledIdsRef.current = current;
+    if (!previous) return;
+    const hasNewCall = [...current].some((id) => !previous.has(id));
+    if (!hasNewCall || !soundEnabled || !audioReady || !ctxRef.current) return;
+    playArrivalChime(ctxRef.current);
+  }, [calledKey, soundEnabled, audioReady]);
 
   // Keep the display awake where the browser allows it (tablets on a wall).
   useEffect(() => {

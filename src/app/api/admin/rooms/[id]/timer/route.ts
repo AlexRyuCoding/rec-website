@@ -98,12 +98,23 @@ export async function POST(
     return NextResponse.json({ error: result.error }, { status: 409 });
   }
 
-  const { data, error } = await supabase
-    .from("rooms")
-    .update({ ...result.fields, updated_at: new Date().toISOString() })
-    .eq("id", id)
-    .select("*")
-    .single();
+  const writeRoom = (fields: Partial<RoomRow>) =>
+    supabase
+      .from("rooms")
+      .update({ ...fields, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .select("*")
+      .single();
+
+  let { data, error } = await writeRoom(result.fields);
+  // The check button now also stamps turnover_started_at (migration
+  // 0011). If that column is not there yet, the alarm must still be
+  // silenceable: fall back to the plain clear the board always had.
+  if (error && "turnover_started_at" in result.fields) {
+    const { turnover_started_at: _turnover, ...timerOnly } = result.fields;
+    void _turnover;
+    ({ data, error } = await writeRoom(timerOnly));
+  }
 
   if (error) {
     return NextResponse.json({ error: "Database error" }, { status: 500 });

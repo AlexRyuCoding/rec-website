@@ -10,6 +10,7 @@ import {
   hasFreeBedNow,
   isActiveVisit,
   matchRosterDoctor,
+  previewTimerFlow,
   promotionUpdates,
   removeUpdate,
   roomNextUp,
@@ -17,6 +18,7 @@ import {
   timerFlowUpdates,
   unassignUpdate,
   visitState,
+  VisitView,
 } from "./patient-flow";
 
 const T0 = Date.parse("2026-11-19T18:00:00.000Z");
@@ -400,5 +402,51 @@ describe("doctorForCalls", () => {
     const visits = [visit({ id: "a", practitioner_name: "Pat Lee" })];
     const updates = [{ id: "a", fields: { called_at: iso(T0) } }];
     expect(doctorForCalls(updates, visits, roster)).toBeNull();
+  });
+});
+
+describe("previewTimerFlow", () => {
+  const view = (v: FlowVisit, name: string): VisitView => ({
+    id: v.id,
+    display_name: name,
+    appointment_at: null,
+    checked_in_at: v.checked_in_at,
+    practitioner_name: v.practitioner_name,
+    room_id: v.room_id,
+    room_assigned_at: v.room_assigned_at,
+    called_at: v.called_at,
+    seen_at: v.seen_at,
+  });
+  const views = [
+    view(treating("a"), "Alex R."),
+    view(nextUp("n"), "Nora K."),
+    view(waiting("w"), "Wes T."),
+  ];
+
+  it("ready drops the finished patient and calls the next one", () => {
+    const after = previewTimerFlow("ready", room(), views, T0);
+    expect(after.map((v) => v.id)).toEqual(["n", "w"]);
+    expect(after[0]).toMatchObject({
+      display_name: "Nora K.",
+      called_at: iso(T0),
+    });
+    expect(after[0]).not.toHaveProperty("done_at");
+  });
+
+  it("start marks the called patient as seen", () => {
+    const calledViews = [view(called("a"), "Alex R.")];
+    const after = previewTimerFlow(
+      "start",
+      room(timerRunning),
+      calledViews,
+      T0
+    );
+    expect(after[0].seen_at).toBe(iso(T0));
+  });
+
+  it("returns the same list when the action moves nobody", () => {
+    expect(previewTimerFlow("pause", room(timerRunning), views, T0)).toBe(
+      views
+    );
   });
 });
