@@ -6,6 +6,7 @@ import { commitFlow } from "@/lib/flow-server";
 import {
   applyVisitUpdates,
   assignUpdate,
+  markWaitingUpdate,
   promotionUpdates,
   removeUpdate,
   unassignUpdate,
@@ -18,6 +19,7 @@ const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("assign"), roomId: z.string().uuid() }),
   z.object({ action: z.literal("unassign") }),
   z.object({ action: z.literal("remove") }),
+  z.object({ action: z.literal("mark_waiting") }),
 ]);
 
 // Staff move a checked-in patient through the flow:
@@ -25,6 +27,8 @@ const bodySchema = z.discriminatedUnion("action", [
 //             up and called automatically when the room is ready)
 // - unassign: back to the waiting list
 // - remove:   finished / no-show / handled another way
+// - mark_waiting: undo a mistaken "Doctor in" — the patient is waiting
+//             for the doctor again and the board's alert comes back
 // Whatever the action, if it frees a bed in the room the patient leaves,
 // the people lined up for that room are called.
 export async function POST(
@@ -79,6 +83,15 @@ export async function POST(
     updates.push(...result.updates);
   } else if (input.action === "unassign") {
     updates.push(unassignUpdate(id));
+  } else if (input.action === "mark_waiting") {
+    // Only meaningful for a patient who is in a room and was marked seen.
+    if (!visit.room_id || !visit.called_at) {
+      return NextResponse.json(
+        { error: "That patient is not in a room" },
+        { status: 409 }
+      );
+    }
+    updates.push(markWaitingUpdate(id));
   } else {
     updates.push(removeUpdate(id, nowMs));
   }
@@ -86,6 +99,7 @@ export async function POST(
   // The room the patient is leaving may now have a free bed.
   const leftRoomId =
     visit.room_id &&
+    input.action !== "mark_waiting" &&
     !(input.action === "assign" && input.roomId === visit.room_id)
       ? visit.room_id
       : null;

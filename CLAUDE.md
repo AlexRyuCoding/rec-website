@@ -57,7 +57,10 @@ throughout the day unassisted.
   accepts capacity 1–4 = beds). /api/admin/rooms/[id]/timer POST timer
   actions (start/pause/resume/adjust/set/reset/clear/ready)
 - /api/admin/visits/[id] — POST {action: assign(roomId) | unassign |
-  remove} moves a checked-in patient through the flow
+  remove | mark_waiting} moves a checked-in patient through the flow
+  (mark_waiting undoes a mistaken "Doctor in")
+- /api/admin/rooms/[id]/doctor-in — POST: the doctor has walked in; marks
+  the room's waiting patients seen (no timer change)
 - /api/admin/displays — GET paired screens; /approve POST {code, label?}
   pairs the TV showing that code; /[id] DELETE revokes a screen
 - /api/display/pair — PUBLIC POST: a TV asks for a pairing code (useless
@@ -155,17 +158,25 @@ through src/lib/flow-server.ts.
 
 - One checkins row = one visit. Its state is derived from timestamps,
   never stored: no room → waiting; room but not called → next up; called
-  → patient told to go; seen → timer started; done → finished. Open
-  visits older than 12 h drop off by themselves.
+  → patient told to go; seen → the doctor is in (tapped "Doctor in", or at
+  the latest started the timer); done → finished. Open visits older than
+  12 h drop off by themselves.
 - STAFF choose the room (never the system): tap a waiting chip, then a
   room. A free bed → called now; busy room → lined up ("next up") and
   called automatically when the room is ready.
 - Room status with no timer running: turnover_started_at set → Turning
-  over; else any occupant → Patient waiting; else Available.
+  over; else any occupant not yet seen → Patient waiting; else any
+  occupant → With doctor; else Available. The timer is started once the
+  needles are in, so "With doctor" covers the gap before that.
+- Doctor alert: while a room has an unseen patient, every rooms board
+  shows a large banner in that doctor's color (pinned to the top, with a
+  "Doctor in" button) and rings three times when it appears. It cannot be
+  dismissed — only "Doctor in" or Start clears it. Tapping a patient's
+  name on a With-doctor tile offers "Doctor hasn't come yet" to undo.
 - ✓ (clear) = "needles out": silences the alarm and starts Turning over;
   the patient is still in the room, so nobody is called. "Room ready"
   finishes the room's patients and calls whoever is lined up. Reset only
-  cancels the timer (the patient stays). A Start sent during turnover
+  cancels the timer (the patient stays, still "seen" → With doctor). A Start sent during turnover
   (only an old, un-reloaded board can do that) counts as Room ready +
   Start.
 - Promotion is a rule, not a button: after every change, an idle room

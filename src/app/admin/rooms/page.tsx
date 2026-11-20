@@ -7,6 +7,7 @@ import {
   assignOutcome,
   roomNextUp,
   roomOccupants,
+  roomWaitingForDoctor,
   visitState,
 } from "@/lib/patient-flow";
 import { gridStyle } from "./grid";
@@ -15,6 +16,7 @@ import { useAlarm } from "./useAlarm";
 import RoomTile from "./RoomTile";
 import LayoutEditor from "./LayoutEditor";
 import WaitingList from "./WaitingList";
+import WaitingBanner, { WaitingAlert } from "./WaitingBanner";
 
 export default function RoomsPage() {
   const {
@@ -29,6 +31,7 @@ export default function RoomsPage() {
     actionError,
     timerAction,
     visitAction,
+    doctorIn,
     createRoom,
     updateRoom,
     deleteRoom,
@@ -36,7 +39,12 @@ export default function RoomsPage() {
     deleteDoctor,
   } = useRooms();
   const [editMode, setEditMode] = useState(false);
-  const { soundEnabled, enableSound } = useAlarm(rooms, serverNowMs, visits);
+  const { soundEnabled, enableSound } = useAlarm(
+    rooms,
+    serverNowMs,
+    visits,
+    !loading
+  );
   // The waiting patient staff are about to place. While set, every room
   // tile turns into a "Send here" / "Next up here" target.
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
@@ -48,6 +56,26 @@ export default function RoomsPage() {
   const otherVisits = selectedVisit
     ? visits.filter((v) => v.id !== selectedVisit.id)
     : visits;
+
+  // One alert per room where a patient is waiting and no doctor has come
+  // yet, longest wait first. Shown on every board: a board has no idea
+  // which doctor is looking at it, so each alert names its doctor.
+  const waitingAlerts: WaitingAlert[] = rooms
+    .map((room) => {
+      const unseen = roomWaitingForDoctor(visits, room.id);
+      if (unseen.length === 0) return null;
+      return {
+        roomId: room.id,
+        roomName: room.name,
+        doctorName: room.doctor_name,
+        doctorColor:
+          doctors.find((d) => d.name === room.doctor_name)?.color ?? null,
+        patientNames: unseen.map((v) => v.display_name),
+        sinceMs: Math.min(...unseen.map((v) => Date.parse(v.called_at!))),
+      };
+    })
+    .filter((a): a is WaitingAlert => a !== null)
+    .sort((a, b) => a.sinceMs - b.sinceMs);
 
   // A tap anywhere that is not a waiting chip or a room target cancels
   // the selection, so the board never stays stuck in assign mode.
@@ -125,6 +153,12 @@ export default function RoomsPage() {
         />
       ) : (
         <>
+          <WaitingBanner
+            alerts={waitingAlerts}
+            nowMs={serverNowMs}
+            busyRoomIds={busyRoomIds}
+            onDoctorIn={doctorIn}
+          />
           <WaitingList
             visits={waiting}
             doctors={doctors}
@@ -156,7 +190,8 @@ export default function RoomsPage() {
                         state={deriveRoomState(
                           room,
                           serverNowMs,
-                          occupants.length
+                          occupants.length,
+                          roomWaitingForDoctor(visits, room.id).length
                         )}
                         busy={busyRoomIds.has(room.id)}
                         adjustPending={pendingAdjustRoomIds.has(room.id)}
@@ -183,6 +218,7 @@ export default function RoomsPage() {
                         onVisitAction={(visitId, action) =>
                           visitAction(visitId, action)
                         }
+                        onDoctorIn={() => doctorIn(room.id)}
                       />
                     </div>
                   );

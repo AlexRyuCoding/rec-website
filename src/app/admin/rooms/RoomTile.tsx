@@ -36,6 +36,9 @@ const STATUS_STYLES: Record<
 > = {
   available: { card: "bg-emerald-700", label: "Available" },
   patient_waiting: { card: "bg-purple-700", label: "Patient waiting" },
+  // Deliberately calm and dark next to the loud purple of "Patient
+  // waiting": the doctor is there, nothing needs attention.
+  with_doctor: { card: "bg-indigo-950", label: "With doctor" },
   turnover: { card: "bg-slate-600", label: "Turning over" },
   in_use: { card: "bg-sky-800", label: "In Use" },
   complete: { card: "bg-amber-600", label: "Remove Needles" },
@@ -56,6 +59,7 @@ export default function RoomTile({
   onAssignDoctor,
   onAssignHere,
   onVisitAction,
+  onDoctorIn,
 }: {
   room: RoomRow;
   state: RoomState;
@@ -74,7 +78,12 @@ export default function RoomTile({
   onAction: (action: TimerAction, valueSeconds?: number) => void;
   onAssignDoctor: (doctorName: string | null) => void;
   onAssignHere: () => void;
-  onVisitAction: (visitId: string, action: "unassign" | "remove") => void;
+  onVisitAction: (
+    visitId: string,
+    action: "unassign" | "remove" | "mark_waiting"
+  ) => void;
+  // The doctor has walked in: ends the "patient waiting" alert.
+  onDoctorIn: () => void;
 }) {
   const [editingTime, setEditingTime] = useState(false);
   const [minutesInput, setMinutesInput] = useState("");
@@ -363,12 +372,22 @@ export default function RoomTile({
           </div>
 
           <div className="flex w-full items-center justify-center gap-1.5">
+            {state.status === "patient_waiting" && (
+              <button
+                disabled={busy}
+                onClick={onDoctorIn}
+                className="whitespace-nowrap rounded-xl bg-white/90 px-2.5 py-1.5 text-sm font-semibold text-purple-800 hover:bg-white disabled:opacity-40"
+              >
+                Doctor in
+              </button>
+            )}
             {(state.status === "available" ||
-              state.status === "patient_waiting") && (
+              state.status === "patient_waiting" ||
+              state.status === "with_doctor") && (
               <button
                 disabled={busy}
                 onClick={() => onAction("start")}
-                className="flex items-center gap-1.5 rounded-xl bg-white/20 px-3 py-1.5 text-sm font-medium hover:bg-white/30 disabled:opacity-40"
+                className="flex items-center gap-1.5 whitespace-nowrap rounded-xl bg-white/20 px-2.5 py-1.5 text-sm font-medium hover:bg-white/30 disabled:opacity-40"
               >
                 <Play className="h-4 w-4" /> Start
               </button>
@@ -498,6 +517,19 @@ export default function RoomTile({
           <p className="truncate text-sm font-semibold">
             {menuVisit.display_name}
           </p>
+          {/* Undo for a mistaken "Doctor in". Only before the timer runs:
+              once needles are in, the doctor has plainly been. */}
+          {menuVisit.seen_at !== null && !sessionActive && !turningOver && (
+            <button
+              onClick={() => {
+                setMenuVisitId(null);
+                onVisitAction(menuVisit.id, "mark_waiting");
+              }}
+              className="w-full rounded-lg bg-purple-700 px-2 py-1.5 text-sm hover:bg-purple-600"
+            >
+              Doctor hasn&apos;t come yet
+            </button>
+          )}
           <button
             onClick={() => {
               setMenuVisitId(null);

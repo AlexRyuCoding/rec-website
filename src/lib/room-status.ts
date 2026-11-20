@@ -68,6 +68,7 @@ export interface RoomRow {
 export type RoomStatus =
   | "available"
   | "patient_waiting"
+  | "with_doctor"
   | "turnover"
   | "in_use"
   | "complete"
@@ -92,21 +93,28 @@ function timerIdle(room: RoomRow): boolean {
   return room.timer_started_at === null || room.timer_duration_seconds === null;
 }
 
-// occupantCount: patients called to or being treated in the room (see
+// occupantCount: patients called to or being treated in the room;
+// waitingCount: how many of them the doctor has not seen yet (see
 // patient-flow.ts). A running timer always wins; without one the room is
 // turning over (cleared but not yet marked ready), waiting for the doctor
-// (someone was sent in), or genuinely free.
+// (someone was sent in and nobody has come), with the doctor (the doctor
+// is in but the needles are not, so no timer yet), or genuinely free.
+// waitingCount defaults to "all of them" so a caller that only knows the
+// room is occupied errs on the side of raising the alert.
 export function deriveRoomState(
   room: RoomRow,
   nowMs: number,
-  occupantCount = 0
+  occupantCount = 0,
+  waitingCount = occupantCount
 ): RoomState {
   if (timerIdle(room)) {
     const status = room.turnover_started_at
       ? "turnover"
-      : occupantCount > 0
+      : waitingCount > 0
         ? "patient_waiting"
-        : "available";
+        : occupantCount > 0
+          ? "with_doctor"
+          : "available";
     return { status, paused: false, remainingSeconds: null };
   }
   const remaining = room.timer_duration_seconds! - elapsedSeconds(room, nowMs);
