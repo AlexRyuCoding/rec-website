@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Music, Pause, Play, Plus } from "lucide-react";
+import { Music, Pause, Play, Plus, Radio } from "lucide-react";
 import type { MusicSource, RadioPreset, SavedStation } from "@/lib/music";
 
 interface Settings {
@@ -27,6 +27,50 @@ interface Reply {
   // Only in the reply to loading the panel, not to a settings change.
   stations?: SavedStation[];
   stationsAvailable?: boolean;
+}
+
+// The services' own marks, as single-colour glyphs (shapes from Simple
+// Icons, CC0). Drawn in the text colour, so the caller decides the colour.
+const GLYPHS = {
+  spotify:
+    "M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z",
+  youtube:
+    "M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z",
+};
+
+// Each service in its own colour: Spotify green, YouTube red. Radio has
+// no brand of its own, so it takes the clinic's gold.
+const SOURCE_COLOR: Partial<Record<MusicSource, string>> = {
+  radio: "text-brand-accent",
+  youtube: "text-[#FF0000]",
+  spotify: "text-[#1ED760]",
+};
+
+// The small mark in front of a source's name. Decoration only — the name
+// beside it is what is read out.
+function SourceIcon({
+  source,
+  className = "",
+}: {
+  source: MusicSource;
+  className?: string;
+}) {
+  if (source === "radio") {
+    return <Radio aria-hidden className={`size-4 shrink-0 ${className}`} />;
+  }
+  if (source === "youtube" || source === "spotify") {
+    return (
+      <svg
+        aria-hidden
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        className={`size-4 shrink-0 ${className}`}
+      >
+        <path d={GLYPHS[source]} />
+      </svg>
+    );
+  }
+  return null;
 }
 
 const SOURCES: { id: MusicSource; label: string }[] = [
@@ -328,6 +372,14 @@ export default function MusicPanel() {
     "px-4 py-2 rounded-full border border-brand-foreground hover:bg-brand-muted transition-colors disabled:opacity-40";
   const field =
     "w-full rounded-lg border border-brand-foreground bg-transparent px-3 py-2 placeholder:opacity-40";
+  // A dropdown must NOT be transparent: the browser paints the open list
+  // itself, and with no background of its own it falls back to white —
+  // under this page's light text. A solid dark background, dark-scheme
+  // native controls, and the same colours on every entry keep the list
+  // readable in every browser.
+  const selectField =
+    "w-full rounded-lg border border-brand-foreground bg-brand-background px-3 py-2 text-brand-foreground [color-scheme:dark]";
+  const optionColors = "bg-brand-background text-brand-foreground";
 
   const set = (change: Partial<Settings>) =>
     setDraft((d) => (d ? { ...d, ...change } : d));
@@ -382,12 +434,21 @@ export default function MusicPanel() {
                 role="radio"
                 aria-checked={draft.source === s.id}
                 onClick={() => set({ source: s.id })}
-                className={`px-5 py-2 rounded-full border transition-colors ${
+                className={`flex items-center gap-2 px-5 py-2 rounded-full border transition-colors ${
                   draft.source === s.id
                     ? "border-brand-primary bg-brand-primary text-white"
                     : "border-brand-foreground hover:bg-brand-muted"
                 }`}
               >
+                {/* In its brand colour; white on the filled (chosen)
+                    button, where green or red on teal would be hard to
+                    see. */}
+                <SourceIcon
+                  source={s.id}
+                  className={
+                    draft.source === s.id ? "" : (SOURCE_COLOR[s.id] ?? "")
+                  }
+                />
                 {s.label}
               </button>
             ))}
@@ -420,28 +481,38 @@ export default function MusicPanel() {
                         set({ radioUrl: "", radioName: "" });
                       }
                     }}
-                    className={`${field} bg-brand-background`}
+                    className={selectField}
                   >
-                    <option value="" disabled>
+                    <option value="" disabled className={optionColors}>
                       Choose a station…
                     </option>
                     {stations.length > 0 && (
-                      <optgroup label="My stations">
+                      <optgroup label="My stations" className={optionColors}>
                         {stations.map((s) => (
-                          <option key={s.id} value={MINE + s.id}>
+                          <option
+                            key={s.id}
+                            value={MINE + s.id}
+                            className={optionColors}
+                          >
                             {s.name}
                           </option>
                         ))}
                       </optgroup>
                     )}
-                    <optgroup label="Built-in">
+                    <optgroup label="Built-in" className={optionColors}>
                       {presets.map((p) => (
-                        <option key={p.id} value={p.id}>
+                        <option
+                          key={p.id}
+                          value={p.id}
+                          className={optionColors}
+                        >
                           {p.name} — {p.about}
                         </option>
                       ))}
                     </optgroup>
-                    <option value={OTHER_STATION}>Other station…</option>
+                    <option value={OTHER_STATION} className={optionColors}>
+                      Other station…
+                    </option>
                   </select>
                 </label>
                 {stationChoice === OTHER_STATION && (
