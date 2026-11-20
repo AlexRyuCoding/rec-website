@@ -227,12 +227,25 @@ describe("timerActionUpdate", () => {
     expect(timerActionUpdate(running(), "ready", T0).ok).toBe(false);
   });
 
-  it("start fails while the room is turning over", () => {
+  it("start on a room that is turning over ends the turnover too", () => {
+    // The new tile only offers "Room ready" here, but a board still
+    // running the previous version shows this room as free with a Start
+    // button. Its Start must work, not dead-end on an error.
     const turning = { ...baseRoom, turnover_started_at: iso(T0) };
     expect(timerActionUpdate(turning, "start", T0 + 1000)).toEqual({
-      ok: false,
-      error: "Room is turning over",
+      ok: true,
+      fields: {
+        timer_started_at: iso(T0 + 1000),
+        timer_duration_seconds: 900,
+        timer_paused_at: null,
+        turnover_started_at: null,
+      },
     });
+  });
+
+  it("an ordinary start does not write the turnover column", () => {
+    const result = timerActionUpdate(baseRoom, "start", T0);
+    expect(result.ok && "turnover_started_at" in result.fields).toBe(false);
   });
 
   it("adjust and set edit the default while turning over", () => {

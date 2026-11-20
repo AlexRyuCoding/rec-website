@@ -209,13 +209,37 @@ export function promotionUpdates(
 // What a timer button does to the patients in the room. `visits` is the
 // state before the action; `roomAfter` already carries the new timer
 // fields. Actions that don't move patients return nothing.
+//
+// wasTurningOver: the room was turning over when Start arrived (only a
+// board on an older version of the page can send that). It is then
+// "Room ready" followed by Start: last session's patients are finished,
+// whoever was lined up takes the beds, and they are the ones being
+// treated.
 export function timerFlowUpdates(
   action: string,
   roomAfter: FlowRoom,
   visits: FlowVisit[],
-  nowMs: number
+  nowMs: number,
+  opts: { wasTurningOver?: boolean } = {}
 ): VisitUpdate[] {
   const now = new Date(nowMs).toISOString();
+
+  if (action === "start" && opts.wasTurningOver) {
+    const idleRoom = {
+      ...roomAfter,
+      timer_started_at: null,
+      turnover_started_at: null,
+    };
+    const readyUpdates = timerFlowUpdates("ready", idleRoom, visits, nowMs);
+    const afterReady = applyVisitUpdates(visits, readyUpdates).filter(
+      (v) => v.done_at === null
+    );
+    return [
+      ...readyUpdates,
+      ...timerFlowUpdates("start", roomAfter, afterReady, nowMs),
+    ];
+  }
+
   const occupants = roomOccupants(visits, roomAfter.id);
 
   if (action === "start") {

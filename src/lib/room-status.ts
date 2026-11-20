@@ -158,15 +158,18 @@ export function timerActionUpdate(
       if (!idle) {
         return { ok: false, error: "Timer already running" };
       }
-      if (room.turnover_started_at) {
-        return { ok: false, error: "Room is turning over" };
-      }
+      // Starting during turnover means "Room ready" and Start in one.
+      // The tile only offers "Room ready" in that state, but a board
+      // still running an older version of the page shows the room as
+      // free with a Start button — that Start has to work. The patient
+      // side of it is in patient-flow.ts (timerFlowUpdates).
       return {
         ok: true,
         fields: {
           timer_started_at: new Date(nowMs).toISOString(),
           timer_duration_seconds: room.default_duration_seconds,
           timer_paused_at: null,
+          ...(room.turnover_started_at ? { turnover_started_at: null } : {}),
         },
       };
 

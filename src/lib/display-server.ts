@@ -15,7 +15,12 @@ export type DisplayAuth =
   | { status: "pending"; code: string }
   // No usable pairing: missing/garbled cookie, unknown or revoked screen,
   // wrong secret, or a code that expired unapproved. The screen re-pairs.
-  | { status: "none" };
+  | { status: "none" }
+  // The database could not be asked. Deliberately distinct from "none":
+  // "none" makes the TV request a new pairing, which replaces its cookie,
+  // so a database blip reported as "none" would cost a working screen its
+  // pairing. On "error" the screen just retries.
+  | { status: "error" };
 
 const LAST_SEEN_INTERVAL_MS = 60_000;
 
@@ -34,7 +39,8 @@ export async function authorizeDisplay(
     )
     .eq("id", parsed.id)
     .maybeSingle();
-  if (error || !row) return { status: "none" };
+  if (error) return { status: "error" };
+  if (!row) return { status: "none" };
   if (!verifySecret(parsed.secret, row.secret_hash)) return { status: "none" };
   if (row.revoked_at !== null) return { status: "none" };
 

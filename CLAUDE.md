@@ -165,7 +165,9 @@ through src/lib/flow-server.ts.
 - ✓ (clear) = "needles out": silences the alarm and starts Turning over;
   the patient is still in the room, so nobody is called. "Room ready"
   finishes the room's patients and calls whoever is lined up. Reset only
-  cancels the timer (the patient stays).
+  cancels the timer (the patient stays). A Start sent during turnover
+  (only an old, un-reloaded board can do that) counts as Room ready +
+  Start.
 - Promotion is a rule, not a button: after every change, an idle room
   (no timer, not turning over) with a free bed calls its lined-up
   patients, oldest first.

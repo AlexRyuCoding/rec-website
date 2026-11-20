@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { fetchWithTimeout } from "@/lib/fetch-timeout";
 import { CALL_DISPLAY_MS } from "@/lib/patient-flow";
 import { createBrowserClient } from "@/lib/supabase-browser";
 import { FLOW_EVENT, ROOMS_CHANNEL, ROOMS_EVENT } from "@/lib/rooms-realtime";
@@ -8,6 +9,9 @@ import CallBoard, { BoardPhase, Call } from "./CallBoard";
 const POLL_LIVE_MS = 10_000;
 const POLL_PAIRING_MS = 5_000;
 const POLL_ERROR_MS = 30_000;
+// A request that never settles would stop the poll loop for good (each
+// poll waits for the last one), so every request gives up after this.
+const REQUEST_TIMEOUT_MS = 8_000;
 
 // Soft three-note rise (C5 E5 G5): "your room is ready".
 function playCallChime(ctx: AudioContext) {
@@ -57,7 +61,11 @@ export default function WaitingRoomScreen() {
     if (loadingRef.current) return;
     loadingRef.current = true;
     try {
-      const res = await fetch("/api/display/calls", { cache: "no-store" });
+      const res = await fetchWithTimeout(
+        "/api/display/calls",
+        { cache: "no-store" },
+        REQUEST_TIMEOUT_MS
+      );
       if (res.ok) {
         const data = (await res.json()) as {
           calls: Call[];
@@ -79,7 +87,11 @@ export default function WaitingRoomScreen() {
         // names on screen and ask for a fresh code.
         setCalls([]);
         knownCallIdsRef.current = null;
-        const pair = await fetch("/api/display/pair", { method: "POST" });
+        const pair = await fetchWithTimeout(
+          "/api/display/pair",
+          { method: "POST" },
+          REQUEST_TIMEOUT_MS
+        );
         const data = (await pair.json().catch(() => ({}))) as {
           code?: string;
         };

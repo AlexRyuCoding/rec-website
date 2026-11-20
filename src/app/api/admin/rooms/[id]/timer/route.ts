@@ -130,7 +130,9 @@ export async function POST(
       parsed.data.action,
       latestRoom,
       before,
-      nowMs
+      nowMs,
+      // Start sent while the room was turning over (an older board)
+      { wasTurningOver: Boolean((room as RoomRow).turnover_started_at) }
     );
     if (updates.length > 0) {
       const flow = await commitFlow(supabase, {

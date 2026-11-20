@@ -29,6 +29,11 @@ export async function POST(req: NextRequest) {
     req.cookies.get(DISPLAY_COOKIE)?.value,
     nowMs
   );
+  if (existing.status === "error") {
+    // Can't tell whether this screen is already paired — minting a new
+    // pairing now would overwrite a possibly good cookie.
+    return NextResponse.json({ error: "Database error" }, { status: 503 });
+  }
   if (existing.status === "ok") {
     return NextResponse.json({ paired: true });
   }

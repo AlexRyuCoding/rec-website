@@ -1,3 +1,4 @@
+import { fetchWithTimeout } from "./fetch-timeout";
 import type { RoomRow } from "@/lib/room-status";
 
 // Cross-device sync for the room timer board. After any rooms mutation the
@@ -23,9 +24,13 @@ export interface RoomsBroadcastPayload {
   deletedId?: string;
 }
 
+const BROADCAST_TIMEOUT_MS = 2000;
+
 async function postBroadcast(event: string, payload: object): Promise<void> {
   try {
-    await fetch(
+    // Routes await this (including the kiosk check-in), so it is capped:
+    // a stalled Realtime endpoint costs at most BROADCAST_TIMEOUT_MS.
+    await fetchWithTimeout(
       `${process.env.NEXT_PUBLIC_SUPABASE_URL}/realtime/v1/api/broadcast`,
       {
         method: "POST",
@@ -37,7 +42,8 @@ async function postBroadcast(event: string, payload: object): Promise<void> {
         body: JSON.stringify({
           messages: [{ topic: ROOMS_CHANNEL, event, payload }],
         }),
-      }
+      },
+      BROADCAST_TIMEOUT_MS
     );
   } catch {
     // Swallow: polling is the fallback transport.

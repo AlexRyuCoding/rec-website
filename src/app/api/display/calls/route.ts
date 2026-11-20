@@ -23,6 +23,13 @@ export async function GET(req: NextRequest) {
   let viaCookie = false;
   if (!(await isAdminAuthorized())) {
     const auth = await authorizeDisplay(supabase, cookieValue, nowMs);
+    if (auth.status === "error") {
+      // Not 401: the screen must retry, not start a new pairing.
+      return NextResponse.json(
+        { error: "Database error" },
+        { status: 503, headers: noStore }
+      );
+    }
     if (auth.status === "none") {
       return NextResponse.json(
         { pair: true },

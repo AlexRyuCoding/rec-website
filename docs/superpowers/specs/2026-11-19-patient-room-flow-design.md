@@ -396,7 +396,10 @@ called. No new environment variable.
 4. On the TV, open `ryuacupuncture.com/waiting-room`, enter its code in
    Dashboard → Screens, press OK once for sound. Turn off the TV / stick
    screensaver and sleep.
-5. Tell staff: ✓ = needles out, **Room ready** = room is empty.
+5. Reload every open rooms board (wall tablets stay open for days and
+   would otherwise keep running the old page, which has no Room ready
+   button).
+6. Tell staff: ✓ = needles out, **Room ready** = room is empty.
 
 CLAUDE.md gets the new routes, tables, columns and the broadcast rule.
 
@@ -414,3 +417,15 @@ CLAUDE.md gets the new routes, tables, columns and the broadcast rule.
 - Occupant names on a tile share one line and truncate rather than
   wrapping; the tap menu shows the name in full.
 - The waiting-room screen shows a clock and the clinic logo.
+- Start **is** accepted while a room is turning over, as "Room ready +
+  Start" in one (§2 said it was not available). The new tile still only
+  offers Room ready in that state; this exists so a board left running the
+  previous version of the page — which shows the room as free with a Start
+  button — keeps working instead of hitting an error.
+- `GET /api/admin/displays` lists paired screens only, not pending ones
+  (§5 said both): a pending code is typed in, not picked from a list.
+- A database failure while checking a screen's pairing answers 503, not
+  401, so a blip can never push a working TV back into pairing.
+- Requests from the TV give up after 8 s and server broadcasts after 2 s,
+  so a hung connection can neither freeze the screen nor hold up a kiosk
+  check-in.

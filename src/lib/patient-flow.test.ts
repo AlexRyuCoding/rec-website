@@ -345,6 +345,23 @@ describe("timerFlowUpdates", () => {
       { id: "n", fields: { called_at: iso(T0) } },
     ]);
   });
+  it("start on a room that was turning over finishes the old patients first", () => {
+    // Start arriving during turnover (a board on the previous version)
+    // means Room ready + Start: the people from the last session are
+    // done, and whoever was lined up is the one now being treated.
+    const visits = [treating("old"), nextUp("n")];
+    const updates = timerFlowUpdates("start", room(timerRunning), visits, T0, {
+      wasTurningOver: true,
+    });
+    const after = applyVisitUpdates(visits, updates);
+    expect(after.find((v) => v.id === "old")?.done_at).toBe(iso(T0));
+    expect(after.find((v) => v.id === "n")).toMatchObject({
+      called_at: iso(T0),
+      seen_at: iso(T0),
+      done_at: null,
+    });
+  });
+
   it("other actions change no visits", () => {
     const visits = [called("a"), nextUp("n")];
     for (const action of ["pause", "resume", "adjust", "set", "clear"]) {
