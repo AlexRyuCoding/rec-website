@@ -7,7 +7,8 @@ import { formatTrackTime, NowPlaying, progressAt } from "@/lib/music";
 // This is ambience, not something a patient has to read, so it is the one
 // part of the board set below the 2 cm letter rule: big enough to make out
 // from a seat, small enough to stay out of the way of the names.
-// Sizes are in vh like everything else on the TV.
+// Sizes are in vh like everything else on the TV. The bar as a whole is
+// faded in and out by CallBoard; in here, text that changes fades in.
 export default function MusicBar({
   playing,
   // The TV's own clock (not the server-corrected one): progress readings
@@ -50,7 +51,7 @@ export default function MusicBar({
     <div
       role="status"
       aria-label="Music playing in the waiting room"
-      className={`mx-[3vw] flex min-w-0 flex-1 items-center gap-[1.2vw] transition-opacity duration-700 ${
+      className={`flex min-w-0 items-center gap-[1.2vw] transition-opacity duration-700 ${
         quiet ? "opacity-60" : ""
       }`}
     >
@@ -61,7 +62,12 @@ export default function MusicBar({
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-[1.5vw]">
-          <p className="min-w-0 truncate font-sans text-[3.2vh] font-medium leading-[1.25]">
+          {/* Keyed by its text: a new track is a new element, which
+              fades in instead of the letters just changing. */}
+          <p
+            key={title}
+            className="tv-fade min-w-0 truncate font-sans text-[3.2vh] font-medium leading-[1.25]"
+          >
             {title}
           </p>
           {status === "playing" && playing.live ? (
@@ -83,7 +89,7 @@ export default function MusicBar({
         {progress && (
           <div
             aria-hidden
-            className="my-[0.7vh] h-[0.55vh] overflow-hidden rounded-full bg-cream/15"
+            className="tv-fade my-[0.7vh] h-[0.55vh] overflow-hidden rounded-full bg-cream/15"
           >
             <div
               className="h-full rounded-full bg-gold/80"
@@ -95,7 +101,10 @@ export default function MusicBar({
             />
           </div>
         )}
-        <p className="truncate font-sans text-[2.1vh] leading-[1.3] text-cream/50">
+        <p
+          key={detail}
+          className="tv-fade truncate font-sans text-[2.1vh] leading-[1.3] text-cream/50"
+        >
           {detail}
         </p>
       </div>

@@ -59,7 +59,8 @@ throughout the day unassisted.
   header is ambience and is deliberately smaller). It always shows a
   clock with seconds and a door reminder ("When you enter your room,
   please close the door, but leave it slightly open." with a large
-  door-open icon); the call list sizes itself to the space above that
+  door-open icon); the call list sizes itself to the space above that.
+  Nothing on it pops in or blinks out (see "Waiting-room TV motion")
 - /api/admin/rooms — GET rooms + doctor roster + open visits + server
   time; POST creates a room. /api/admin/rooms/[id] PATCH/DELETE (PATCH
   accepts capacity 1–4 = beds). /api/admin/rooms/[id]/timer POST timer
@@ -228,6 +229,35 @@ through src/lib/flow-server.ts.
   staff enter it in Dashboard → Screens → the TV's httpOnly rac_display
   cookie (id + secret; only the hash is stored) now authorises that one
   screen until revoked. No env var involved.
+
+## Waiting-room TV motion
+
+Patients watch this screen for minutes, so every change is animated.
+Styles: src/app/waiting-room/board.css; building blocks:
+src/app/waiting-room/motion.tsx (Appear, Swap, useLingering); ordering
+rules: src/lib/lingering.ts (pure, tested).
+
+- A block that comes or goes (clock, music bar, door reminder, staff
+  notes) is wrapped in Appear: it fades up into place and fades away,
+  still showing what it last showed.
+- The middle of the screen is one Swap: loading / error / pairing code /
+  "Please have a seat" / the call list. The old view fades out BEFORE the
+  new one fades in, so two large texts never overlap.
+- A called patient's row opens (height 0 → full, pushing the others
+  down), glows gold with rounded corners, and closes when the call ends;
+  rows glide to a smaller size when there are more than three. A call is
+  "news" (opens + glows) for 20 s after called_at, so calls already on
+  screen at page load stay still.
+- Do not regress these, each was measured frame by frame:
+  - Arrivals are CSS @keyframes (they start on mount by themselves), not
+    a class flipped a frame later with requestAnimationFrame — the tab is
+    cast, and may not be the visible one on the computer.
+  - A collapsing row needs three layers (li grid → .tv-row-clip →
+    padded body). Padding or a border on the squeezed layer keeps it
+    from reaching zero and the rows below jump at the end.
+  - Exit durations are set once in motion.tsx and passed to the CSS as
+    variables; do not hard-code them in board.css.
+- prefers-reduced-motion: fades stay, sliding and resizing are dropped.
 
 ## Waiting-room music (migrations 0012 + 0013 — must be applied)
 
