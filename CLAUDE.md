@@ -51,7 +51,12 @@ throughout the day unassisted.
   room flow" below)
 - /waiting-room — the waiting-room TV ("Alex R. → Room 3"). NOT under
   /admin: the page shell is public and holds no patient data; its data
-  API needs a paired-screen cookie or a staff session
+  API needs a paired-screen cookie or a staff session. Shown on a 42-inch
+  TV across the waiting room: sizes are in vh only, and anything patients
+  must read is at least text-[5.5vh] (~2 cm letters). It always shows a
+  clock with seconds and a door reminder ("When you enter your room,
+  please close the door, but leave it slightly open." with a large
+  door-open icon); the call list sizes itself to the space above that
 - /api/admin/rooms — GET rooms + doctor roster + open visits + server
   time; POST creates a room. /api/admin/rooms/[id] PATCH/DELETE (PATCH
   accepts capacity 1–4 = beds). /api/admin/rooms/[id]/timer POST timer

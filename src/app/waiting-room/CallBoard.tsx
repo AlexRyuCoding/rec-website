@@ -1,7 +1,7 @@
 "use client";
 import { useRef } from "react";
 import Image from "next/image";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, DoorOpen } from "lucide-react";
 import { gsap, useGSAP } from "@/lib/gsap";
 
 export interface Call {
@@ -20,8 +20,14 @@ export type BoardPhase =
 const CLINIC_TZ = "America/Los_Angeles";
 
 // What the waiting-room TV shows. Pure presentation: WaitingRoomScreen
-// owns the data, pairing and sound. Read from across a room, so the type
-// is as large as the number of calls allows and nothing ever scrolls.
+// owns the data, pairing and sound.
+//
+// It is read on a 42-inch TV from the far side of the waiting room, so
+// every size here is in vh (a share of the screen's height), never px or
+// rem. On that TV 1vh is about 5 mm; the rule used is that anything a
+// patient must read has letters at least ~2 cm tall (text-[5.5vh] and up),
+// which holds at 5–6 m. Only notes for staff (reconnecting, sound hint)
+// are smaller. Nothing ever scrolls.
 export default function CallBoard({
   phase,
   calls,
@@ -65,19 +71,21 @@ export default function CallBoard({
     { dependencies: [idsKey] }
   );
 
+  // With seconds, so the screen is visibly alive at a glance.
   const clock = new Date(nowMs).toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
+    second: "2-digit",
     timeZone: CLINIC_TZ,
   });
 
   // Up to three calls get the full size; more shrink to share the height.
-  // A row is about 1.6x its font size tall and the list has roughly 72vh
-  // to itself, hence 44 / count.
-  const rowVh = Math.min(12, 44 / Math.max(calls.length, 1));
+  // A row is about 1.6x its font size tall and, with the door reminder
+  // below it, the list has roughly 53vh to itself — hence 32 / count.
+  const rowVh = Math.min(11, 32 / Math.max(calls.length, 1));
 
   return (
-    <main className="flex h-dvh w-full flex-col overflow-hidden bg-canvas px-[5vw] py-[4vh] text-cream">
+    <main className="relative flex h-dvh w-full flex-col overflow-hidden bg-canvas px-[5vw] py-[4vh] text-cream">
       <header className="flex shrink-0 items-center justify-between">
         <Image
           src="/rac-logo-white.png"
@@ -90,7 +98,9 @@ export default function CallBoard({
         {phase.kind === "live" && (
           <p
             suppressHydrationWarning
-            className="font-serif text-[5vh] leading-none text-cream/60"
+            // Fixed-width digits (the sans face has them; the serif does
+            // not), so the time does not wobble as the seconds change.
+            className="font-sans text-[6vh] font-medium tabular-nums leading-none text-cream/70"
           >
             {clock}
           </p>
@@ -125,10 +135,10 @@ export default function CallBoard({
 
         {phase.kind === "live" && calls.length === 0 && (
           <div className="text-center">
-            <p className="font-serif text-[11vh] leading-tight">
+            <p className="font-serif text-[12vh] leading-tight">
               Please have a seat.
             </p>
-            <p className="mt-[3vh] text-[3.4vh] text-cream/60">
+            <p className="mt-[2.5vh] text-[5.5vh] leading-tight text-cream/70">
               Your name will appear here when your room is ready.
             </p>
           </div>
@@ -136,7 +146,7 @@ export default function CallBoard({
 
         {phase.kind === "live" && calls.length > 0 && (
           <>
-            <h1 className="mb-[3vh] shrink-0 text-[3vh] uppercase tracking-[0.3em] text-gold">
+            <h1 className="mb-[2vh] shrink-0 text-[4.5vh] font-medium uppercase tracking-[0.25em] text-gold">
               Your room is ready
             </h1>
             <ul ref={listRef} className="min-h-0 overflow-hidden">
@@ -172,7 +182,29 @@ export default function CallBoard({
         )}
       </section>
 
-      <footer className="flex h-[3vh] shrink-0 items-center justify-between text-[1.8vh] text-cream/35">
+      {/* Always on screen while the board is live: patients read this
+          while they wait, before they are ever called. */}
+      {phase.kind === "live" && (
+        <aside
+          aria-label="Reminder about your room door"
+          className="mt-[2vh] flex shrink-0 items-center gap-[3vw] rounded-[3vh] border-[0.4vh] border-gold/50 bg-cream/[0.06] px-[3vw] py-[2vh]"
+        >
+          <DoorOpen
+            aria-hidden
+            strokeWidth={1.6}
+            className="size-[15vh] shrink-0 text-gold"
+          />
+          <p className="font-sans text-[5.8vh] font-medium leading-[1.2]">
+            When you enter your room, please close the door,
+            <br />
+            but <span className="text-gold">leave it slightly open</span>.
+          </p>
+        </aside>
+      )}
+
+      {/* Notes for staff, tucked into the bottom margin so they take no
+          room from what patients read. */}
+      <footer className="absolute inset-x-[5vw] bottom-[1vh] flex items-center justify-between text-[1.8vh] text-cream/35">
         <span>{reconnecting ? "Reconnecting…" : ""}</span>
         <span>
           {phase.kind === "live" && !soundReady
