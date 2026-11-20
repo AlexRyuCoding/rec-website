@@ -78,6 +78,10 @@ export default function ScreensPanel() {
           text: "Screen paired. It will start within a few seconds.",
         });
         await refresh();
+        // The TV picks the approval up on its next poll (within ~5 s);
+        // refresh once more so the row shows "online now" instead of
+        // "never connected".
+        setTimeout(refresh, 7000);
       } else if (res.status === 404) {
         setMessage({
           ok: false,
