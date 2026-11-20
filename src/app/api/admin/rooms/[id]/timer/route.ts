@@ -3,6 +3,9 @@ import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
 import { isAdminAuthorized } from "@/lib/admin-auth";
 import { broadcastRoomsUpdated } from "@/lib/rooms-realtime";
+import { commitFlow } from "@/lib/flow-server";
+import { timerFlowUpdates, VisitView } from "@/lib/patient-flow";
+import { loadActiveVisits } from "@/lib/visits-server";
 import {
   timerActionUpdate,
   ADJUST_STEP_SECONDS,
@@ -20,6 +23,7 @@ const bodySchema = z.object({
     "adjust",
     "set",
     "clear",
+    "ready",
   ]),
   // "adjust": the client debounces rapid +/- taps and sends the summed
   // delta, so any non-zero multiple of the step within the duration range
@@ -46,6 +50,12 @@ const bodySchema = z.object({
 // timer_* fields with the same pure logic clients use for display, write,
 // broadcast. Last write wins if two devices act at once — both converge on
 // the next refetch.
+//
+// Three actions also move the patients in the room (see patient-flow.ts):
+// start = the doctor is in, ready = the room is empty so its patients are
+// finished and whoever is lined up gets called, reset = the timer was a
+// mistake and the patient is waiting again. That part is best effort: a
+// timer action never fails because the patient bookkeeping did.
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -75,10 +85,11 @@ export async function POST(
     return NextResponse.json({ error: "Room not found" }, { status: 404 });
   }
 
+  const nowMs = Date.now();
   const result = timerActionUpdate(
     room as RoomRow,
     parsed.data.action,
-    Date.now(),
+    nowMs,
     parsed.data.action === "set"
       ? parsed.data.setSeconds
       : parsed.data.deltaSeconds
@@ -99,5 +110,30 @@ export async function POST(
   }
 
   await broadcastRoomsUpdated({ room: data });
-  return NextResponse.json({ room: data });
+
+  let latestRoom = data as RoomRow;
+  let visits: VisitView[] | undefined;
+  try {
+    const before = await loadActiveVisits(supabase, nowMs);
+    const updates = timerFlowUpdates(
+      parsed.data.action,
+      latestRoom,
+      before,
+      nowMs
+    );
+    if (updates.length > 0) {
+      const flow = await commitFlow(supabase, {
+        updates,
+        visitsBefore: before,
+        nowMs,
+      });
+      visits = flow.visits;
+      // Calling the next patient may have switched this room's doctor.
+      latestRoom = flow.rooms.find((r) => r.id === id) ?? latestRoom;
+    }
+  } catch {
+    // The timer change stands; boards reconcile visits on their next poll.
+  }
+
+  return NextResponse.json({ room: latestRoom, visits });
 }
