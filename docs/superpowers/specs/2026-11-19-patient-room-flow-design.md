@@ -1,7 +1,7 @@
 # Patient Room Flow — Design Spec
 
 Date: 2026-11-19
-Status: Draft — awaiting approval by Alex Ryu
+Status: Approved by Alex Ryu
 
 ## Purpose
 
@@ -251,9 +251,10 @@ Staff routes: behind `isAdminAuthorized()`, zod-validated, service-role
 client.
 
 - `GET /api/admin/rooms` — additionally returns `visits`: every active
-  visit as `{ id, displayName, appointmentAt, practitionerName,
-  checkedInAt, roomId, roomAssignedAt, calledAt, seenAt }`. `displayName`
-  is built on the server ("Alex R."); the full last name is not sent.
+  visit as `{ id, display_name, appointment_at, practitioner_name,
+  checked_in_at, room_id, room_assigned_at, called_at, seen_at }`
+  (snake_case, like the room rows). `display_name` is built on the server
+  ("Alex R."); the full last name is not sent.
 - `POST /api/admin/visits/[id]` — body `{ action: "assign", roomId }`,
   `{ action: "unassign" }` or `{ action: "remove" }`. Returns the updated
   visits and any changed rooms. 404 unknown/inactive visit, 409 room full.
