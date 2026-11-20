@@ -321,7 +321,12 @@ describe("timerFlowUpdates", () => {
   });
   it("ready finishes both patients of a shared room", () => {
     const visits = [treating("a"), called("late")];
-    const updates = timerFlowUpdates("ready", room({ capacity: 2 }), visits, T0);
+    const updates = timerFlowUpdates(
+      "ready",
+      room({ capacity: 2 }),
+      visits,
+      T0
+    );
     expect(updates).toEqual([
       { id: "a", fields: { done_at: iso(T0) } },
       { id: "late", fields: { done_at: iso(T0) } },

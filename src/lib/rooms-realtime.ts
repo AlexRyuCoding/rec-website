@@ -11,15 +11,19 @@ import type { RoomRow } from "@/lib/room-status";
 
 export const ROOMS_CHANNEL = "room-timers";
 export const ROOMS_EVENT = "rooms-updated";
+// "Something about the patient flow changed — refetch." Sent after a
+// check-in and after any visit change. The payload is ALWAYS empty: this
+// channel is readable with the public anon key, so nothing identifying a
+// patient may ever be put on it. Clients respond by calling the
+// staff-authenticated API.
+export const FLOW_EVENT = "flow-updated";
 
 export interface RoomsBroadcastPayload {
   room?: RoomRow;
   deletedId?: string;
 }
 
-export async function broadcastRoomsUpdated(
-  payload: RoomsBroadcastPayload = {}
-): Promise<void> {
+async function postBroadcast(event: string, payload: object): Promise<void> {
   try {
     await fetch(
       `${process.env.NEXT_PUBLIC_SUPABASE_URL}/realtime/v1/api/broadcast`,
@@ -31,11 +35,21 @@ export async function broadcastRoomsUpdated(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          messages: [{ topic: ROOMS_CHANNEL, event: ROOMS_EVENT, payload }],
+          messages: [{ topic: ROOMS_CHANNEL, event, payload }],
         }),
       }
     );
   } catch {
     // Swallow: polling is the fallback transport.
   }
+}
+
+export async function broadcastRoomsUpdated(
+  payload: RoomsBroadcastPayload = {}
+): Promise<void> {
+  await postBroadcast(ROOMS_EVENT, payload);
+}
+
+export async function broadcastFlowUpdated(): Promise<void> {
+  await postBroadcast(FLOW_EVENT, {});
 }
