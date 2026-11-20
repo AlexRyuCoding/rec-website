@@ -25,6 +25,24 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* The patient kiosk is pinned in place: it never scrolls, bounces or pans
+   in any direction. The class is put on <html> while the kiosk is on
+   screen (src/components/kiosk/use-scroll-lock.ts). The fixed body is what
+   stops iPad Safari's rubber-band; overscroll-behavior covers the rest. */
+html.kiosk-locked,
+html.kiosk-locked body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+html.kiosk-locked body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+}
+
 ::selection {
   background: var(--accent);
   color: var(--canvas);

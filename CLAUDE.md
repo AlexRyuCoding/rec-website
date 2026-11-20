@@ -256,11 +256,19 @@ Input rules (do not regress these — each fixes a way presses were lost):
   does not catch touches while fading out.
 - Layout scales with dvh and goes two-column in landscape; every screen
   must fit 1024×700 and 768×950 without scrolling.
+- The page is pinned: no scroll, bounce, pan or zoom in any direction, by
+  finger, wheel, trackpad or pinch. Three layers — `html.kiosk-locked` in
+  globals.css (fixed body, no overflow/overscroll), touch-action: none on
+  the kiosk, and src/components/kiosk/use-scroll-lock.ts cancelling
+  wheel / touchmove / Safari gesture events. Buttons use pointer events,
+  which that does not affect.
 
 **Returning Patient**
 
-- "Sign in — Tap your 4-digit PIN": four boxes (dots), the next box
-  outlined; pad is 1–9 / Clear · 0 · Delete; physical numpad also works
+- "Sign in — Tap your 4-digit PIN": four boxes, the next box outlined;
+  the number just pressed is shown as a digit and turns into a dot when
+  the next one is pressed (owner's decision — proof of what registered);
+  pad is 1–9 / Clear · 0 · Delete; physical numpad also works
 - The 4th digit checks the PIN by itself ("Checking…" under the boxes; the
   value is locked while checking)
 - On match: "Is this you? / Is this your appointment?" with name +

@@ -10,6 +10,7 @@ import {
   PadKey,
   phoneCandidates,
   signInPinReducer,
+  slotContent,
 } from "./kiosk-entry";
 
 const digit = (d: string): PadKey => ({ type: "digit", digit: d });
@@ -197,5 +198,31 @@ describe("phoneCandidates", () => {
   it("leaves any other length alone", () => {
     expect(phoneCandidates("5550101")).toEqual(["5550101"]);
     expect(phoneCandidates("442071234567")).toEqual(["442071234567"]);
+  });
+});
+
+describe("slotContent (what one PIN box shows)", () => {
+  it("is empty for boxes not typed into yet", () => {
+    expect(slotContent("48", 2, "last")).toEqual({ kind: "empty" });
+    expect(slotContent("", 0, "all")).toEqual({ kind: "empty" });
+  });
+  it("shows every digit when creating a PIN", () => {
+    expect(slotContent("48", 0, "all")).toEqual({ kind: "digit", digit: "4" });
+    expect(slotContent("48", 1, "all")).toEqual({ kind: "digit", digit: "8" });
+  });
+  it("signing in: shows the number just pressed, dots for the ones before", () => {
+    expect(slotContent("481", 0, "last")).toEqual({ kind: "dot" });
+    expect(slotContent("481", 1, "last")).toEqual({ kind: "dot" });
+    expect(slotContent("481", 2, "last")).toEqual({
+      kind: "digit",
+      digit: "1",
+    });
+  });
+  it("signing in: after Delete, the number now last is the one shown", () => {
+    expect(slotContent("48", 1, "last")).toEqual({ kind: "digit", digit: "8" });
+    expect(slotContent("48", 2, "last")).toEqual({ kind: "empty" });
+  });
+  it("can still hide everything", () => {
+    expect(slotContent("48", 1, "none")).toEqual({ kind: "dot" });
   });
 });

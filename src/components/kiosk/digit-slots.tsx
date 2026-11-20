@@ -1,11 +1,14 @@
 "use client";
 
+import { RevealMode, slotContent } from "@/lib/kiosk-entry";
+
 // Four boxes showing how far a PIN entry has got. The box the next number
 // will land in is outlined in gold, so "where am I?" is answered by the
 // screen rather than by counting dots.
 //
-// reveal: show the digits themselves (creating a PIN, where seeing what
-// you chose matters) or hide them as dots (signing in).
+// reveal: which digits show as numbers — "all" when creating a PIN (seeing
+// what you chose matters), "last" when signing in (the number just pressed
+// is shown, the ones before it are dots), "none" for dots only.
 export default function DigitSlots({
   value,
   length = 4,
@@ -17,7 +20,7 @@ export default function DigitSlots({
 }: {
   value: string;
   length?: number;
-  reveal: boolean;
+  reveal: RevealMode;
   // This entry is the one the pad is typing into.
   active: boolean;
   tone?: "normal" | "done" | "error";
@@ -36,7 +39,8 @@ export default function DigitSlots({
       className="flex justify-center gap-[min(1.6dvh,14px)]"
     >
       {Array.from({ length }, (_, i) => {
-        const filled = i < value.length;
+        const content = slotContent(value, i, reveal);
+        const filled = content.kind !== "empty";
         const next = active && i === value.length;
         return (
           <div
@@ -54,12 +58,10 @@ export default function DigitSlots({
                       : "border-cream/30 text-cream"
             }`}
           >
-            {filled ? (
-              reveal ? (
-                value[i]
-              ) : (
-                <span className="size-[0.45em] rounded-full bg-current" />
-              )
+            {content.kind === "digit" ? (
+              content.digit
+            ) : content.kind === "dot" ? (
+              <span className="size-[0.45em] rounded-full bg-current" />
             ) : null}
           </div>
         );
