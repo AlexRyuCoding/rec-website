@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchWithTimeout } from "@/lib/fetch-timeout";
 import { CALL_DISPLAY_MS } from "@/lib/patient-flow";
+import { playSound } from "@/lib/sounds";
 import { createBrowserClient } from "@/lib/supabase-browser";
 import { FLOW_EVENT, ROOMS_CHANNEL, ROOMS_EVENT } from "@/lib/rooms-realtime";
 import CallBoard, { BoardPhase, Call } from "./CallBoard";
@@ -12,24 +13,6 @@ const POLL_ERROR_MS = 30_000;
 // A request that never settles would stop the poll loop for good (each
 // poll waits for the last one), so every request gives up after this.
 const REQUEST_TIMEOUT_MS = 8_000;
-
-// Soft three-note rise (C5 E5 G5): "your room is ready".
-function playCallChime(ctx: AudioContext) {
-  [523.25, 659.25, 783.99].forEach((freq, i) => {
-    const at = ctx.currentTime + i * 0.28;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0, at);
-    gain.gain.linearRampToValueAtTime(0.2, at + 0.05);
-    gain.gain.exponentialRampToValueAtTime(0.001, at + 1.4);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(at);
-    osc.stop(at + 1.5);
-  });
-}
 
 // Data, pairing and sound for the waiting-room TV. The page is a public
 // shell with no patient data in it; everything comes from
@@ -181,9 +164,13 @@ export default function WaitingRoomScreen() {
   useEffect(() => {
     const unlock = () => {
       try {
+        const first = !ctxRef.current;
         if (!ctxRef.current) ctxRef.current = new AudioContext();
         ctxRef.current.resume().catch(() => {});
         setSoundReady(true);
+        // Play the chime once when sound is switched on: whoever pressed
+        // the button hears that it worked, and what a call will sound like.
+        if (first) playSound(ctxRef.current, "room_ready");
       } catch {
         // No Web Audio on this device — the screen stays visual-only.
       }
@@ -233,7 +220,9 @@ export default function WaitingRoomScreen() {
     knownCallIdsRef.current = current;
     if (!previous) return;
     const hasNew = [...current].some((id) => !previous.has(id));
-    if (hasNew && ctxRef.current) playCallChime(ctxRef.current);
+    // The gentle rising chime (see src/lib/sounds.ts) — deliberately
+    // unlike anything the staff board plays.
+    if (hasNew && ctxRef.current) playSound(ctxRef.current, "room_ready");
   }, [callIdsKey, phase.kind]);
 
   return (

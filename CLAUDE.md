@@ -170,7 +170,7 @@ through src/lib/flow-server.ts.
   needles are in, so "With doctor" covers the gap before that.
 - Doctor alert: while a room has an unseen patient, every rooms board
   shows a large banner in that doctor's color (pinned to the top, with a
-  "Doctor in" button) and rings three times when it appears. It cannot be
+  "Doctor in" button) and rings the doorbell sound when it appears. It cannot be
   dismissed — only "Doctor in" or Start clears it. Tapping a patient's
   name on a With-doctor tile offers "Doctor hasn't come yet" to undo.
 - ✓ (clear) = "needles out": silences the alarm and starts Turning over;
@@ -185,6 +185,16 @@ through src/lib/flow-server.ts.
 - When a patient is called, the room's doctor pill switches to the roster
   doctor matching the appointment's PB practitioner (all words of the
   roster name must appear in the PB name; exactly one match or no change).
+- Alert sounds are defined as data in src/lib/sounds.ts and must stay
+  unmistakably different from one another in melody, tone colour, rhythm
+  AND pitch range (sounds.test.ts enforces it — keep those tests when
+  retuning). Staff board (useAlarm.ts): patient waiting = doorbell
+  ding-dong ×3; timer done = kitchen-timer beeps (very high, pulsed),
+  repeating every 20 s until ✓; overtime (5 min past zero) = low buzzing
+  two-tone alarm, repeating the same way; a board with both plays both in
+  turn. Waiting-room TV: a soft rising four-note chime per call, and once
+  when sound is switched on. The board's "Sounds" button lets staff play
+  each one.
 - Patient names leave the server only as "First L." (display_name).
 - NEVER put patient data in a Realtime broadcast: the channel is readable
   with the public anon key. Room broadcasts carry anonymous room rows;

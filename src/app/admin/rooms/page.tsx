@@ -16,6 +16,7 @@ import { useAlarm } from "./useAlarm";
 import RoomTile from "./RoomTile";
 import LayoutEditor from "./LayoutEditor";
 import WaitingList from "./WaitingList";
+import SoundsPanel from "./SoundsPanel";
 import WaitingBanner, { WaitingAlert } from "./WaitingBanner";
 
 export default function RoomsPage() {
@@ -39,7 +40,7 @@ export default function RoomsPage() {
     deleteDoctor,
   } = useRooms();
   const [editMode, setEditMode] = useState(false);
-  const { soundEnabled, enableSound } = useAlarm(
+  const { soundEnabled, enableSound, testSound } = useAlarm(
     rooms,
     serverNowMs,
     visits,
@@ -106,6 +107,7 @@ export default function RoomsPage() {
           {connectionError && (
             <span className="text-xs text-amber-400">Reconnecting…</span>
           )}
+          <SoundsPanel onPlay={testSound} />
           <button
             onClick={() => setEditMode((v) => !v)}
             className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20"
@@ -128,7 +130,7 @@ export default function RoomsPage() {
           onClick={enableSound}
           className="mx-auto mb-4 flex w-full max-w-5xl items-center gap-2 rounded-lg bg-sky-900/60 px-4 py-2 text-sm hover:bg-sky-900"
         >
-          <Bell className="h-4 w-4" /> Tap to enable the timer chime on this
+          <Bell className="h-4 w-4" /> Tap to turn on alert sounds on this
           device
         </button>
       )}
