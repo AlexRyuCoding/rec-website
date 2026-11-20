@@ -8,6 +8,7 @@ export const ADJUST_STEP_SECONDS = 60;
 export const MIN_DURATION_SECONDS = 60;
 export const MAX_DURATION_SECONDS = 3600;
 export const GRID_COLS = 6;
+export const MAX_ROOM_CAPACITY = 4;
 export const MAX_DOCTORS = 5;
 export const DOCTOR_NAME_MAX_LENGTH = 60;
 
@@ -57,15 +58,25 @@ export interface RoomRow {
   timer_started_at: string | null;
   timer_duration_seconds: number | null;
   timer_paused_at: string | null;
+  // Beds. More than one means patients share the room on one timer.
+  capacity: number;
+  // Set by the check button ("needles out"), cleared by "Room ready".
+  turnover_started_at: string | null;
   updated_at: string;
 }
 
-export type RoomStatus = "available" | "in_use" | "complete" | "overtime";
+export type RoomStatus =
+  | "available"
+  | "patient_waiting"
+  | "turnover"
+  | "in_use"
+  | "complete"
+  | "overtime";
 
 export interface RoomState {
   status: RoomStatus;
   paused: boolean;
-  // Seconds left; negative counts up past zero. Null when available.
+  // Seconds left; negative counts up past zero. Null when no timer runs.
   remainingSeconds: number | null;
 }
 
@@ -77,11 +88,28 @@ function elapsedSeconds(room: RoomRow, nowMs: number): number {
   return Math.floor((effectiveNow - startedMs) / 1000);
 }
 
-export function deriveRoomState(room: RoomRow, nowMs: number): RoomState {
-  if (room.timer_started_at === null || room.timer_duration_seconds === null) {
-    return { status: "available", paused: false, remainingSeconds: null };
+function timerIdle(room: RoomRow): boolean {
+  return room.timer_started_at === null || room.timer_duration_seconds === null;
+}
+
+// occupantCount: patients called to or being treated in the room (see
+// patient-flow.ts). A running timer always wins; without one the room is
+// turning over (cleared but not yet marked ready), waiting for the doctor
+// (someone was sent in), or genuinely free.
+export function deriveRoomState(
+  room: RoomRow,
+  nowMs: number,
+  occupantCount = 0
+): RoomState {
+  if (timerIdle(room)) {
+    const status = room.turnover_started_at
+      ? "turnover"
+      : occupantCount > 0
+        ? "patient_waiting"
+        : "available";
+    return { status, paused: false, remainingSeconds: null };
   }
-  const remaining = room.timer_duration_seconds - elapsedSeconds(room, nowMs);
+  const remaining = room.timer_duration_seconds! - elapsedSeconds(room, nowMs);
   if (remaining > 0) {
     return {
       status: "in_use",
@@ -103,7 +131,8 @@ export type TimerAction =
   | "reset"
   | "adjust"
   | "set"
-  | "clear";
+  | "clear"
+  | "ready";
 
 export type TimerUpdate =
   | { ok: true; fields: Partial<RoomRow> }
@@ -122,11 +151,15 @@ export function timerActionUpdate(
   valueSeconds?: number
 ): TimerUpdate {
   const state = deriveRoomState(room, nowMs);
+  const idle = timerIdle(room);
 
   switch (action) {
     case "start":
-      if (state.status !== "available") {
+      if (!idle) {
         return { ok: false, error: "Timer already running" };
+      }
+      if (room.turnover_started_at) {
+        return { ok: false, error: "Room is turning over" };
       }
       return {
         ok: true,
@@ -165,7 +198,7 @@ export function timerActionUpdate(
       if (valueSeconds === undefined || valueSeconds === 0) {
         return { ok: false, error: "deltaSeconds required" };
       }
-      if (state.status === "available") {
+      if (idle) {
         return {
           ok: true,
           fields: {
@@ -190,7 +223,7 @@ export function timerActionUpdate(
         return { ok: false, error: "setSeconds required" };
       }
       const value = clampDuration(valueSeconds);
-      if (state.status === "available") {
+      if (idle) {
         return { ok: true, fields: { default_duration_seconds: value } };
       }
       return {
@@ -199,8 +232,9 @@ export function timerActionUpdate(
       };
     }
 
+    // Abandon the session (the timer was a mistake). The room does not
+    // turn over: nobody was treated.
     case "reset":
-    case "clear":
       return {
         ok: true,
         fields: {
@@ -209,6 +243,29 @@ export function timerActionUpdate(
           timer_paused_at: null,
         },
       };
+
+    // Staff tap the check when they go in to remove needles, so the
+    // patient is still in the room: the alarm stops and the room turns
+    // over until someone taps "Room ready".
+    case "clear":
+      if (idle) {
+        return { ok: false, error: "No session to clear" };
+      }
+      return {
+        ok: true,
+        fields: {
+          timer_started_at: null,
+          timer_duration_seconds: null,
+          timer_paused_at: null,
+          turnover_started_at: new Date(nowMs).toISOString(),
+        },
+      };
+
+    case "ready":
+      if (!idle || !room.turnover_started_at) {
+        return { ok: false, error: "Room is not turning over" };
+      }
+      return { ok: true, fields: { turnover_started_at: null } };
   }
 }
 

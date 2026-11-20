@@ -27,6 +27,8 @@ const STATUS_STYLES: Record<
   { card: string; label: string }
 > = {
   available: { card: "bg-emerald-700", label: "Available" },
+  patient_waiting: { card: "bg-purple-700", label: "Patient waiting" },
+  turnover: { card: "bg-slate-600", label: "Turning over" },
   in_use: { card: "bg-sky-800", label: "In Use" },
   complete: { card: "bg-amber-600", label: "Remove Needles" },
   overtime: { card: "bg-rose-700", label: "Overtime" },

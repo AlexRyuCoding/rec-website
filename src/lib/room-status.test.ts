@@ -23,6 +23,8 @@ const baseRoom: RoomRow = {
   timer_started_at: null,
   timer_duration_seconds: null,
   timer_paused_at: null,
+  capacity: 1,
+  turnover_started_at: null,
   updated_at: iso(T0),
 };
 
@@ -183,9 +185,9 @@ describe("timerActionUpdate", () => {
     expect(timerActionUpdate(baseRoom, "set", T0).ok).toBe(false);
   });
 
-  it.each(["reset", "clear"] as const)("%s clears all session fields", (a) => {
-    const paused = running({ timer_paused_at: iso(T0 + 100_000) });
-    expect(timerActionUpdate(paused, a, T0 + 200_000)).toEqual({
+  it("reset clears all session fields and leaves turnover alone", () => {
+    const result = timerActionUpdate(running(), "reset", T0 + 1000);
+    expect(result).toEqual({
       ok: true,
       fields: {
         timer_started_at: null,
@@ -193,6 +195,85 @@ describe("timerActionUpdate", () => {
         timer_paused_at: null,
       },
     });
+  });
+
+  it("clear ends the session and starts the room turning over", () => {
+    const result = timerActionUpdate(running(), "clear", T0 + 1000);
+    expect(result).toEqual({
+      ok: true,
+      fields: {
+        timer_started_at: null,
+        timer_duration_seconds: null,
+        timer_paused_at: null,
+        turnover_started_at: iso(T0 + 1000),
+      },
+    });
+  });
+
+  it("clear fails when no session is running", () => {
+    expect(timerActionUpdate(baseRoom, "clear", T0).ok).toBe(false);
+  });
+
+  it("ready ends the turnover", () => {
+    const turning = { ...baseRoom, turnover_started_at: iso(T0) };
+    expect(timerActionUpdate(turning, "ready", T0 + 1000)).toEqual({
+      ok: true,
+      fields: { turnover_started_at: null },
+    });
+  });
+
+  it("ready fails when the room is not turning over", () => {
+    expect(timerActionUpdate(baseRoom, "ready", T0).ok).toBe(false);
+    expect(timerActionUpdate(running(), "ready", T0).ok).toBe(false);
+  });
+
+  it("start fails while the room is turning over", () => {
+    const turning = { ...baseRoom, turnover_started_at: iso(T0) };
+    expect(timerActionUpdate(turning, "start", T0 + 1000)).toEqual({
+      ok: false,
+      error: "Room is turning over",
+    });
+  });
+
+  it("adjust and set edit the default while turning over", () => {
+    const turning = { ...baseRoom, turnover_started_at: iso(T0) };
+    expect(timerActionUpdate(turning, "adjust", T0, 60)).toEqual({
+      ok: true,
+      fields: { default_duration_seconds: 960 },
+    });
+    expect(timerActionUpdate(turning, "set", T0, 1200)).toEqual({
+      ok: true,
+      fields: { default_duration_seconds: 1200 },
+    });
+  });
+});
+
+describe("deriveRoomState with patients and turnover", () => {
+  const idle = { status: undefined, paused: false, remainingSeconds: null };
+
+  it("is patient_waiting when idle with an occupant", () => {
+    expect(deriveRoomState(baseRoom, T0, 1)).toEqual({
+      ...idle,
+      status: "patient_waiting",
+    });
+  });
+
+  it("stays available with no occupants (the default)", () => {
+    expect(deriveRoomState(baseRoom, T0).status).toBe("available");
+    expect(deriveRoomState(baseRoom, T0, 0).status).toBe("available");
+  });
+
+  it("is turnover once cleared, even with occupants still inside", () => {
+    const turning = { ...baseRoom, turnover_started_at: iso(T0) };
+    expect(deriveRoomState(turning, T0 + 1000, 2)).toEqual({
+      ...idle,
+      status: "turnover",
+    });
+  });
+
+  it("a running timer wins over occupants and turnover", () => {
+    const odd = running({ turnover_started_at: iso(T0) });
+    expect(deriveRoomState(odd, T0 + 1000, 1).status).toBe("in_use");
   });
 });
 
