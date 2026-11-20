@@ -12,6 +12,7 @@ import {
 } from "@/lib/music";
 import {
   loadMusicRow,
+  loadSavedStations,
   mergeMusicSettings,
   MUSIC_TABLE,
   MusicRow,
@@ -55,11 +56,21 @@ export async function GET() {
   if (!(await staffEmail())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const row = await loadMusicRow(createServiceClient());
+  const supabase = createServiceClient();
+  const [row, stations] = await Promise.all([
+    loadMusicRow(supabase),
+    loadSavedStations(supabase),
+  ]);
   if (!row) {
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
-  return NextResponse.json(settingsReply(row));
+  // Staff's own stations. If that list can't be read (migration 0013 not
+  // applied yet) the panel still works with the built-in ones.
+  return NextResponse.json({
+    ...settingsReply(row),
+    stations: stations ?? [],
+    stationsAvailable: stations !== null,
+  });
 }
 
 const patchSchema = z.object({

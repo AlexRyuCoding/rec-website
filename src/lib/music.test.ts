@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  checkNewStation,
   checkStreamUrl,
   extractIcyBlock,
   formatTrackTime,
@@ -8,6 +9,7 @@ import {
   parseYouTubeLink,
   playerVolume,
   progressAt,
+  MAX_SAVED_STATIONS,
   RADIO_PRESETS,
 } from "./music";
 
@@ -219,5 +221,56 @@ describe("playerVolume", () => {
     expect(playerVolume(60, true)).toBeCloseTo(0.15);
     expect(playerVolume(250, false)).toBe(1);
     expect(playerVolume(-3, false)).toBe(0);
+  });
+});
+
+describe("checkNewStation", () => {
+  const kusc =
+    "https://playerservices.streamtheworld.com/api/livestream-redirect/KUSCMP128.mp3";
+
+  it("accepts a named public stream and tidies both", () => {
+    expect(checkNewStation("  Classical   KUSC ", ` ${kusc} `, [])).toEqual({
+      ok: true,
+      name: "Classical KUSC",
+      url: kusc,
+    });
+  });
+
+  it("needs an address, a usable one, and a name", () => {
+    expect(checkNewStation("KUSC", "  ", [])).toMatchObject({
+      ok: false,
+      reason: "Paste the stream address first.",
+    });
+    expect(checkNewStation("KUSC", "http://example.com/live", []).ok).toBe(
+      false
+    );
+    expect(checkNewStation("   ", kusc, [])).toMatchObject({
+      ok: false,
+      reason: "Give the station a name first.",
+    });
+    expect(checkNewStation("x".repeat(61), kusc, []).ok).toBe(false);
+  });
+
+  it("refuses a station that is already in either list", () => {
+    expect(checkNewStation("Again", kusc, [{ url: kusc }])).toMatchObject({
+      ok: false,
+      reason: "That station is already in your list.",
+    });
+    // Same stream, typed without the scheme.
+    expect(
+      checkNewStation("Again", kusc.replace("https://", ""), [{ url: kusc }]).ok
+    ).toBe(false);
+    expect(checkNewStation("Mine", RADIO_PRESETS[0].url, [])).toMatchObject({
+      ok: false,
+      reason: "That station is already in the built-in list.",
+    });
+  });
+
+  it("stops at a full list", () => {
+    const full = Array.from({ length: MAX_SAVED_STATIONS }, (_, i) => ({
+      url: `https://radio${i}.example.com/live`,
+    }));
+    expect(checkNewStation("One more", kusc, full).ok).toBe(false);
+    expect(checkNewStation("One more", kusc, full.slice(1)).ok).toBe(true);
   });
 });

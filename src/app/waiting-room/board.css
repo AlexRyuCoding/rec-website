@@ -1,0 +1,154 @@
+/* Motion for the waiting-room TV (CallBoard.tsx, motion.tsx).
+
+   Patients look at this screen for minutes at a time, so nothing on it
+   pops in, jumps or blinks out: everything arrives, moves and leaves
+   over a visible moment, on the site's "house" curve.
+
+   Arrivals are CSS animations, which start by themselves when an element
+   is added — no script has to run a frame later, so they also play in a
+   tab that is being cast while the computer shows something else.
+   Departures add the *-out class and the element is removed once it has
+   played; the script takes the same durations from the two variables set
+   on .tv-board (see motion.tsx), so the two cannot drift apart. */
+
+.tv-board {
+  --tv-ease: cubic-bezier(0.24, 1, 0.36, 1);
+}
+
+/* A whole block: fades up into place, fades up and away. */
+@keyframes tv-in {
+  from {
+    opacity: 0;
+    transform: translateY(2.4vh);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes tv-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-1.6vh);
+  }
+}
+.tv-in {
+  animation: tv-in 900ms var(--tv-ease) both;
+}
+.tv-out {
+  animation: tv-out var(--tv-out-ms) ease-in both;
+}
+
+/* Text that changes in place (the track name): the new text fades in. */
+@keyframes tv-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes tv-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.tv-fade {
+  animation: tv-fade 700ms ease both;
+}
+
+/* One called patient. The row is a one-track grid so its height can be
+   animated between nothing and "whatever it needs": a new row opens up
+   and pushes the others down smoothly, a departing one closes and lets
+   them slide back — that is what makes the rows *move* rather than jump. */
+.tv-row {
+  display: grid;
+  grid-template-rows: 1fr;
+}
+.tv-row-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+.tv-row-body {
+  /* More or fewer rows changes their size; glide to it. */
+  transition:
+    font-size 800ms var(--tv-ease),
+    padding 800ms var(--tv-ease);
+}
+@keyframes tv-row-in {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+  45% {
+    opacity: 0;
+  }
+  to {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+}
+@keyframes tv-row-out {
+  from {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+  45% {
+    opacity: 0;
+  }
+  to {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+.tv-row-in {
+  animation: tv-row-in 1000ms var(--tv-ease) both;
+}
+.tv-row-out {
+  animation: tv-row-out var(--tv-row-out-ms) var(--tv-ease) both;
+}
+
+/* The gold highlight behind a newly called name: swells in just after
+   the row has opened, then fades over a few seconds. */
+@keyframes tv-glow {
+  0% {
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.tv-glow {
+  opacity: 0;
+  animation: tv-glow 5600ms ease-out 450ms both;
+}
+
+/* Someone who has asked their computer for less motion still gets the
+   fades, but nothing slides or resizes. */
+@media (prefers-reduced-motion: reduce) {
+  .tv-in {
+    animation-name: tv-fade;
+  }
+  .tv-out {
+    animation-name: tv-fade-out;
+  }
+  .tv-row-in {
+    animation-name: tv-fade;
+  }
+  .tv-row-out {
+    animation-name: tv-fade-out;
+  }
+  .tv-row-body {
+    transition: none;
+  }
+}

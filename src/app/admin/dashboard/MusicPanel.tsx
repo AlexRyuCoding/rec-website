@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Music, Pause, Play } from "lucide-react";
-import type { MusicSource, RadioPreset } from "@/lib/music";
+import { Music, Pause, Play, Plus } from "lucide-react";
+import type { MusicSource, RadioPreset, SavedStation } from "@/lib/music";
 
 interface Settings {
   source: MusicSource;
@@ -24,6 +24,9 @@ interface Reply {
   settings: Settings;
   spotify: SpotifyStatus;
   presets: RadioPreset[];
+  // Only in the reply to loading the panel, not to a settings change.
+  stations?: SavedStation[];
+  stationsAvailable?: boolean;
 }
 
 const SOURCES: { id: MusicSource; label: string }[] = [
@@ -34,6 +37,16 @@ const SOURCES: { id: MusicSource; label: string }[] = [
 ];
 
 const OTHER_STATION = "other";
+// <select> values for staff's own stations, kept apart from preset ids.
+const MINE = "mine:";
+
+function streamHost(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
 
 const SPOTIFY_RESULT: Record<string, { ok: boolean; text: string }> = {
   connected: { ok: true, text: "Spotify is connected." },
@@ -51,14 +64,24 @@ const SPOTIFY_RESULT: Record<string, { ok: boolean; text: string }> = {
 // switches within a second or two of Save and shows what is playing at
 // the top of the screen. Pause and volume apply straight away, without
 // touching whatever is half-typed in the form.
+//
+// Radio stations come from two lists: the built-in presets, and "My
+// stations" — ones staff have added (a name and a stream address) so they
+// are pasted only once. Adding or removing a station never changes what
+// is playing; only Save does.
 export default function MusicPanel() {
   const [saved, setSaved] = useState<Settings | null>(null);
   const savedRef = useRef<Settings | null>(null);
   const [draft, setDraft] = useState<Settings | null>(null);
   const [spotify, setSpotify] = useState<SpotifyStatus | null>(null);
   const [presets, setPresets] = useState<RadioPreset[]>([]);
-  // "Other station…" is a choice of its own, even before an address is typed.
-  const [customStation, setCustomStation] = useState(false);
+  const [stations, setStations] = useState<SavedStation[]>([]);
+  // false = the list couldn't be read (migration 0013 not applied yet).
+  const [stationsAvailable, setStationsAvailable] = useState(true);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  // "Other station…" was picked by hand: keep its fields open even if what
+  // is typed happens to match a listed station, or is still empty.
+  const [otherChosen, setOtherChosen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(
@@ -70,12 +93,13 @@ export default function MusicPanel() {
     setSaved(data.settings);
     setSpotify(data.spotify);
     setPresets(data.presets);
+    if (data.stations) setStations(data.stations);
+    if (data.stationsAvailable !== undefined) {
+      setStationsAvailable(data.stationsAvailable);
+    }
     if (!keepDraft) {
       setDraft(data.settings);
-      setCustomStation(
-        data.settings.radioUrl !== "" &&
-          !data.presets.some((p) => p.url === data.settings.radioUrl)
-      );
+      setOtherChosen(false);
     }
   }, []);
 
@@ -206,6 +230,85 @@ export default function MusicPanel() {
     );
   };
 
+  const addStation = async () => {
+    if (!draft) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/music/stations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: draft.radioName, url: draft.radioUrl }),
+      });
+      if (res.status === 401) {
+        window.location.href = "/admin/login";
+        return;
+      }
+      const data = (await res.json().catch(() => ({}))) as {
+        station?: SavedStation;
+        error?: string;
+      };
+      if (!res.ok || !data.station) {
+        setMessage({
+          ok: false,
+          text:
+            res.status === 400 && data.error
+              ? data.error
+              : "Couldn't add the station. If this is a new install, migration 0013 may not be applied yet.",
+        });
+        return;
+      }
+      const added = data.station;
+      setStations((list) =>
+        [...list, added].sort((a, b) => a.name.localeCompare(b.name))
+      );
+      // Show it selected in the list, with the tidied name and address.
+      setDraft((d) =>
+        d ? { ...d, radioUrl: added.url, radioName: added.name } : d
+      );
+      setOtherChosen(false);
+      setMessage({
+        ok: true,
+        text: `${added.name} is in My stations. Press Save to play it.`,
+      });
+    } catch {
+      setMessage({ ok: false, text: "Connection problem. Try again." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeStation = async (station: SavedStation) => {
+    setBusy(true);
+    setRemovingId(null);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/admin/music/stations/${station.id}`, {
+        method: "DELETE",
+      });
+      if (res.status === 401) {
+        window.location.href = "/admin/login";
+        return;
+      }
+      // 404 = someone else already removed it: the same outcome.
+      if (!res.ok && res.status !== 404) throw new Error("remove failed");
+      setStations((list) => list.filter((s) => s.id !== station.id));
+      const playing =
+        savedRef.current?.source === "radio" &&
+        savedRef.current.radioUrl === station.url;
+      setMessage({
+        ok: true,
+        text: playing
+          ? `${station.name} is removed from My stations. It keeps playing until you choose something else.`
+          : `${station.name} is removed from My stations.`,
+      });
+    } catch {
+      setMessage({ ok: false, text: "Couldn't remove it. Try again." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const disconnectSpotify = async () => {
     setBusy(true);
     setMessage(null);
@@ -229,10 +332,18 @@ export default function MusicPanel() {
   const set = (change: Partial<Settings>) =>
     setDraft((d) => (d ? { ...d, ...change } : d));
 
-  const presetId =
-    draft && !customStation
-      ? (presets.find((p) => p.url === draft.radioUrl)?.id ?? "")
-      : OTHER_STATION;
+  // Which entry of the Station list the address in the form stands for.
+  const mine = draft ? stations.find((s) => s.url === draft.radioUrl) : null;
+  const preset = draft ? presets.find((p) => p.url === draft.radioUrl) : null;
+  const stationChoice = otherChosen
+    ? OTHER_STATION
+    : mine
+      ? `${MINE}${mine.id}`
+      : preset
+        ? preset.id
+        : draft?.radioUrl
+          ? OTHER_STATION
+          : "";
 
   const playingSomething = saved !== null && saved.source !== "off";
 
@@ -288,16 +399,24 @@ export default function MusicPanel() {
                 <label className="flex flex-col gap-1 text-sm">
                   Station
                   <select
-                    value={presetId}
+                    value={stationChoice}
                     onChange={(e) => {
-                      const preset = presets.find(
-                        (p) => p.id === e.target.value
-                      );
-                      if (preset) {
-                        setCustomStation(false);
-                        set({ radioUrl: preset.url, radioName: "" });
+                      const value = e.target.value;
+                      const pickedMine = value.startsWith(MINE)
+                        ? stations.find((s) => MINE + s.id === value)
+                        : undefined;
+                      const pickedPreset = presets.find((p) => p.id === value);
+                      setOtherChosen(value === OTHER_STATION);
+                      if (pickedMine) {
+                        // The name goes along, so the screen shows it (and
+                        // keeps showing it if the station is later removed).
+                        set({
+                          radioUrl: pickedMine.url,
+                          radioName: pickedMine.name,
+                        });
+                      } else if (pickedPreset) {
+                        set({ radioUrl: pickedPreset.url, radioName: "" });
                       } else {
-                        setCustomStation(e.target.value === OTHER_STATION);
                         set({ radioUrl: "", radioName: "" });
                       }
                     }}
@@ -306,15 +425,26 @@ export default function MusicPanel() {
                     <option value="" disabled>
                       Choose a station…
                     </option>
-                    {presets.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} — {p.about}
-                      </option>
-                    ))}
+                    {stations.length > 0 && (
+                      <optgroup label="My stations">
+                        {stations.map((s) => (
+                          <option key={s.id} value={MINE + s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <optgroup label="Built-in">
+                      {presets.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} — {p.about}
+                        </option>
+                      ))}
+                    </optgroup>
                     <option value={OTHER_STATION}>Other station…</option>
                   </select>
                 </label>
-                {presetId === OTHER_STATION && (
+                {stationChoice === OTHER_STATION && (
                   <>
                     <label className="flex flex-col gap-1 text-sm">
                       Stream address
@@ -344,7 +474,71 @@ export default function MusicPanel() {
                       ends in .mp3 or .aac and starts with https://), not the
                       address of its website.
                     </p>
+                    {stationsAvailable && (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          onClick={addStation}
+                          disabled={
+                            busy ||
+                            !draft.radioUrl.trim() ||
+                            !draft.radioName.trim()
+                          }
+                          className={`${pill} flex items-center gap-2`}
+                        >
+                          <Plus className="size-4" /> Add to My stations
+                        </button>
+                        <p className="text-sm opacity-60">
+                          Keeps it in the Station list for next time.
+                        </p>
+                      </div>
+                    )}
                   </>
+                )}
+                {stations.length > 0 && (
+                  <div className="pt-2">
+                    <h3 className="text-sm font-semibold">My stations</h3>
+                    <ul className="mt-1 divide-y divide-brand-foreground/20">
+                      {stations.map((s) => (
+                        <li
+                          key={s.id}
+                          className="flex flex-wrap items-center justify-between gap-3 py-2"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{s.name}</p>
+                            <p className="truncate text-sm opacity-60">
+                              {streamHost(s.url)}
+                            </p>
+                          </div>
+                          {removingId === s.id ? (
+                            <span className="flex items-center gap-2">
+                              <button
+                                onClick={() => removeStation(s)}
+                                disabled={busy}
+                                className="px-3 py-1 rounded-full bg-brand-danger text-white disabled:opacity-40"
+                              >
+                                Confirm remove
+                              </button>
+                              <button
+                                onClick={() => setRemovingId(null)}
+                                className="px-3 py-1 rounded-full border border-brand-foreground hover:bg-brand-muted transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => setRemovingId(s.id)}
+                              disabled={busy}
+                              aria-label={`Remove ${s.name}`}
+                              className="px-3 py-1 rounded-full border border-brand-foreground hover:bg-brand-muted transition-colors disabled:opacity-40"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </>
             )}
