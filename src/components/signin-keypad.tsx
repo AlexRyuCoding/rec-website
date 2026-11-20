@@ -636,7 +636,7 @@ export default function SignInKeypad() {
               <p className={leadClass}>Tap your 4-digit PIN.</p>
               <DigitSlots
                 value={pin}
-                reveal={false}
+                reveal="last"
                 active={!checking}
                 label="Your PIN"
               />
@@ -837,7 +837,7 @@ export default function SignInKeypad() {
                       </p>
                       <DigitSlots
                         value={value}
-                        reveal
+                        reveal="all"
                         active={isActive}
                         tone={isDone ? "done" : "normal"}
                         size="md"
@@ -885,7 +885,7 @@ export default function SignInKeypad() {
           <h1 className={headingClass}>Your PIN is saved</h1>
           <DigitSlots
             value={savedPin}
-            reveal
+            reveal="all"
             active={false}
             tone="done"
             label="Your new PIN"

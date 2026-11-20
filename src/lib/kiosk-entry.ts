@@ -134,3 +134,28 @@ export function phoneCandidates(digits: string): string[] {
   }
   return [digits];
 }
+
+// Which typed digits a PIN entry shows as numbers:
+// - "all":  every digit (creating a PIN — the patient must be able to
+//           check and remember what they chose)
+// - "last": only the digit just pressed; earlier ones become dots
+//           (signing in — proof that the press registered and what it
+//           was, without leaving the whole PIN on screen)
+// - "none": dots only
+export type RevealMode = "all" | "last" | "none";
+
+export type SlotContent =
+  | { kind: "empty" }
+  | { kind: "dot" }
+  | { kind: "digit"; digit: string };
+
+export function slotContent(
+  value: string,
+  index: number,
+  reveal: RevealMode
+): SlotContent {
+  if (index >= value.length) return { kind: "empty" };
+  const shown =
+    reveal === "all" || (reveal === "last" && index === value.length - 1);
+  return shown ? { kind: "digit", digit: value[index] } : { kind: "dot" };
+}
