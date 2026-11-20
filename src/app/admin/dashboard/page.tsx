@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import ScreensPanel from "./ScreensPanel";
 import { KeyRound, RefreshCw, Timer } from "lucide-react";
 
 interface CheckinRow {
@@ -525,6 +526,8 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+
+      <ScreensPanel />
 
       <Link
         href="/admin/patient-signin"

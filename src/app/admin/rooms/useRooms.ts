@@ -6,12 +6,23 @@ import {
   TimerAction,
   timerActionUpdate,
 } from "@/lib/room-status";
+import { previewTimerFlow, VisitView } from "@/lib/patient-flow";
 import { createBrowserClient } from "@/lib/supabase-browser";
 import {
+  FLOW_EVENT,
   ROOMS_CHANNEL,
   ROOMS_EVENT,
   RoomsBroadcastPayload,
 } from "@/lib/rooms-realtime";
+
+export type VisitAction = "assign" | "unassign" | "remove";
+
+interface MutationBody {
+  room?: RoomRow;
+  rooms?: RoomRow[];
+  visits?: VisitView[];
+  success?: boolean;
+}
 
 const POLL_MS = 60_000;
 // Rapid +/- taps update the display instantly and accumulate; the summed
@@ -27,9 +38,15 @@ const ADJUST_FLUSH_MS = 800;
 // - a 60 s poll plus focus/online refetch reconciles anything missed or
 //   forged (broadcast payloads are unauthenticated hints, never authority)
 // Display math stays in room-status.ts.
+//
+// Visits (the waiting list and who is in which room) follow the same
+// layering with one difference: patient data never rides a broadcast, so
+// other devices learn of a visit change from an empty "flow-updated" hint
+// and refetch through the authenticated API.
 export function useRooms() {
   const [rooms, setRooms] = useState<RoomRow[]>([]);
   const [doctors, setDoctors] = useState<DoctorRow[]>([]);
+  const [visits, setVisits] = useState<VisitView[]>([]);
   const [loading, setLoading] = useState(true);
   const [connectionError, setConnectionError] = useState(false);
   const [actionError, setActionError] = useState("");
@@ -76,11 +93,13 @@ export function useRooms() {
       const data = (await res.json()) as {
         rooms: RoomRow[];
         doctors?: DoctorRow[];
+        visits?: VisitView[];
         serverTime: string;
       };
       offsetRef.current = Date.parse(data.serverTime) - Date.now();
       setRooms(data.rooms);
       setDoctors(data.doctors ?? []);
+      setVisits(data.visits ?? []);
       setConnectionError(false);
     } catch {
       setConnectionError(true);
@@ -109,6 +128,9 @@ export function useRooms() {
           } else {
             refresh();
           }
+        })
+        .on("broadcast", { event: FLOW_EVENT }, () => {
+          refresh();
         })
         .subscribe();
     } catch {
@@ -145,7 +167,7 @@ export function useRooms() {
       roomId: string | null,
       path: string,
       init: RequestInit
-    ): Promise<{ room?: RoomRow; success?: boolean } | null> => {
+    ): Promise<MutationBody | null> => {
       if (roomId) {
         setBusyRoomIds((prev) => new Set(prev).add(roomId));
       }
@@ -165,7 +187,7 @@ export function useRooms() {
           await refresh();
           return null;
         }
-        return (await res.json()) as { room?: RoomRow; success?: boolean };
+        return (await res.json()) as MutationBody;
       } catch {
         setActionError("Connection problem");
         setTimeout(() => setActionError(""), 4000);
@@ -240,6 +262,17 @@ export function useRooms() {
           setRooms((prev) =>
             prev.map((r) => (r.id === roomId ? { ...r, ...result.fields } : r))
           );
+          // Start / Room ready / reset also move the room's patients;
+          // preview that with the server's own rules.
+          const roomAfter = { ...room, ...result.fields };
+          setVisits((prev) =>
+            previewTimerFlow(
+              action,
+              roomAfter,
+              prev,
+              Date.now() + offsetRef.current
+            )
+          );
         }
       }
       if (action === "adjust") {
@@ -269,8 +302,31 @@ export function useRooms() {
         ),
       });
       if (body?.room) upsertRoom(body.room);
+      if (body?.visits) setVisits(body.visits);
     },
     [mutate, upsertRoom, flushAdjust]
+  );
+
+  // Send a waiting patient to a room, back to the list, or off the board.
+  // No local guess here: the server decides (called now vs lined up, who
+  // gets promoted) and its answer replaces the list.
+  const visitAction = useCallback(
+    async (visitId: string, action: VisitAction, roomId?: string) => {
+      const body = await mutate(
+        action === "assign" ? (roomId ?? null) : null,
+        `/api/admin/visits/${visitId}`,
+        {
+          method: "POST",
+          body: JSON.stringify(
+            action === "assign" ? { action, roomId } : { action }
+          ),
+        }
+      );
+      if (!body) return;
+      if (body.visits) setVisits(body.visits);
+      for (const room of body.rooms ?? []) upsertRoom(room);
+    },
+    [mutate, upsertRoom]
   );
 
   const createRoom = useCallback(
@@ -293,6 +349,7 @@ export function useRooms() {
         gridCol?: number;
         doctorName?: string | null;
         defaultDurationSeconds?: number;
+        capacity?: number;
       }
     ) => {
       const body = await mutate(roomId, `/api/admin/rooms/${roomId}`, {
@@ -340,6 +397,7 @@ export function useRooms() {
   return {
     rooms,
     doctors,
+    visits,
     serverNowMs: tickMs + offsetRef.current,
     loading,
     connectionError,
@@ -347,6 +405,7 @@ export function useRooms() {
     pendingAdjustRoomIds,
     actionError,
     timerAction,
+    visitAction,
     createRoom,
     updateRoom,
     deleteRoom,

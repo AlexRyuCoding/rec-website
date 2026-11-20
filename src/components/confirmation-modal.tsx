@@ -202,6 +202,10 @@ export default function ConfirmationModal({
                     <br />
                     <br />
                     You&apos;re checked in.
+                    <span className="mt-4 block text-2xl text-ink/70">
+                      Please have a seat — your name and room will appear on the
+                      screen.
+                    </span>
                   </>
                 )}
               </p>

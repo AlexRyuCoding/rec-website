@@ -9,7 +9,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { Plus, Trash2, X } from "lucide-react";
+import { Minus, Plus, Trash2, X } from "lucide-react";
 import {
   doctorColorClasses,
   DoctorRow,
@@ -17,6 +17,7 @@ import {
   GRID_COLS,
   MAX_DOCTORS,
   MAX_DURATION_SECONDS,
+  MAX_ROOM_CAPACITY,
   MIN_DURATION_SECONDS,
   RoomRow,
 } from "@/lib/room-status";
@@ -129,6 +130,7 @@ export default function LayoutEditor({
       gridRow?: number;
       gridCol?: number;
       defaultDurationSeconds?: number;
+      capacity?: number;
     }
   ) => Promise<void>;
   onDelete: (roomId: string) => Promise<void>;
@@ -138,6 +140,7 @@ export default function LayoutEditor({
   const [panel, setPanel] = useState<PanelState | null>(null);
   const [name, setName] = useState("");
   const [minutes, setMinutes] = useState(15);
+  const [beds, setBeds] = useState(1);
   const [doctorInput, setDoctorInput] = useState("");
   const [saving, setSaving] = useState(false);
   const sensors = useSensors(
@@ -165,6 +168,7 @@ export default function LayoutEditor({
   const openEdit = (room: RoomRow) => {
     setName(room.name);
     setMinutes(Math.round(room.default_duration_seconds / 60));
+    setBeds(room.capacity ?? 1);
     setPanel({ mode: "edit", room });
   };
 
@@ -205,6 +209,7 @@ export default function LayoutEditor({
           MAX_DURATION_SECONDS,
           Math.max(MIN_DURATION_SECONDS, minutes * 60)
         ),
+        capacity: beds,
       });
     }
     setSaving(false);
@@ -346,6 +351,39 @@ export default function LayoutEditor({
                   className="mt-1 w-full rounded-lg bg-neutral-800 px-3 py-2"
                 />
               </label>
+            )}
+            {panel.mode === "edit" && (
+              <div className="mb-3 text-sm">
+                Beds
+                <div className="mt-1 flex items-center gap-3">
+                  <button
+                    type="button"
+                    aria-label="Fewer beds"
+                    disabled={beds <= 1}
+                    onClick={() => setBeds((b) => Math.max(1, b - 1))}
+                    className="rounded-lg bg-neutral-800 p-2 hover:bg-neutral-700 disabled:opacity-40"
+                  >
+                    <Minus className="h-4 w-4" />
+                  </button>
+                  <span className="w-6 text-center text-lg font-semibold tabular-nums">
+                    {beds}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="More beds"
+                    disabled={beds >= MAX_ROOM_CAPACITY}
+                    onClick={() =>
+                      setBeds((b) => Math.min(MAX_ROOM_CAPACITY, b + 1))
+                    }
+                    className="rounded-lg bg-neutral-800 p-2 hover:bg-neutral-700 disabled:opacity-40"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                  <span className="text-xs text-white/50">
+                    How many patients can share this room on one timer.
+                  </span>
+                </div>
+              </div>
             )}
             <div className="mt-4 flex items-center gap-2">
               <button

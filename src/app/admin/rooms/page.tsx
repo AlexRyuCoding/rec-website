@@ -1,18 +1,26 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Bell, Pencil, X } from "lucide-react";
 import { deriveRoomState } from "@/lib/room-status";
+import {
+  assignOutcome,
+  roomNextUp,
+  roomOccupants,
+  visitState,
+} from "@/lib/patient-flow";
 import { gridStyle } from "./grid";
 import { useRooms } from "./useRooms";
 import { useAlarm } from "./useAlarm";
 import RoomTile from "./RoomTile";
 import LayoutEditor from "./LayoutEditor";
+import WaitingList from "./WaitingList";
 
 export default function RoomsPage() {
   const {
     rooms,
     doctors,
+    visits,
     serverNowMs,
     loading,
     connectionError,
@@ -20,6 +28,7 @@ export default function RoomsPage() {
     pendingAdjustRoomIds,
     actionError,
     timerAction,
+    visitAction,
     createRoom,
     updateRoom,
     deleteRoom,
@@ -27,7 +36,30 @@ export default function RoomsPage() {
     deleteDoctor,
   } = useRooms();
   const [editMode, setEditMode] = useState(false);
-  const { soundEnabled, enableSound } = useAlarm(rooms, serverNowMs);
+  const { soundEnabled, enableSound } = useAlarm(rooms, serverNowMs, visits);
+  // The waiting patient staff are about to place. While set, every room
+  // tile turns into a "Send here" / "Next up here" target.
+  const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
+
+  const waiting = visits.filter((v) => visitState(v) === "waiting");
+  const selectedVisit = waiting.find((v) => v.id === selectedVisitId) ?? null;
+  // Everyone except the selected patient — what each room looks like
+  // before they are added to it.
+  const otherVisits = selectedVisit
+    ? visits.filter((v) => v.id !== selectedVisit.id)
+    : visits;
+
+  // A tap anywhere that is not a waiting chip or a room target cancels
+  // the selection, so the board never stays stuck in assign mode.
+  useEffect(() => {
+    if (!selectedVisitId) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Element | null;
+      if (!target?.closest?.("[data-assign-keep]")) setSelectedVisitId(null);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [selectedVisitId]);
 
   return (
     <main className="min-h-screen bg-neutral-950 p-4 text-white sm:p-6">
@@ -91,40 +123,74 @@ export default function RoomsPage() {
           onAddDoctor={addDoctor}
           onDeleteDoctor={deleteDoctor}
         />
-      ) : rooms.length === 0 ? (
-        <p className="mx-auto max-w-5xl text-white/60">
-          No rooms yet — tap &quot;Edit layout&quot;, then &quot;Create
-          room&quot;.
-        </p>
       ) : (
-        <div className="mx-auto max-w-5xl overflow-x-auto pb-2">
-          <div className="grid gap-3" style={gridStyle}>
-            {rooms.map((room) => (
-              <div
-                key={room.id}
-                style={{
-                  gridRowStart: room.grid_row + 1,
-                  gridColumnStart: room.grid_col + 1,
-                }}
-              >
-                <RoomTile
-                  room={room}
-                  state={deriveRoomState(room, serverNowMs)}
-                  busy={busyRoomIds.has(room.id)}
-                  adjustPending={pendingAdjustRoomIds.has(room.id)}
-                  nowMs={serverNowMs}
-                  doctors={doctors}
-                  onAction={(action, deltaSeconds) =>
-                    timerAction(room.id, action, deltaSeconds)
-                  }
-                  onAssignDoctor={(doctorName) =>
-                    updateRoom(room.id, { doctorName })
-                  }
-                />
+        <>
+          <WaitingList
+            visits={waiting}
+            doctors={doctors}
+            nowMs={serverNowMs}
+            selectedId={selectedVisit?.id ?? null}
+            onSelect={setSelectedVisitId}
+            onRemove={(visitId) => visitAction(visitId, "remove")}
+          />
+          {rooms.length === 0 ? (
+            <p className="mx-auto max-w-5xl text-white/60">
+              No rooms yet — tap &quot;Edit layout&quot;, then &quot;Create
+              room&quot;.
+            </p>
+          ) : (
+            <div className="mx-auto max-w-5xl overflow-x-auto pb-2">
+              <div className="grid gap-3" style={gridStyle}>
+                {rooms.map((room) => {
+                  const occupants = roomOccupants(visits, room.id);
+                  return (
+                    <div
+                      key={room.id}
+                      style={{
+                        gridRowStart: room.grid_row + 1,
+                        gridColumnStart: room.grid_col + 1,
+                      }}
+                    >
+                      <RoomTile
+                        room={room}
+                        state={deriveRoomState(
+                          room,
+                          serverNowMs,
+                          occupants.length
+                        )}
+                        busy={busyRoomIds.has(room.id)}
+                        adjustPending={pendingAdjustRoomIds.has(room.id)}
+                        nowMs={serverNowMs}
+                        doctors={doctors}
+                        occupants={occupants}
+                        nextUp={roomNextUp(visits, room.id)}
+                        assignMode={
+                          selectedVisit
+                            ? assignOutcome(room, otherVisits)
+                            : null
+                        }
+                        onAction={(action, deltaSeconds) =>
+                          timerAction(room.id, action, deltaSeconds)
+                        }
+                        onAssignDoctor={(doctorName) =>
+                          updateRoom(room.id, { doctorName })
+                        }
+                        onAssignHere={() => {
+                          if (!selectedVisit) return;
+                          setSelectedVisitId(null);
+                          visitAction(selectedVisit.id, "assign", room.id);
+                        }}
+                        onVisitAction={(visitId, action) =>
+                          visitAction(visitId, action)
+                        }
+                      />
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          )}
+        </>
       )}
     </main>
   );

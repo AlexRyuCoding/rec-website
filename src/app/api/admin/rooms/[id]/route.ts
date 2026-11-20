@@ -7,6 +7,7 @@ import {
   DOCTOR_NAME_MAX_LENGTH,
   GRID_COLS,
   MAX_DURATION_SECONDS,
+  MAX_ROOM_CAPACITY,
   MIN_DURATION_SECONDS,
 } from "@/lib/room-status";
 
@@ -32,6 +33,8 @@ const patchSchema = z.object({
     .min(MIN_DURATION_SECONDS)
     .max(MAX_DURATION_SECONDS)
     .optional(),
+  // Beds: how many patients can share the room on its one timer
+  capacity: z.number().int().min(1).max(MAX_ROOM_CAPACITY).optional(),
 });
 
 // Edit-layout metadata updates. Timer actions live in ./timer — this route
@@ -60,6 +63,7 @@ export async function PATCH(
   if (d.defaultDurationSeconds !== undefined) {
     fields.default_duration_seconds = d.defaultDurationSeconds;
   }
+  if (d.capacity !== undefined) fields.capacity = d.capacity;
   if (Object.keys(fields).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }

@@ -4,11 +4,14 @@ import { createServiceClient } from "@/lib/supabase";
 import { isAdminAuthorized } from "@/lib/admin-auth";
 import { broadcastRoomsUpdated } from "@/lib/rooms-realtime";
 import { GRID_COLS } from "@/lib/room-status";
+import { VisitView } from "@/lib/patient-flow";
+import { loadActiveVisits, toVisitView } from "@/lib/visits-server";
 
 // Room timer board data. GET returns every room, the doctor roster, and
 // the server clock so devices with skewed clocks still render identical
 // countdowns. Riding the roster on this response means the existing 60 s
-// poll and focus refresh keep it synced across devices.
+// poll and focus refresh keep it synced across devices. The open visits
+// (waiting list + who is in which room) ride along for the same reason.
 export async function GET() {
   if (!(await isAdminAuthorized())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -23,9 +26,20 @@ export async function GET() {
   if (roomsResult.error || doctorsResult.error) {
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
+
+  // The timer board must keep working even if the visit query fails
+  // (e.g. the flow migration is not applied yet): degrade to no visits.
+  let visits: VisitView[] = [];
+  try {
+    visits = (await loadActiveVisits(supabase, Date.now())).map(toVisitView);
+  } catch {
+    visits = [];
+  }
+
   return NextResponse.json({
     rooms: roomsResult.data ?? [],
     doctors: doctorsResult.data ?? [],
+    visits,
     serverTime: new Date().toISOString(),
   });
 }
