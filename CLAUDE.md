@@ -220,32 +220,72 @@ through src/lib/flow-server.ts.
 
 ### Kiosk Screen (main UI) — two modes:
 
+Written for patients who are not comfortable with screens. Three rules:
+one question per screen in plain words; nothing changes without the
+patient seeing why (no screen swaps for spinners); no dead ends. Code:
+src/components/signin-keypad.tsx (screens), src/components/kiosk/
+(number-pad, digit-slots, tap-button), src/lib/kiosk-entry.ts (what a key
+press does — pure, tested), src/lib/tap-guard.ts.
+
+Input rules (do not regress these — each fixes a way presses were lost):
+
+- Number keys fire on touch-DOWN (pointerdown), not on click: click drops
+  presses when a finger drifts, holds, or a second finger lands early.
+  Other buttons (TapButton) fire on lift if the finger is still on them.
+- Typed values go through reducers, never `value + digit` from a closure.
+- NumberPad / TapButton are module-level components (a component defined
+  inside the screen is rebuilt on every digit).
+- touch-action: manipulation on the kiosk (no double-tap zoom, so "2200"
+  is four presses); touchend is preventDefault-ed (no ghost clicks).
+- For ~350 ms after any screen change all kiosk buttons ignore presses,
+  so a double tap can't answer the next screen (Continue → Cancel sit in
+  the same place).
+- A notice must never move the pad: PadScreen reserves the notice slot.
+- The confirmation dialog cannot be dismissed by tapping outside it, and
+  does not catch touches while fading out.
+- Layout scales with dvh and goes two-column in landscape; every screen
+  must fit 1024×700 and 768×950 without scrolling.
+
 **Returning Patient**
 
-- Numeric PIN pad (0–9) on screen — no physical keyboard needed
-- Patient taps their 4-digit PIN
-- On match: show name + appointment time + confirm button
+- "Sign in — Tap your 4-digit PIN": four boxes (dots), the next box
+  outlined; pad is 1–9 / Clear · 0 · Delete; physical numpad also works
+- The 4th digit checks the PIN by itself ("Checking…" under the boxes; the
+  value is locked while checking)
+- On match: "Is this you? / Is this your appointment?" with name +
+  appointment time, big "Yes — check me in" / "No, that's not me"
 - On confirm: log check-in, show "Thank you [first name]!" and "Please
-  have a seat — your name and room will appear on the screen", reset
+  have a seat — your name and room will appear on the screen" for 8 s (or
+  "Done"), reset
 - Re-check-in within 4 hours: no duplicate row; shows "You're already
   checked in" instead
-- On no match: show "PIN not recognized, please see the front desk"
-- Kiosk resets to the PIN pad after 60s of inactivity (abandoned flows
-  must not leave patient info on screen)
+- On no match: stays on the pad with "We don't recognize that PIN. Please
+  try again, or ask the front desk for help."
+- Idle: after 40 s without a touch mid-flow, "Are you still there?" with a
+  countdown; at 60 s the kiosk resets to the PIN pad (abandoned flows must
+  not leave patient info on screen). Replies from the server that arrive
+  after a reset are dropped.
 
-**New Patient**
+**New Patient** ("First time here? Create your PIN")
 
-- "First visit? Set up your PIN" button below the PIN pad
-- Step 1: Enter phone number or email
+- Step 1 of 3: "What is your phone number?" on the same big number pad,
+  formatted as typed; "Use my email instead" switches to a text field.
+  The lookup matches a phone stored with or without a leading 1.
   - Both emails and phones can match MULTIPLE patients (family members
     share contact info, esp. in the legacy PB import). Resolution: zero
-    matches → "see the front desk"; all matches have PINs → "you already
-    have a PIN"; exactly one match without a PIN → proceed with that
-    patient; several without PINs → "Select your name to set up your PIN"
-    screen listing each PIN-less match as first name + last INITIAL (never
-    full last name); tapping a name proceeds to PIN creation for that
-    patient. Patients who already have a PIN are never listed.
-- Step 2: Enter a 4-digit PIN (twice to confirm)
+    matches → "We couldn't find you" (Try again / Back to sign in); all
+    matches have PINs → "You already have a PIN"; exactly one match
+    without a PIN → proceed with that patient; several without PINs →
+    "Which one is you?" listing each PIN-less match as first name + last
+    INITIAL (never full last name). Patients who already have a PIN are
+    never listed.
+- Step 2 of 3: "Create your PIN" — two rows on one screen, "1 Choose 4
+  numbers" and "2 Type the same 4 numbers again"; the digits are SHOWN
+  here (owner's decision, so patients can check and remember them). A
+  mismatch or an already-used PIN restarts the choice on the same screen
+  with the reason. Then "Your PIN is saved" shows it once more and moves
+  on by itself after 7 s.
+- Step 3 of 3: the same confirmation as a returning patient
 - On success: hash with bcrypt, save to patients table, proceed to
   appointment confirmation as a normal check-in
 

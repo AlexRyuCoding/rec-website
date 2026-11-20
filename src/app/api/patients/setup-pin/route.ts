@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { createServiceClient, fetchAllPatientsWithPins } from "@/lib/supabase";
 import { isAdminAuthorized } from "@/lib/admin-auth";
+import { phoneCandidates } from "@/lib/kiosk-entry";
 
 function normalizePhone(raw: string): string {
   return raw.replace(/\D/g, "");
@@ -68,10 +69,12 @@ export async function POST(req: Request) {
     .select("id, first_name, last_name, pin");
 
   if (isPhone) {
-    // phone_digits is a generated normalized column — exact indexed match
-    const { data: patients, error } = await query.eq(
+    // phone_digits is a generated normalized column — indexed match. The
+    // record may hold the number with or without the leading 1, whichever
+    // way the patient typed it, so every form is looked up.
+    const { data: patients, error } = await query.in(
       "phone_digits",
-      normalized
+      phoneCandidates(normalized)
     );
     if (error)
       return NextResponse.json({ error: "Database error" }, { status: 500 });
