@@ -5,6 +5,7 @@ import { DISPLAY_COOKIE } from "@/lib/display-auth";
 import { authorizeDisplay, displayCookieOptions } from "@/lib/display-server";
 import { CALL_DISPLAY_MS, displayName } from "@/lib/patient-flow";
 import { loadActiveVisits } from "@/lib/visits-server";
+import { loadMusicRow, tvMusicFromRow } from "@/lib/music-server";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,9 @@ export const dynamic = "force-dynamic";
 //
 // A call is shown from the moment the patient is called until the room's
 // timer is started (the doctor is in) or ten minutes pass.
+//
+// The reply also carries the background-music setting (no patient data in
+// it), so the screen needs only this one poll.
 export async function GET(req: NextRequest) {
   const supabase = createServiceClient();
   const nowMs = Date.now();
@@ -84,8 +88,17 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  // Music must never get in the way of calling patients: if the setting
+  // can't be read the field is left out and the screen keeps playing
+  // whatever it was playing.
+  const musicRow = await loadMusicRow(supabase).catch(() => null);
+
   const res = NextResponse.json(
-    { calls, serverTime: new Date(nowMs).toISOString() },
+    {
+      calls,
+      serverTime: new Date(nowMs).toISOString(),
+      ...(musicRow ? { music: tvMusicFromRow(musicRow) } : {}),
+    },
     { headers: noStore }
   );
   // Slide the cookie's expiry so a screen in daily use never lapses.

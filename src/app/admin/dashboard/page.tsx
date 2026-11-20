@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import MusicPanel from "./MusicPanel";
 import ScreensPanel from "./ScreensPanel";
 import { KeyRound, RefreshCw, Timer } from "lucide-react";
 
@@ -528,6 +529,7 @@ export default function AdminDashboard() {
       </div>
 
       <ScreensPanel />
+      <MusicPanel />
 
       <Link
         href="/admin/patient-signin"
