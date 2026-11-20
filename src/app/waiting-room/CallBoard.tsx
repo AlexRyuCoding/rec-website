@@ -3,6 +3,8 @@ import { useRef } from "react";
 import Image from "next/image";
 import { ArrowRight, DoorOpen } from "lucide-react";
 import { gsap, useGSAP } from "@/lib/gsap";
+import type { NowPlaying } from "@/lib/music";
+import MusicBar from "./music/MusicBar";
 
 export interface Call {
   id: string;
@@ -34,6 +36,8 @@ export default function CallBoard({
   nowMs,
   reconnecting,
   soundReady,
+  music,
+  localNowMs,
 }: {
   phase: BoardPhase;
   // Newest call first.
@@ -41,6 +45,10 @@ export default function CallBoard({
   nowMs: number;
   reconnecting: boolean;
   soundReady: boolean;
+  // Background music, when staff have chosen some; null = none.
+  music: NowPlaying | null;
+  // This device's own clock, for the music progress bar.
+  localNowMs: number;
 }) {
   const listRef = useRef<HTMLUListElement>(null);
   const seenIdsRef = useRef<Set<string> | null>(null);
@@ -93,14 +101,17 @@ export default function CallBoard({
           width={200}
           height={200}
           priority
-          className="h-[9vh] w-auto opacity-90"
+          className="h-[9vh] w-auto shrink-0 opacity-90"
         />
+        {phase.kind === "live" && music && (
+          <MusicBar playing={music} nowMs={localNowMs} />
+        )}
         {phase.kind === "live" && (
           <p
             suppressHydrationWarning
             // Fixed-width digits (the sans face has them; the serif does
             // not), so the time does not wobble as the seconds change.
-            className="font-sans text-[6vh] font-medium tabular-nums leading-none text-cream/70"
+            className="shrink-0 font-sans text-[6vh] font-medium tabular-nums leading-none text-cream/70"
           >
             {clock}
           </p>

@@ -1,6 +1,5 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { MonitorPlay } from "lucide-react";
 
 interface Display {
@@ -120,9 +119,12 @@ export default function ScreensPanel() {
           <MonitorPlay className="size-5" />
           Screens
         </h2>
-        <Link href="/waiting-room" className={pill}>
+        {/* A plain link (full page load), not next/link: the waiting-room
+            page has its own content-security policy for the music
+            players, and an in-app navigation would keep this page's. */}
+        <a href="/waiting-room" className={pill}>
           Open waiting-room screen
-        </Link>
+        </a>
       </div>
       <p className="mb-5 text-sm opacity-70">
         The waiting-room screen tells patients which room to go to. On the TV,

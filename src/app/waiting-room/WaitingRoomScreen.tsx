@@ -1,11 +1,13 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchWithTimeout } from "@/lib/fetch-timeout";
+import { DUCK_MS, MUSIC_OFF, TvMusic } from "@/lib/music";
 import { CALL_DISPLAY_MS } from "@/lib/patient-flow";
 import { playSound } from "@/lib/sounds";
 import { createBrowserClient } from "@/lib/supabase-browser";
 import { FLOW_EVENT, ROOMS_CHANNEL, ROOMS_EVENT } from "@/lib/rooms-realtime";
 import CallBoard, { BoardPhase, Call } from "./CallBoard";
+import { useMusic } from "./music/useMusic";
 
 const POLL_LIVE_MS = 10_000;
 const POLL_PAIRING_MS = 5_000;
@@ -34,6 +36,32 @@ export default function WaitingRoomScreen() {
   const loadingRef = useRef(false);
   const ctxRef = useRef<AudioContext | null>(null);
   const knownCallIdsRef = useRef<Set<string> | null>(null);
+  const [music, setMusic] = useState<TvMusic>(MUSIC_OFF);
+  const musicKeyRef = useRef(JSON.stringify(MUSIC_OFF));
+  const [ducked, setDucked] = useState(false);
+  const duckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // The setting arrives with every poll; only a real change may reach the
+  // players, or the music would restart every ten seconds.
+  const applyMusic = useCallback((next: TvMusic) => {
+    const key = JSON.stringify(next);
+    if (key === musicKeyRef.current) return;
+    musicKeyRef.current = key;
+    setMusic(next);
+  }, []);
+
+  // Drop the music under the chime while a patient is being called.
+  const duck = useCallback(() => {
+    setDucked(true);
+    if (duckTimerRef.current) clearTimeout(duckTimerRef.current);
+    duckTimerRef.current = setTimeout(() => setDucked(false), DUCK_MS);
+  }, []);
+  useEffect(
+    () => () => {
+      if (duckTimerRef.current) clearTimeout(duckTimerRef.current);
+    },
+    []
+  );
 
   const enter = useCallback((next: BoardPhase) => {
     phaseRef.current = next.kind;
@@ -53,9 +81,13 @@ export default function WaitingRoomScreen() {
         const data = (await res.json()) as {
           calls: Call[];
           serverTime: string;
+          // Left out when the server could not read the setting: keep
+          // playing whatever is playing.
+          music?: TvMusic;
         };
         offsetRef.current = Date.parse(data.serverTime) - Date.now();
         setCalls(data.calls);
+        if (data.music) applyMusic(data.music);
         setReconnecting(false);
         enter({ kind: "live" });
         return;
@@ -70,6 +102,8 @@ export default function WaitingRoomScreen() {
         // names on screen and ask for a fresh code.
         setCalls([]);
         knownCallIdsRef.current = null;
+        // A revoked screen goes quiet as well as blank.
+        applyMusic(MUSIC_OFF);
         const pair = await fetchWithTimeout(
           "/api/display/pair",
           { method: "POST" },
@@ -91,7 +125,7 @@ export default function WaitingRoomScreen() {
     } finally {
       loadingRef.current = false;
     }
-  }, [enter]);
+  }, [enter, applyMusic]);
 
   // Poll forever, at a pace that suits the current phase.
   useEffect(() => {
@@ -170,7 +204,10 @@ export default function WaitingRoomScreen() {
         setSoundReady(true);
         // Play the chime once when sound is switched on: whoever pressed
         // the button hears that it worked, and what a call will sound like.
-        if (first) playSound(ctxRef.current, "room_ready");
+        if (first) {
+          playSound(ctxRef.current, "room_ready");
+          duck();
+        }
       } catch {
         // No Web Audio on this device — the screen stays visual-only.
       }
@@ -181,7 +218,7 @@ export default function WaitingRoomScreen() {
       document.removeEventListener("keydown", unlock);
       document.removeEventListener("pointerdown", unlock);
     };
-  }, []);
+  }, [duck]);
 
   // Keep the TV awake where the browser allows it.
   useEffect(() => {
@@ -222,8 +259,18 @@ export default function WaitingRoomScreen() {
     const hasNew = [...current].some((id) => !previous.has(id));
     // The gentle rising chime (see src/lib/sounds.ts) — deliberately
     // unlike anything the staff board plays.
-    if (hasNew && ctxRef.current) playSound(ctxRef.current, "room_ready");
-  }, [callIdsKey, phase.kind]);
+    if (hasNew && ctxRef.current) {
+      playSound(ctxRef.current, "room_ready");
+      duck();
+    }
+  }, [callIdsKey, phase.kind, duck]);
+
+  // Background music plays only on a live (paired) board, and only once
+  // sound has been switched on for this screen.
+  const nowPlaying = useMusic(phase.kind === "live" ? music : MUSIC_OFF, {
+    armed: soundReady,
+    ducked,
+  });
 
   return (
     <CallBoard
@@ -232,6 +279,8 @@ export default function WaitingRoomScreen() {
       nowMs={nowMs}
       reconnecting={reconnecting}
       soundReady={soundReady}
+      music={nowPlaying}
+      localNowMs={tickMs}
     />
   );
 }

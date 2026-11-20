@@ -5,17 +5,43 @@
 // page, while Chromium just silently loses realtime.
 const supabaseHttp = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseWs = supabaseHttp.replace(/^https:/, "wss:");
-const CSP = [
-  "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self'",
-  `connect-src 'self' ${supabaseHttp} ${supabaseWs}`.replace(/\s+/g, " ").trim(),
-  "frame-ancestors 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-].join("; ");
+// One policy for the whole site, with the few extra allowances the
+// waiting-room TV needs for background music (see src/lib/music.ts).
+// Those are granted to /waiting-room only — the kiosk, the dashboard and
+// the public pages still load nothing from outside.
+function buildCsp({ music = false } = {}) {
+  const join = (...parts) => parts.filter(Boolean).join(" ");
+  return [
+    "default-src 'self'",
+    join(
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      // YouTube's IFrame Player API and Spotify's Web Playback SDK.
+      music && "https://www.youtube.com https://sdk.scdn.co"
+    ),
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self'",
+    join(
+      "connect-src 'self'",
+      supabaseHttp,
+      supabaseWs,
+      // "Play this playlist on this screen" goes to Spotify's API.
+      music &&
+        "https://api.spotify.com https://*.spotify.com wss://*.spotify.com"
+    ),
+    // The two players are iframes; nothing else may be framed.
+    music && "frame-src https://www.youtube.com https://sdk.scdn.co",
+    // Radio: staff may choose any station, so any https stream.
+    music && "media-src 'self' https: blob:",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ]
+    .filter(Boolean)
+    .join("; ");
+}
+const CSP = buildCsp();
+const WAITING_ROOM_CSP = buildCsp({ music: true });
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -45,6 +71,12 @@ const nextConfig = {
           },
           { key: "Content-Security-Policy", value: CSP },
         ],
+      },
+      // Listed after the catch-all on purpose: when two entries set the
+      // same header for a path, Next.js uses the later one.
+      {
+        source: "/waiting-room",
+        headers: [{ key: "Content-Security-Policy", value: WAITING_ROOM_CSP }],
       },
     ];
   },

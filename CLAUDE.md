@@ -36,6 +36,8 @@ throughout the day unassisted.
 - CRON_SECRET= (self-generated; auths the daily Vercel Cron keepalive ping)
 - RESEND_API_KEY= (Resend API key; sends appointment-request + grievance form emails)
 - RESEND_FROM_EMAIL= (sender on the Resend-verified domain, e.g. forms@ryuacupuncture.com; falls back to onboarding@resend.dev which only delivers to the Resend account owner)
+- SPOTIFY_CLIENT_ID= / SPOTIFY_CLIENT_SECRET= (optional; a Spotify developer app, only needed for Spotify as the waiting-room music source. Its Redirect URI must be https://www.ryuacupuncture.com/api/admin/spotify/callback)
+- SPOTIFY_REDIRECT_URI= (optional; local dev only — Spotify refuses "localhost", so use http://127.0.0.1:3000/api/admin/spotify/callback)
 
 ## Route Structure
 
@@ -53,7 +55,8 @@ throughout the day unassisted.
   /admin: the page shell is public and holds no patient data; its data
   API needs a paired-screen cookie or a staff session. Shown on a 42-inch
   TV across the waiting room: sizes are in vh only, and anything patients
-  must read is at least text-[5.5vh] (~2 cm letters). It always shows a
+  must read is at least text-[5.5vh] (~2 cm letters; the music bar in the
+  header is ambience and is deliberately smaller). It always shows a
   clock with seconds and a door reminder ("When you enter your room,
   please close the door, but leave it slightly open." with a large
   door-open icon); the call list sizes itself to the space above that
@@ -71,7 +74,16 @@ throughout the day unassisted.
 - /api/display/pair — PUBLIC POST: a TV asks for a pairing code (useless
   until staff approve it; rate limited 10/hour/IP, fails closed)
 - /api/display/calls — GET who is being called to which room; paired
-  screen cookie or staff session only
+  screen cookie or staff session only. The reply also carries the
+  background-music setting (`music`), so the TV needs only this one poll
+- /api/admin/music — GET/PATCH the waiting-room music setting (staff);
+  PATCH changes only the fields sent
+- /api/admin/spotify/login → Spotify consent → /api/admin/spotify/callback
+  connects the clinic's Spotify account (staff); DELETE /api/admin/spotify
+  disconnects it
+- /api/display/spotify-token — GET a one-hour Spotify access token for
+  the TV's player; /api/display/now-playing — GET the track the chosen
+  radio station is playing. Both: paired screen cookie or staff session
 - /api/admin/reset-pin — POST clears a patient's PIN (patient re-creates at kiosk)
 - /api/admin/sync-patients — POST bulk-syncs PB client records in chunks
   (~500/call, before_id cursor); the dashboard "Full sync" button loops it
@@ -149,6 +161,9 @@ unreachable or there is no session that day).
 
 ### rooms / doctors / display_devices
 
+waiting_room_music (0012): a single row — source, the link for each
+source, volume, paused, and the encrypted Spotify refresh token.
+
 rooms (0008–0011): grid position, doctor_name (from the doctors roster),
 default duration, timer_* timestamps, capacity (beds, default 1; Room 5 =
 2), turnover_started_at. doctors (0009–0010): roster of ≤5 names with a
@@ -208,6 +223,47 @@ through src/lib/flow-server.ts.
   staff enter it in Dashboard → Screens → the TV's httpOnly rac_display
   cookie (id + secret; only the hash is stored) now authorises that one
   screen until revoked. No env var involved.
+
+## Waiting-room music (migration 0012 — must be applied)
+
+Staff choose ONE source in Dashboard → Waiting-room music; the TV plays
+it and shows what is playing in a bar between the logo and the clock
+(track/video/station, a progress bar when there is a length, LIVE when
+there is not). Pure rules: src/lib/music.ts (tested). Server:
+src/lib/music-server.ts, src/lib/spotify-server.ts. Players:
+src/app/waiting-room/music/ (useRadio, useYouTube, useSpotify, MusicBar).
+
+- Settings are one row in waiting_room_music. The TV learns them from
+  /api/display/calls; a PATCH sends the empty "flow-updated" hint so it
+  switches in about a second. If the setting cannot be read the field is
+  left out and the TV keeps playing — music must never get in the way of
+  calling patients.
+- Radio: an <audio> element on any https stream (presets in music.ts, or
+  a pasted stream address). A dropped or stalled stream reconnects by
+  itself. The track name is read server-side from the stream's ICY
+  metadata (browsers hide it from the page); the server only ever reads
+  the station saved by staff, never an address from the request.
+- YouTube: the IFrame player, sound only — it is kept out of sight
+  (200×200, transparent) by the owner's decision, knowing YouTube's terms
+  ask for a visible player. A single video repeats, a playlist loops.
+  Adverts play unless the TV's browser is signed in to YouTube Premium.
+- Spotify: the Web Playback SDK makes the TV page a Spotify Connect
+  device ("Waiting Room TV") on the clinic's Premium account. Staff
+  connect the account once; the refresh token is stored encrypted
+  (src/lib/secret-box.ts, key derived from NEXTAUTH_SECRET — rotating
+  that secret means reconnecting Spotify) and never leaves the server.
+  Spotify plays on one device at a time: if the account is used elsewhere
+  the TV goes quiet and does NOT grab playback back; Save in the
+  dashboard brings it back. Run as a personal, non-commercial Spotify
+  developer app by the owner's decision.
+- Music starts only after the TV page has been clicked once (the same
+  click that enables the chime). This is deliberate: a staff member
+  previewing /waiting-room elsewhere must not start a second copy.
+- While a patient is called the music drops to 25 % for a few seconds.
+- The content-security policy is loosened for /waiting-room ONLY
+  (next.config.js: YouTube + Spotify scripts/frames, any https audio).
+  Reach that page with a full page load, never next/link, or it inherits
+  the stricter policy of the page it came from.
 
 ## Practice Better API
 
@@ -338,4 +394,8 @@ Input rules (do not regress these — each fixes a way presses were lost):
 - No patient data logged to console
 - /admin/\* routes protected by middleware.ts
 - Waiting-room screens authenticate with a staff-approved device cookie;
-  they can read only "First L." + room name of patients being called
+  they can read only "First L." + room name of patients being called,
+  the music setting, and a one-hour Spotify access token (which can play
+  and control music on the clinic's Spotify account — nothing else)
+- The Spotify refresh token is stored encrypted and is never sent to a
+  browser; outside scripts/frames are allowed on /waiting-room only
