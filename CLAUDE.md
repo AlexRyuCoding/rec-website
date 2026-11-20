@@ -77,7 +77,10 @@ throughout the day unassisted.
   screen cookie or staff session only. The reply also carries the
   background-music setting (`music`), so the TV needs only this one poll
 - /api/admin/music — GET/PATCH the waiting-room music setting (staff);
-  PATCH changes only the fields sent
+  PATCH changes only the fields sent. GET also returns staff's saved
+  radio stations
+- /api/admin/music/stations — POST {name, url} keeps a radio station for
+  later; /api/admin/music/stations/[id] DELETE removes it (staff)
 - /api/admin/spotify/login → Spotify consent → /api/admin/spotify/callback
   connects the clinic's Spotify account (staff); DELETE /api/admin/spotify
   disconnects it
@@ -163,6 +166,8 @@ unreachable or there is no session that day).
 
 waiting_room_music (0012): a single row — source, the link for each
 source, volume, paused, and the encrypted Spotify refresh token.
+radio_stations (0013): staff's saved radio stations — name + unique
+stream address.
 
 rooms (0008–0011): grid position, doctor_name (from the doctors roster),
 default duration, timer_* timestamps, capacity (beds, default 1; Room 5 =
@@ -224,7 +229,7 @@ through src/lib/flow-server.ts.
   cookie (id + secret; only the hash is stored) now authorises that one
   screen until revoked. No env var involved.
 
-## Waiting-room music (migration 0012 — must be applied)
+## Waiting-room music (migrations 0012 + 0013 — must be applied)
 
 Staff choose ONE source in Dashboard → Waiting-room music; the TV plays
 it and shows what is playing in a bar between the logo and the clock
@@ -238,8 +243,13 @@ src/app/waiting-room/music/ (useRadio, useYouTube, useSpotify, MusicBar).
   switches in about a second. If the setting cannot be read the field is
   left out and the TV keeps playing — music must never get in the way of
   calling patients.
-- Radio: an <audio> element on any https stream (presets in music.ts, or
-  a pasted stream address). A dropped or stalled stream reconnects by
+- Radio: an <audio> element on any https stream (presets in music.ts,
+  staff's own "My stations", or a pasted stream address). My stations
+  (radio_stations table, migration 0013, max 30) are added from the
+  "Other station…" form and removed from the list under it; adding or
+  removing never changes what is playing — the setting stores the
+  stream's address and name, not a link to the row. Without 0013 the
+  panel still works with the presets and just hides "Add to My stations". A dropped or stalled stream reconnects by
   itself. The track name is read server-side from the stream's ICY
   metadata (browsers hide it from the page); the server only ever reads
   the station saved by staff, never an address from the request.

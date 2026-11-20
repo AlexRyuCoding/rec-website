@@ -309,3 +309,62 @@ export function playerVolume(volume: number, ducked: boolean): number {
   const v = Math.min(100, Math.max(0, volume)) / 100;
   return ducked ? v * DUCK_FACTOR : v;
 }
+
+// ---- Staff's own radio stations ---------------------------------------------
+// Besides the built-in presets, staff can keep stations they have found
+// (a name and a stream address) so they need pasting only once.
+
+export interface SavedStation {
+  id: string;
+  name: string;
+  url: string;
+}
+
+export const MAX_SAVED_STATIONS = 30;
+
+export type StationCheck =
+  | { ok: true; name: string; url: string }
+  | { ok: false; reason: string };
+
+// A station staff want to keep. Same address rules as playing one
+// (checkStreamUrl), plus: it needs a name, and it must not already be in
+// either list — two entries for one stream would only be confusing.
+export function checkNewStation(
+  name: string,
+  url: string,
+  existing: readonly { url: string }[]
+): StationCheck {
+  const check = checkStreamUrl(url);
+  if (!check.ok) {
+    return {
+      ok: false,
+      reason: url.trim() ? check.reason : "Paste the stream address first.",
+    };
+  }
+  const cleanName = name.trim().replace(/\s+/g, " ");
+  if (!cleanName) {
+    return { ok: false, reason: "Give the station a name first." };
+  }
+  if (cleanName.length > STATION_NAME_MAX_LENGTH) {
+    return {
+      ok: false,
+      reason: `Keep the name under ${STATION_NAME_MAX_LENGTH} characters.`,
+    };
+  }
+  if (RADIO_PRESETS.some((p) => p.url === check.url)) {
+    return {
+      ok: false,
+      reason: "That station is already in the built-in list.",
+    };
+  }
+  if (existing.some((s) => s.url === check.url)) {
+    return { ok: false, reason: "That station is already in your list." };
+  }
+  if (existing.length >= MAX_SAVED_STATIONS) {
+    return {
+      ok: false,
+      reason: `Your list is full (${MAX_SAVED_STATIONS} stations). Remove one first.`,
+    };
+  }
+  return { ok: true, name: cleanName, url: check.url };
+}

@@ -10,6 +10,7 @@ import {
   parseSpotifyLink,
   parseYouTubeLink,
   RADIO_PRESETS,
+  SavedStation,
   TvMusic,
 } from "./music";
 
@@ -73,6 +74,22 @@ export function radioDisplayName(name: string | null, url: string): string {
   } catch {
     return "Radio";
   }
+}
+
+export const STATIONS_TABLE = "radio_stations";
+
+// Staff's own stations, by name. null = the list could not be read
+// (database trouble, or migration 0013 not applied yet); the rest of the
+// music panel must keep working without it.
+export async function loadSavedStations(
+  supabase: SupabaseClient
+): Promise<SavedStation[] | null> {
+  const { data, error } = await supabase
+    .from(STATIONS_TABLE)
+    .select("id, name, url")
+    .order("name");
+  if (error) return null;
+  return (data ?? []) as SavedStation[];
 }
 
 // What the TV is told. Anything unusable (a link that no longer parses)
