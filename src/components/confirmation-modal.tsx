@@ -1,9 +1,16 @@
 // src/components/confirmation-modal.tsx
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { gsap, useGSAP } from "@/lib/gsap";
 import { useMotionPrefs } from "./motion/motion-provider";
+import { kioskTapGuard } from "@/lib/tap-guard";
+import TapButton from "./kiosk/tap-button";
+
+// How long the thank-you stays up before the kiosk resets for the next
+// patient. Long enough to read "have a seat — your name and room will
+// appear on the screen" slowly; "Done" ends it sooner.
+const SUCCESS_VISIBLE_MS = 8000;
 
 interface ConfirmationModalProps {
   isOpen: boolean;
@@ -16,6 +23,8 @@ interface ConfirmationModalProps {
   appointmentTime: string | null;
   appointmentDate: string | null;
   practitioner: string | null;
+  // Set for a new patient, where this is the last of three steps.
+  step?: number | null;
 }
 
 export default function ConfirmationModal({
@@ -28,6 +37,7 @@ export default function ConfirmationModal({
   appointmentTime,
   appointmentDate,
   practitioner,
+  step = null,
 }: ConfirmationModalProps) {
   const { reduced } = useMotionPrefs();
   const successRef = useRef<HTMLDivElement>(null);
@@ -55,10 +65,17 @@ export default function ConfirmationModal({
       const timer = setTimeout(() => {
         setShowSuccess(false);
         onClose();
-      }, 4000);
+      }, SUCCESS_VISIBLE_MS);
       return () => clearTimeout(timer);
     }
   }, [showSuccess, onClose]);
+
+  // "Yes" is replaced by "Done" (or "OK") in the same place. Hold presses
+  // off a little longer here than for an ordinary screen change, so a
+  // double tap on "Yes" cannot close the thank-you before it is seen.
+  useLayoutEffect(() => {
+    if (showSuccess || failed) kioskTapGuard.block(700);
+  }, [showSuccess, failed]);
 
   // Checked-in celebration: draw the circled checkmark, then pop the
   // thank-you text in. Static (pre-drawn) under reduced motion.
@@ -101,6 +118,8 @@ export default function ConfirmationModal({
   );
 
   const handleConfirm = async () => {
+    // Two quick taps on "Yes" must be one check-in.
+    if (saving || showSuccess) return;
     setSaving(true);
     const result = await onConfirm();
     setSaving(false);
@@ -117,7 +136,8 @@ export default function ConfirmationModal({
   useEffect(() => {
     if (!isOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (saving || showSuccess) return;
+      // A held key repeats; one press is one answer.
+      if (e.repeat || saving || showSuccess) return;
       if (e.key === "Enter") {
         e.preventDefault();
         if (failed) onClose();
@@ -139,26 +159,32 @@ export default function ConfirmationModal({
 
   return (
     <div
+      // While it fades out the dialog must not catch touches: the PIN pad
+      // underneath is live again the moment "No" is tapped, and an
+      // invisible layer on top of it used to swallow the next presses.
       className={`fixed inset-0 z-50 flex items-center justify-center backdrop-blur-md transition-opacity duration-300 ${
-        isOpen ? "opacity-100" : "opacity-0"
+        isOpen ? "opacity-100" : "pointer-events-none opacity-0"
       }`}
     >
       <div
-        className={`fixed inset-0 bg-canvas/60 backdrop-blur-md transition-all duration-300 ${
+        // Deliberately not tappable: a stray touch beside the card used to
+        // close the question, and the patient walked away thinking they
+        // had checked in. Only the buttons answer it.
+        className={`fixed inset-0 bg-canvas/70 backdrop-blur-md transition-all duration-300 ${
           isOpen ? "opacity-100" : "opacity-0 backdrop-blur-none"
         }`}
-        onClick={saving ? undefined : onClose}
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Check-in confirmation"
-        className={`relative bg-island text-ink border border-ink/10 p-6 mx-4 sm:mx-auto rounded-card max-w-md w-full z-10 transition-all duration-300 ${
+        style={{ touchAction: "manipulation" }}
+        className={`relative bg-island text-ink border border-ink/10 p-6 mx-4 sm:mx-auto rounded-card max-w-lg w-full z-10 select-none transition-all duration-300 ${
           isOpen ? "translate-y-0 opacity-100" : "translate-y-24 opacity-0"
         }`}
       >
         {/* aria-live announces the thank-you / error text when it appears */}
-        <div className="text-center mb-10" aria-live="polite">
+        <div className="text-center mb-8" aria-live="polite">
           {failed ? (
             <p className="text-2xl text-error">
               We couldn&apos;t record your check-in. Please see the front desk.
@@ -212,7 +238,12 @@ export default function ConfirmationModal({
             </div>
           ) : firstName ? (
             <>
-              <h2 className="text-lg uppercase tracking-widest text-ink/60 mb-4">
+              {step && (
+                <p className="mb-3 text-base font-semibold uppercase tracking-[0.2em] text-brand-secondary">
+                  Step {step} of 3
+                </p>
+              )}
+              <h2 className="text-xl uppercase tracking-widest text-ink/70 mb-4">
                 {appointmentTime ? "Is this your appointment?" : "Is this you?"}
               </h2>
               <p className="font-serif text-5xl sm:text-6xl text-ink mb-6">
@@ -236,31 +267,44 @@ export default function ConfirmationModal({
         </div>
 
         {!showSuccess && !failed && firstName && (
-          <div className="flex items-center justify-center gap-4 text-2xl">
-            <button
-              onClick={handleConfirm}
+          <div className="flex flex-col gap-3">
+            <TapButton
+              onTap={handleConfirm}
               disabled={saving}
-              className="px-6 py-2 bg-surface text-cream active:scale-95 rounded-full disabled:opacity-50 transition"
+              className="w-full rounded-full bg-brand-primary px-6 py-5 text-3xl font-medium text-white data-[pressed=true]:bg-brand-secondary"
             >
-              {saving ? "Signing in..." : "Yes, Sign In"}
-            </button>
-            <button
-              onClick={onDeny}
+              {saving ? "Checking you in…" : "Yes — check me in"}
+            </TapButton>
+            <TapButton
+              onTap={onDeny}
               disabled={saving}
-              className="px-6 py-2 border border-ink/20 text-ink active:scale-95 rounded-full disabled:opacity-50 transition"
+              className="w-full rounded-full border-2 border-ink/30 px-6 py-4 text-2xl text-ink data-[pressed=true]:bg-ink/10"
             >
-              No
-            </button>
+              No, that&apos;s not me
+            </TapButton>
+          </div>
+        )}
+        {showSuccess && (
+          <div className="flex justify-center">
+            <TapButton
+              onTap={() => {
+                setShowSuccess(false);
+                onClose();
+              }}
+              className="rounded-full border-2 border-ink/30 px-10 py-3 text-2xl text-ink data-[pressed=true]:bg-ink/10"
+            >
+              Done
+            </TapButton>
           </div>
         )}
         {failed && (
           <div className="flex justify-center">
-            <button
-              onClick={onClose}
-              className="px-6 py-2 border border-ink/20 text-ink active:scale-95 rounded-full transition"
+            <TapButton
+              onTap={onClose}
+              className="rounded-full bg-brand-primary px-10 py-4 text-2xl text-white data-[pressed=true]:bg-brand-secondary"
             >
-              Close
-            </button>
+              OK
+            </TapButton>
           </div>
         )}
       </div>

@@ -5,10 +5,16 @@ import SignInKeypad from "@/components/signin-keypad";
 
 export default function Page() {
   return (
-    // Kiosk: exactly one viewport tall, never scrolls. pt-28 clears the
-    // fixed header (py-4 + 80px logo ≈ 112px).
-    <div className="h-dvh overflow-hidden flex flex-col items-center justify-center px-4 pb-4 pt-28">
-      <main className="flex flex-col items-center">
+    // Kiosk: exactly one viewport tall, never scrolls or zooms. (Admin
+    // pages have no site header, so no top offset is needed — the space
+    // goes to bigger keys instead.) The sizes inside scale with the
+    // viewport height (dvh), so the whole flow fits an iPad in either
+    // orientation.
+    <div
+      className="h-dvh overflow-hidden overscroll-none flex flex-col items-center justify-center px-4 py-3"
+      style={{ touchAction: "manipulation" }}
+    >
+      <main className="flex w-full flex-col items-center">
         <SignInKeypad />
       </main>
       <Link
