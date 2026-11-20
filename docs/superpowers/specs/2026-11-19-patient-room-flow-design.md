@@ -399,3 +399,18 @@ called. No new environment variable.
 5. Tell staff: ✓ = needles out, **Room ready** = room is empty.
 
 CLAUDE.md gets the new routes, tables, columns and the broadcast rule.
+
+## Deviations made while building
+
+- The kiosk check-in retries its insert without `practitioner_name` if the
+  first insert fails, and the timer route retries ✓ without
+  `turnover_started_at`: if a deploy ever lands before migration 0011, the
+  kiosk still checks patients in and the needle alarm can still be
+  silenced (the flow features simply stay dormant).
+- The staff board previews Start / Room ready / Reset locally with the
+  same rules the server applies, so a tile never flashes a stale state
+  while the request is in flight. Assign / unassign / remove wait for the
+  server.
+- Occupant names on a tile share one line and truncate rather than
+  wrapping; the tap menu shows the name in full.
+- The waiting-room screen shows a clock and the clinic logo.

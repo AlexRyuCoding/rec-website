@@ -46,6 +46,24 @@ throughout the day unassisted.
 - /api/auth/[...nextauth] — NextAuth (Google sign-in, session, callbacks)
 - /api/admin/checkins — GET check-ins in a from/to range, joined with names
 - /api/admin/patients — GET staff patient search (returns has_pin, never the hash)
+- /admin/rooms — staff rooms board: per-room timers, doctor pills, the
+  waiting list of checked-in patients, and room assignment (see "Patient
+  room flow" below)
+- /waiting-room — the waiting-room TV ("Alex R. → Room 3"). NOT under
+  /admin: the page shell is public and holds no patient data; its data
+  API needs a paired-screen cookie or a staff session
+- /api/admin/rooms — GET rooms + doctor roster + open visits + server
+  time; POST creates a room. /api/admin/rooms/[id] PATCH/DELETE (PATCH
+  accepts capacity 1–4 = beds). /api/admin/rooms/[id]/timer POST timer
+  actions (start/pause/resume/adjust/set/reset/clear/ready)
+- /api/admin/visits/[id] — POST {action: assign(roomId) | unassign |
+  remove} moves a checked-in patient through the flow
+- /api/admin/displays — GET paired screens; /approve POST {code, label?}
+  pairs the TV showing that code; /[id] DELETE revokes a screen
+- /api/display/pair — PUBLIC POST: a TV asks for a pairing code (useless
+  until staff approve it; rate limited 10/hour/IP, fails closed)
+- /api/display/calls — GET who is being called to which room; paired
+  screen cookie or staff session only
 - /api/admin/reset-pin — POST clears a patient's PIN (patient re-creates at kiosk)
 - /api/admin/sync-patients — POST bulk-syncs PB client records in chunks
   (~500/call, before_id cursor); the dashboard "Full sync" button loops it
@@ -58,8 +76,9 @@ throughout the day unassisted.
 - /api/patients/setup-pin — creates PIN for new patient
 - /api/appointments/today — fetches today's appointment from Practice Better
 - /api/checkins — writes check-in record to Supabase (patient_id + timestamp,
-  plus a snapshot of today's PB appointment time and service name; nullable,
-  fails open if PB is unreachable)
+  plus a snapshot of today's PB appointment time, service name and
+  practitioner; nullable, fails open if PB is unreachable). The new row is
+  also the patient's visit: it appears in the rooms board's waiting list
 - /api/webhooks/practice-better — PB webhook: GET = verification handshake, POST = signed client.record.created/updated events → upsert patient into Supabase (PB is the source of truth for contact info; staff fix wrong numbers/emails in PB, never in Supabase)
 
 ## Auth (Google sign-in via NextAuth)
@@ -109,11 +128,58 @@ policies on both tables; all access goes through the service-role key.
 | checked_in_at  | timestamp | auto-set on insert                            |
 | appointment_at | timestamp | nullable; today's PB session time, snapshotted at check-in (migration 0007) |
 | service_name   | text      | nullable; PB service name, snapshotted at check-in (migration 0007) |
+| practitioner_name | text   | nullable; PB doctor, snapshotted at check-in (migration 0011) |
+| room_id        | uuid      | nullable; → rooms.id, on delete set null (0011) |
+| room_assigned_at | timestamp | nullable; staff assigned a room (0011)      |
+| called_at      | timestamp | nullable; patient told to go to the room (0011) |
+| seen_at        | timestamp | nullable; the room's timer was started (0011) |
+| done_at        | timestamp | nullable; visit finished or removed (0011)    |
 
-A check-in logs who + when + a snapshot of the appointment (time + service
-name, fetched live from PB at check-in; null if PB is unreachable or there
-is no session that day). Practitioner is shown on the kiosk confirm screen
-but not logged.
+A check-in logs who + when + a snapshot of the appointment (time, service
+name and practitioner, fetched live from PB at check-in; null if PB is
+unreachable or there is no session that day).
+
+### rooms / doctors / display_devices
+
+rooms (0008–0011): grid position, doctor_name (from the doctors roster),
+default duration, timer_* timestamps, capacity (beds, default 1; Room 5 =
+2), turnover_started_at. doctors (0009–0010): roster of ≤5 names with a
+color each. display_devices (0011): paired waiting-room screens — pairing
+code, sha256 of the device secret, label, approved/revoked/last-seen.
+
+## Patient room flow (migration 0011 — must be applied)
+
+Spec: docs/superpowers/specs/2026-11-19-patient-room-flow-design.md.
+Rules live in src/lib/patient-flow.ts (pure, tested); routes apply them
+through src/lib/flow-server.ts.
+
+- One checkins row = one visit. Its state is derived from timestamps,
+  never stored: no room → waiting; room but not called → next up; called
+  → patient told to go; seen → timer started; done → finished. Open
+  visits older than 12 h drop off by themselves.
+- STAFF choose the room (never the system): tap a waiting chip, then a
+  room. A free bed → called now; busy room → lined up ("next up") and
+  called automatically when the room is ready.
+- Room status with no timer running: turnover_started_at set → Turning
+  over; else any occupant → Patient waiting; else Available.
+- ✓ (clear) = "needles out": silences the alarm and starts Turning over;
+  the patient is still in the room, so nobody is called. "Room ready"
+  finishes the room's patients and calls whoever is lined up. Reset only
+  cancels the timer (the patient stays).
+- Promotion is a rule, not a button: after every change, an idle room
+  (no timer, not turning over) with a free bed calls its lined-up
+  patients, oldest first.
+- When a patient is called, the room's doctor pill switches to the roster
+  doctor matching the appointment's PB practitioner (all words of the
+  roster name must appear in the PB name; exactly one match or no change).
+- Patient names leave the server only as "First L." (display_name).
+- NEVER put patient data in a Realtime broadcast: the channel is readable
+  with the public anon key. Room broadcasts carry anonymous room rows;
+  the "flow-updated" event has an empty payload and just means "refetch".
+- Waiting-room TV pairing: TV opens /waiting-room → shows a 6-char code →
+  staff enter it in Dashboard → Screens → the TV's httpOnly rac_display
+  cookie (id + secret; only the hash is stored) now authorises that one
+  screen until revoked. No env var involved.
 
 ## Practice Better API
 
@@ -157,7 +223,8 @@ but not logged.
 - Numeric PIN pad (0–9) on screen — no physical keyboard needed
 - Patient taps their 4-digit PIN
 - On match: show name + appointment time + confirm button
-- On confirm: log check-in, show "Thank you [first name]!" briefly, reset
+- On confirm: log check-in, show "Thank you [first name]!" and "Please
+  have a seat — your name and room will appear on the screen", reset
 - Re-check-in within 4 hours: no duplicate row; shows "You're already
   checked in" instead
 - On no match: show "PIN not recognized, please see the front desk"
@@ -194,3 +261,5 @@ but not logged.
 - Failed PIN lookups rate limited durably in Supabase (fails closed)
 - No patient data logged to console
 - /admin/\* routes protected by middleware.ts
+- Waiting-room screens authenticate with a staff-approved device cookie;
+  they can read only "First L." + room name of patients being called
