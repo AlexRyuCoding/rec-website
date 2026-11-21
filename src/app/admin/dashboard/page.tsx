@@ -1,8 +1,9 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import MusicPanel from "./MusicPanel";
 import ScreensPanel from "./ScreensPanel";
+import { createSearchRunner, type SearchRunner } from "@/lib/latest-search";
 import { KeyRound, RefreshCw, Timer } from "lucide-react";
 
 interface CheckinRow {
@@ -22,6 +23,16 @@ interface PatientRow {
   phone: string | null;
   has_pin: boolean;
 }
+
+interface SearchReply {
+  status: number;
+  ok: boolean;
+  data: { patients?: PatientRow[]; more?: boolean; error?: string };
+}
+
+// How long typing has to pause before the search goes out.
+const SEARCH_DELAY_MS = 250;
+const SEARCH_MIN_LENGTH = 2;
 
 type Preset = "today" | "yesterday" | "week" | "month" | "custom";
 
@@ -143,35 +154,60 @@ export default function AdminDashboard() {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [resetDoneId, setResetDoneId] = useState<string | null>(null);
 
-  const search = async () => {
-    if (query.trim().length < 2) return;
-    setSearching(true);
-    setSearchError("");
-    setMoreMatches(false);
-    setConfirmingId(null);
-    setResetDoneId(null);
-    try {
-      const res = await fetch(
-        `/api/admin/patients?q=${encodeURIComponent(query.trim())}`
-      );
-      if (res.status === 401) {
-        window.location.href = "/admin/login";
-        return;
-      }
-      const data = await res.json();
-      if (!res.ok) {
-        setSearchError(data.error ?? "Search failed");
-        return;
-      }
-      setPatients(data.patients);
-      setMoreMatches(data.more === true);
-      if (data.patients.length === 0) setSearchError("No patients found.");
-    } catch {
-      setSearchError("Search failed");
-    } finally {
-      setSearching(false);
-    }
-  };
+  // Searches as the staff member types (and at once on Enter / Search).
+  // The runner sends one request after typing pauses and only ever hands
+  // back the reply to the latest text — see src/lib/latest-search.ts.
+  const searchRunner = useRef<SearchRunner | null>(null);
+  useEffect(() => {
+    const showNothing = (message: string) => {
+      setPatients([]);
+      setMoreMatches(false);
+      setSearchError(message);
+      setConfirmingId(null);
+      setResetDoneId(null);
+    };
+    const runner = createSearchRunner<SearchReply>({
+      delayMs: SEARCH_DELAY_MS,
+      minLength: SEARCH_MIN_LENGTH,
+      // POST, text in the body: a patient's name must not be in the address.
+      run: async (text, signal) => {
+        const res = await fetch("/api/admin/patients", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ q: text }),
+          signal,
+        });
+        const data = await res.json().catch(() => ({}));
+        return { status: res.status, ok: res.ok, data };
+      },
+      onStart: () => setSearching(true),
+      onResult: (reply) => {
+        setSearching(false);
+        if (reply.status === 401) {
+          window.location.href = "/admin/login";
+          return;
+        }
+        if (!reply.ok) {
+          showNothing(reply.data.error ?? "Search failed");
+          return;
+        }
+        const found = reply.data.patients ?? [];
+        showNothing(found.length === 0 ? "No patients found." : "");
+        setPatients(found);
+        setMoreMatches(reply.data.more === true);
+      },
+      onError: () => {
+        setSearching(false);
+        showNothing("Search failed");
+      },
+      onClear: () => {
+        setSearching(false);
+        showNothing("");
+      },
+    });
+    searchRunner.current = runner;
+    return () => runner.cancel();
+  }, []);
 
   const resetPin = async (id: string) => {
     try {
@@ -427,24 +463,40 @@ export default function AdminDashboard() {
         {tab === "patients" && (
           <div className="flex flex-col gap-4">
             <div className="flex gap-2">
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && search()}
-                placeholder="Search by name, email, or phone"
-                className="flex-1 px-4 py-2 border border-brand-foreground rounded-lg bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-primary"
-              />
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    searchRunner.current?.type(e.target.value);
+                  }}
+                  onKeyDown={(e) =>
+                    e.key === "Enter" && searchRunner.current?.submit(query)
+                  }
+                  placeholder="Search by name, email, or phone"
+                  autoComplete="off"
+                  className="w-full pl-4 pr-28 py-2 border border-brand-foreground rounded-lg bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                />
+                {/* Inside the box, so it never moves anything; shown only
+                    when a search takes longer than a moment. */}
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-cream/50 transition-opacity duration-200 ${
+                    searching ? "opacity-100 delay-300" : "opacity-0"
+                  }`}
+                >
+                  Searching…
+                </span>
+              </div>
               <button
-                onClick={search}
-                disabled={searching || query.trim().length < 2}
+                onClick={() => searchRunner.current?.submit(query)}
+                disabled={query.trim().length < SEARCH_MIN_LENGTH}
                 className="px-6 py-2 rounded-lg bg-brand-primary text-white hover:bg-brand-secondary disabled:opacity-50 transition-colors"
               >
-                {searching ? "Searching..." : "Search"}
+                Search
               </button>
             </div>
-
-            {searchError && <p className="text-cream/50">{searchError}</p>}
 
             <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-brand-muted">
               <button
@@ -466,6 +518,12 @@ export default function AdminDashboard() {
                   "New and updated patients normally arrive automatically. Quick sync catches recently added patients; full sync re-pulls every record."}
               </span>
             </div>
+            {/* Below everything else, in the place of the results: the
+                list changes with every letter typed, and nothing sits
+                under it to be pushed around. */}
+            <p aria-live="polite" className="text-cream/50 empty:hidden">
+              {searchError}
+            </p>
             {patients.length > 0 && (
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
@@ -503,7 +561,7 @@ export default function AdminDashboard() {
                                   onClick={() => resetPin(p.id)}
                                   className="px-3 py-1 rounded-full bg-error text-white hover:bg-error/80 transition-colors"
                                 >
-                                  Confirm reset
+                                  Reset PIN for {p.first_name} {p.last_name}
                                 </button>
                                 <button
                                   onClick={() => setConfirmingId(null)}

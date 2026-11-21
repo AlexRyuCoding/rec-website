@@ -47,8 +47,8 @@ throughout the day unassisted.
   service per check-in) and patient search with Reset PIN
 - /api/auth/[...nextauth] — NextAuth (Google sign-in, session, callbacks)
 - /api/admin/checkins — GET check-ins in a from/to range, joined with names
-- /api/admin/patients — GET staff patient search (returns has_pin, never the
-  hash); see "Patient search" below
+- /api/admin/patients — POST {q} staff patient search (returns has_pin,
+  never the hash); see "Patient search" below
 - /admin/rooms — staff rooms board: per-room timers, doctor pills, the
   waiting list of checked-in patients, and room assignment (see "Patient
   room flow" below)
@@ -90,7 +90,8 @@ throughout the day unassisted.
 - /api/display/spotify-token — GET a one-hour Spotify access token for
   the TV's player; /api/display/now-playing — GET the track the chosen
   radio station is playing. Both: paired screen cookie or staff session
-- /api/admin/reset-pin — POST clears a patient's PIN (patient re-creates at kiosk)
+- /api/admin/reset-pin — POST clears a patient's PIN (patient re-creates at
+  kiosk); written to the staff audit log
 - /api/admin/sync-patients — POST bulk-syncs PB client records in chunks
   (~500/call, before_id cursor); the dashboard "Full sync" button loops it
   until done. {quick:true} = newest 100 only (catches recently created
@@ -201,8 +202,39 @@ src/lib/patient-search-server.ts calls it.
 - Database tests: supabase/tests/*.sql, run with `npm run test:db` (a
   throwaway local Postgres with every migration applied; needs Postgres
   installed, touches nothing on Supabase).
+- The text travels in a POST body, never in the address: a name in
+  `?q=` ends up in request logs. The reply is `Cache-Control: no-store`.
+  (GET answers 405 "This page is out of date. Please reload it." for
+  tabs left open from before.)
+- The dashboard searches as staff type: one request 250 ms after typing
+  pauses, at once on Enter / Search. src/lib/latest-search.ts (pure,
+  tested) guarantees only the reply to the LATEST text is shown — a slow
+  older reply must never overwrite a newer one. Because the list changes
+  under the staff member's hands: the no-match message sits below
+  everything else, the "Searching…" hint is inside the box (shown only
+  after 300 ms), the Search button never changes width, and the reset
+  confirmation names the patient ("Reset PIN for Ann Licater").
 - The kiosk's phone/email lookup stays EXACT — do not point it at this
   function: a fuzzy match there would show a patient someone else's name.
+
+## Staff audit log (migration 0015 — should be applied)
+
+staff_audit_log: one row per dashboard patient search (the text typed and
+the ids of the patients listed) and per PIN reset — id, at, staff_email,
+action ('patient_search' | 'pin_reset'), patient_ids uuid[], detail.
+Written by src/lib/audit-server.ts (recordStaffAction); the staff email
+comes from getAdminEmail() in src/lib/admin-auth.ts. There is no page
+for it: read it in the Supabase table editor.
+
+- It fails OPEN, by decision: if the row cannot be written (0015 not
+  applied, database hiccup) the search / reset still happens and the app
+  logs "audit log write failed" with the error code only. The front desk
+  must not be locked out of finding a patient by the logbook.
+- Searching while typing writes a row per request, so one lookup is
+  often 2–4 rows ("an", "ann", "ann lic"). Each one did list patients.
+- Nothing prunes the table.
+- RLS on, no policies; patient_ids is deliberately not a foreign key
+  (the record outlives the patient).
 
 ## Patient room flow (migration 0011 — must be applied)
 
@@ -490,6 +522,9 @@ Input rules (do not regress these — each fixes a way presses were lost):
 - Staff auth = Google sign-in (NextAuth) restricted to ALLOWED_ADMIN_EMAILS;
   no shared password exists
 - Patient API routes require the staff session (401 otherwise)
+- Dashboard patient searches and PIN resets are recorded in
+  staff_audit_log (who, when, which patients); patient names are never
+  put in a request address
 - setup-pin PATCH refuses to overwrite an existing PIN (403) and enforces
   PIN uniqueness across patients
 - Failed PIN lookups rate limited durably in Supabase (fails closed)
