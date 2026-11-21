@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { createServiceClient } from "@/lib/supabase";
 import { fetchClientRecord } from "@/lib/practice-better";
+import { toPatientRow } from "@/lib/patient-record";
 
 // One-time endpoint verification handshake from Practice Better
 export async function GET(req: Request) {
@@ -107,16 +108,9 @@ export async function POST(req: Request) {
     }
 
     const supabase = createServiceClient();
-    const { error } = await supabase.from("patients").upsert(
-      {
-        pb_client_id: record.id,
-        first_name: record.profile?.firstName ?? "",
-        last_name: record.profile?.lastName ?? "",
-        email: record.profile?.emailAddress?.toLowerCase() ?? null,
-        phone: record.profile?.mobilePhone ?? record.profile?.homePhone ?? null,
-      },
-      { onConflict: "pb_client_id" }
-    );
+    const { error } = await supabase
+      .from("patients")
+      .upsert(toPatientRow(record), { onConflict: "pb_client_id" });
     if (error) {
       console.error("Webhook upsert failed:", error.code);
       return NextResponse.json({ error: "Database error" }, { status: 500 });

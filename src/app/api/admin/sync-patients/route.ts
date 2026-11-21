@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
 import { isAdminAuthorized } from "@/lib/admin-auth";
+import { toPatientRow } from "@/lib/patient-record";
 import {
   PB_BASE,
   getPbToken,
@@ -77,13 +78,7 @@ export async function POST(req: Request) {
   // Dedupe by PB record id — a batch upsert fails outright if the same
   // key appears twice ("cannot affect row a second time")
   const unique = [...new Map(clients.map((c) => [c.id, c])).values()];
-  const rows = unique.map((c) => ({
-    pb_client_id: c.id,
-    first_name: c.profile?.firstName ?? "",
-    last_name: c.profile?.lastName ?? "",
-    email: c.profile?.emailAddress?.toLowerCase() ?? null,
-    phone: c.profile?.mobilePhone ?? c.profile?.homePhone ?? null,
-  }));
+  const rows = unique.map(toPatientRow);
 
   const supabase = createServiceClient();
 

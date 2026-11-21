@@ -1,6 +1,26 @@
-require("dotenv").config({ path: ".env.local" });
-
 const PB_BASE = "https://api.practicebetter.io";
+
+// A Practice Better client record → the row stored in the patients table.
+// The same rules as src/lib/patient-record.ts (this script is plain JS and
+// cannot import it); src/lib/patient-record.test.ts runs both copies.
+function cleanText(value) {
+  return (value ?? "")
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function toPatientRow(record) {
+  const profile = record.profile ?? {};
+  return {
+    pb_client_id: record.id,
+    first_name: cleanText(profile.firstName),
+    last_name: cleanText(profile.lastName),
+    email: cleanText(profile.emailAddress).toLowerCase() || null,
+    phone:
+      cleanText(profile.mobilePhone) || cleanText(profile.homePhone) || null,
+  };
+}
 
 async function getPbToken() {
   const res = await fetch(`${PB_BASE}/oauth2/token`, {
@@ -84,6 +104,7 @@ async function upsertPatients(supabaseUrl, serviceKey, patients) {
 }
 
 async function main() {
+  require("dotenv").config({ path: ".env.local" });
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceKey) {
@@ -108,13 +129,7 @@ async function main() {
   }
   console.log(`Found ${unique.length} clients`);
 
-  const rows = unique.map((client) => ({
-    pb_client_id: client.id,
-    first_name: client.profile?.firstName ?? "",
-    last_name: client.profile?.lastName ?? "",
-    email: client.profile?.emailAddress?.toLowerCase() ?? null,
-    phone: client.profile?.mobilePhone ?? client.profile?.homePhone ?? null,
-  }));
+  const rows = unique.map(toPatientRow);
 
   let upserted = 0;
   let errors = 0;
@@ -149,7 +164,12 @@ async function main() {
   console.log(`Done. Upserted: ${upserted}, Errors: ${errors}`);
 }
 
-main().catch((err) => {
-  console.error("Sync failed:", err);
-  process.exit(1);
-});
+// Run from the terminal: sync. Loaded by a test: only hand over the rules.
+if (require.main === module) {
+  main().catch((err) => {
+    console.error("Sync failed:", err);
+    process.exit(1);
+  });
+}
+
+module.exports = { cleanText, toPatientRow };
