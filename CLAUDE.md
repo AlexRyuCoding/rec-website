@@ -64,10 +64,11 @@ throughout the day unassisted.
 - /api/admin/rooms — GET rooms + doctor roster + open visits + server
   time; POST creates a room. /api/admin/rooms/[id] PATCH/DELETE (PATCH
   accepts capacity 1–4 = beds). /api/admin/rooms/[id]/timer POST timer
-  actions (start/pause/resume/adjust/set/reset/clear/ready)
-- /api/admin/visits/[id] — POST {action: assign(roomId) | unassign |
-  remove | mark_waiting} moves a checked-in patient through the flow
-  (mark_waiting undoes a mistaken "Doctor in")
+  actions (start/pause/resume/adjust/set/reset/clear/ready/again)
+- /api/admin/visits/[id] — POST {action: assign(roomId, togetherWith?) |
+  unassign | remove | mark_waiting} moves a checked-in patient through
+  the flow (togetherWith = the visit ids staff said the patient is
+  together with; mark_waiting undoes a mistaken "Doctor in")
 - /api/admin/rooms/[id]/doctor-in — POST: the doctor has walked in; marks
   the room's waiting patients seen (no timer change)
 - /api/admin/displays — GET paired screens; /approve POST {code, label?}
@@ -188,16 +189,36 @@ through src/lib/flow-server.ts.
   the latest started the timer); done → finished. Open visits older than
   12 h drop off by themselves.
 - STAFF choose the room (never the system): tap a waiting chip, then a
-  room. A free bed → called now; busy room → lined up ("next up") and
-  called automatically when the room is ready.
+  room. A room holds ONE GROUP at a time — people share a multi-bed room
+  only when staff say they came together; a patient alone in one gets it
+  to themselves. An empty room → called now. A room with someone in it
+  and a spare bed → the board asks "Together with Alex R.?" (yes = called
+  now, no = lined up as "next up"). A room that already has a line → the
+  only offer is to join that line (the line is one group too). All beds
+  taken, or Setting Up → lined up. Lined-up patients are called
+  automatically when the room is ready.
+- Privacy fails closed (do not regress): the "yes" travels as
+  `togetherWith` — the visit ids the question named — and the server
+  refuses it ("Room 5 changed — please choose again") unless those are
+  still exactly the room's occupants / line. Absent = not together, so a
+  board that never asked (old page, stale picture) lines the patient up.
+  The question on the tile closes by itself when its names change; it
+  never re-words in place, and the tile then reads "Room 5 changed —
+  choose again" and takes no presses for 2.5 s (a tap already heading
+  for "Yes" must land on nothing). The answers ignore presses for 350 ms
+  after the question opens. An assign for a patient who already has a
+  room is refused — rooms are given from the waiting list only, so that
+  request can only come from a stale board, and moving the patient would
+  free the room they are physically in.
 - With a mouse the chip can also be dragged onto a room (@dnd-kit, in
   page.tsx / WaitingList.tsx / RoomTile.tsx). It is the same action as
   tap-then-tap: picking a chip up selects it, letting go over a room is
   the tap. MouseSensor only, on purpose — a finger on the iPads must keep
   tapping and scrolling the list. The dragged copy covers the tile's
   label, so it says what the drop will do itself ("Send to Room 1").
-- Room status with no timer running: turnover_started_at set → Turning
-  over; else any occupant not yet seen → Patient waiting; else any
+- Room status with no timer running: turnover_started_at set → Setting
+  Up (the status is still called `turnover` in code); else any occupant
+  not yet seen → Patient waiting; else any
   occupant → With doctor; else Available. The timer is started once the
   needles are in, so "With doctor" covers the gap before that.
 - Doctor alert: while a room has an unseen patient, every rooms board
@@ -205,15 +226,23 @@ through src/lib/flow-server.ts.
   "Doctor in" button) and rings the doorbell sound when it appears. It cannot be
   dismissed — only "Doctor in" or Start clears it. Tapping a patient's
   name on a With-doctor tile offers "Doctor hasn't come yet" to undo.
-- ✓ (clear) = "needles out": silences the alarm and starts Turning over;
-  the patient is still in the room, so nobody is called. "Room ready"
-  finishes the room's patients and calls whoever is lined up. Reset only
-  cancels the timer (the patient stays, still "seen" → With doctor). A Start sent during turnover
-  (only an old, un-reloaded board can do that) counts as Room ready +
-  Start.
+- ✓ (clear) = "needles out": silences the alarm and starts Setting Up;
+  the patient is still in the room, so nobody is called. From there the
+  tile offers two buttons. "Room ready" finishes the room's patients and
+  calls whoever is lined up. "Another session" (timer action `again`)
+  starts the timer again for the same patients, at the time shown on the
+  tile: nobody is finished, nobody is called. It is how a patient gets
+  several timed sessions in a row — fire cupping is two 8-minute
+  sessions; the doctor sets up the next one in the room, walks out and
+  taps it. A mistaken "Another session" is undone with ✓. Reset only
+  cancels the timer (the patient stays, still "seen" → With doctor). A
+  Start sent during Setting Up (only an old, un-reloaded board can do
+  that) counts as Room ready + Start — which is why "Another session" is
+  its own action.
 - Promotion is a rule, not a button: after every change, an idle room
-  (no timer, not turning over) with a free bed calls its lined-up
-  patients, oldest first.
+  (no timer, not setting up) with NO occupants calls its whole line,
+  oldest first. Empty, not "a free bed": if one of a couple leaves early,
+  the line must not be pulled in beside the partner who is still there.
 - When a patient is called, the room's doctor pill switches to the roster
   doctor matching the appointment's PB practitioner (all words of the
   roster name must appear in the PB name; exactly one match or no change).

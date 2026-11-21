@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   applyVisitUpdates,
+  assignCompanions,
+  AssignOutcome,
   assignOutcome,
   assignUpdate,
   displayName,
@@ -8,8 +10,9 @@ import {
   doctorInUpdates,
   FlowRoom,
   FlowVisit,
-  hasFreeBedNow,
   isActiveVisit,
+  joinQuestionFor,
+  joinQuestionOpen,
   markWaitingUpdate,
   matchRosterDoctor,
   previewTimerFlow,
@@ -70,6 +73,11 @@ const treating = (id: string, roomId = "r1") =>
   });
 
 const timerRunning = { timer_started_at: iso(T0 - 6 * MIN) };
+const settingUp = { turnover_started_at: iso(T0 - MIN) };
+const two = (o: Partial<FlowRoom> = {}) => room({ capacity: 2, ...o });
+const named = (o: Partial<FlowRoom> = {}) => room({ name: "Room 5", ...o });
+const fieldsOf = (r: ReturnType<typeof assignUpdate>) =>
+  r.ok ? r.updates[0].fields : r;
 
 describe("displayName", () => {
   it("shows first name and last initial", () => {
@@ -150,52 +158,110 @@ describe("roomOccupants / roomNextUp", () => {
   });
 });
 
-describe("hasFreeBedNow", () => {
-  it("an idle empty room has a free bed", () => {
-    expect(hasFreeBedNow(room(), [])).toBe(true);
-  });
-  it("an idle one-bed room with an occupant does not", () => {
-    expect(hasFreeBedNow(room(), [called("a")])).toBe(false);
-  });
-  it("a hand-started timer with nobody tracked counts as busy", () => {
-    expect(hasFreeBedNow(room(timerRunning), [])).toBe(false);
-  });
-  it("a late partner can join a two-bed room mid-treatment", () => {
-    const r = room({ capacity: 2, ...timerRunning });
-    expect(hasFreeBedNow(r, [treating("a")])).toBe(true);
-  });
-  it("but not when someone is already lined up for it", () => {
-    const r = room({ capacity: 2, ...timerRunning });
-    expect(hasFreeBedNow(r, [treating("a"), nextUp("n")])).toBe(false);
-  });
-  it("a room turning over is never free", () => {
-    const r = room({ turnover_started_at: iso(T0 - MIN) });
-    expect(hasFreeBedNow(r, [])).toBe(false);
-  });
-  it("an over-full room is not free", () => {
-    expect(hasFreeBedNow(room(), [called("a"), called("b")])).toBe(false);
-  });
-  it("ignores people in other rooms", () => {
-    expect(hasFreeBedNow(room(), [called("a", "r2")])).toBe(true);
+describe("assignOutcome", () => {
+  it.each<[string, FlowRoom, FlowVisit[], AssignOutcome]>([
+    // one bed — exactly as before
+    ["empty one-bed room", room(), [], "send"],
+    [
+      "one-bed room, patient waiting for the doctor",
+      room(),
+      [called("a")],
+      "next_up",
+    ],
+    [
+      "one-bed room mid-treatment",
+      room(timerRunning),
+      [treating("a")],
+      "next_up",
+    ],
+    [
+      "one-bed room with a line",
+      room(timerRunning),
+      [treating("a"), nextUp("n")],
+      "full",
+    ],
+    ["hand-started timer, nobody tracked", room(timerRunning), [], "next_up"],
+    ["one-bed room setting up", room(settingUp), [], "next_up"],
+    ["over-full one-bed room", room(), [called("a"), called("b")], "next_up"],
+    ["people in other rooms do not count", room(), [called("a", "r2")], "send"],
+    // two beds
+    ["empty two-bed room", two(), [], "send"],
+    [
+      "two beds, one patient waiting for the doctor",
+      two(),
+      [called("a")],
+      "ask_join_room",
+    ],
+    [
+      "two beds, one patient mid-treatment",
+      two(timerRunning),
+      [treating("a")],
+      "ask_join_room",
+    ],
+    [
+      "two beds, both taken",
+      two(timerRunning),
+      [treating("a"), treating("b")],
+      "next_up",
+    ],
+    [
+      "two beds, hand-started timer, nobody tracked",
+      two(timerRunning),
+      [],
+      "next_up",
+    ],
+    [
+      "two beds setting up, spare bed, no line",
+      two(settingUp),
+      [treating("a")],
+      "next_up",
+    ],
+    [
+      "two beds, one in line",
+      two(timerRunning),
+      [treating("a"), nextUp("n")],
+      "ask_join_line",
+    ],
+    [
+      "a line wins over setting up",
+      two(settingUp),
+      [treating("a"), nextUp("n")],
+      "ask_join_line",
+    ],
+    ["a line wins over an empty room", two(), [nextUp("n")], "ask_join_line"],
+    [
+      "two beds, line of two",
+      two(timerRunning),
+      [treating("a"), nextUp("n"), nextUp("m")],
+      "full",
+    ],
+  ])("%s", (_name, r, visits, expected) => {
+    expect(assignOutcome(r, visits)).toBe(expected);
   });
 });
 
-describe("assignOutcome", () => {
-  it("sends to a free bed", () => {
-    expect(assignOutcome(room(), [])).toBe("send");
+describe("assignCompanions", () => {
+  it("is the occupants when the question is about the room", () => {
+    const visits = [treating("a"), called("b", "r2")];
+    expect(
+      assignCompanions(two(timerRunning), visits).map((v) => v.id)
+    ).toEqual(["a"]);
   });
-  it("lines up behind a busy room", () => {
-    expect(assignOutcome(room(timerRunning), [treating("a")])).toBe("next_up");
+  it("is the line, oldest first, when the question is about the line", () => {
+    const r = room({ capacity: 3, ...timerRunning });
+    const visits = [
+      treating("a"),
+      nextUp("late", T0 - MIN),
+      nextUp("early", T0 - 9 * MIN),
+    ];
+    expect(assignCompanions(r, visits).map((v) => v.id)).toEqual([
+      "early",
+      "late",
+    ]);
   });
-  it("is full once a one-bed room has someone lined up", () => {
-    const visits = [treating("a"), nextUp("n")];
-    expect(assignOutcome(room(timerRunning), visits)).toBe("full");
-  });
-  it("a two-bed room takes two in line", () => {
-    const r = room({ capacity: 2, ...timerRunning });
-    const visits = [treating("a"), treating("b"), nextUp("n")];
-    expect(assignOutcome(r, visits)).toBe("next_up");
-    expect(assignOutcome(r, [...visits, nextUp("m")])).toBe("full");
+  it("is nobody when there is nothing to ask", () => {
+    expect(assignCompanions(two(), [])).toEqual([]);
+    expect(assignCompanions(room(), [called("a")])).toEqual([]);
   });
 });
 
@@ -235,20 +301,23 @@ describe("assignUpdate", () => {
       ],
     });
   });
-  it("moves a patient already called in another room", () => {
-    const result = assignUpdate(room(), [treating("a", "r2")], "a", T0);
-    expect(result.ok && result.updates[0].fields).toEqual({
-      room_id: "r1",
-      room_assigned_at: iso(T0),
-      called_at: iso(T0),
-      seen_at: null,
+  // The board only ever assigns from the waiting list, so an assign for
+  // a patient who already has a room can only come from a board whose
+  // picture is out of date. Moving them would free the room they are
+  // physically in — and call whoever is lined up for it in on them.
+  it("refuses a patient who is already in a room", () => {
+    expect(assignUpdate(room(), [treating("a", "r2")], "a", T0)).toEqual({
+      ok: false,
+      error: "That patient already has a room — please choose again",
     });
+    expect(assignUpdate(room(), [called("a")], "a", T0).ok).toBe(false);
   });
-  it("does not count the patient against the room they are already in", () => {
-    // Re-assigning the sole occupant of a one-bed room to the same room
-    // must not be refused as full.
-    const result = assignUpdate(room(), [called("a")], "a", T0);
-    expect(result.ok).toBe(true);
+  it("refuses a patient who is already lined up for a room", () => {
+    const visits = [treating("t", "r2"), nextUp("a", T0 - 5 * MIN, "r2")];
+    expect(assignUpdate(room(), visits, "a", T0)).toEqual({
+      ok: false,
+      error: "That patient already has a room — please choose again",
+    });
   });
   it("refuses a full room", () => {
     const visits = [treating("t"), nextUp("n"), waiting("a")];
@@ -263,6 +332,85 @@ describe("assignUpdate", () => {
       error: "Visit not found",
     });
   });
+
+  const lined = {
+    room_id: "r1",
+    room_assigned_at: iso(T0),
+    called_at: null,
+    seen_at: null,
+  };
+  const sent = { ...lined, called_at: iso(T0) };
+  const CHANGED = {
+    ok: false,
+    error: "Room 5 changed — please choose again",
+  };
+
+  it("absent: an occupied shared room lines the patient up", () => {
+    const visits = [called("x"), waiting("a")];
+    expect(fieldsOf(assignUpdate(two(), visits, "a", T0))).toEqual(lined);
+    expect(fieldsOf(assignUpdate(two(), visits, "a", T0, []))).toEqual(lined);
+  });
+  it("a yes naming the occupants sends the patient in", () => {
+    const visits = [called("x"), waiting("a")];
+    expect(fieldsOf(assignUpdate(two(), visits, "a", T0, ["x"]))).toEqual(sent);
+  });
+  it("a yes names every occupant, in any order", () => {
+    const r = room({ capacity: 3 });
+    const visits = [called("x"), called("y"), waiting("a")];
+    expect(fieldsOf(assignUpdate(r, visits, "a", T0, ["y", "x"]))).toEqual(
+      sent
+    );
+  });
+  it("partial match: a yes naming one of two occupants is refused", () => {
+    const r = named({ capacity: 3 });
+    const visits = [called("x"), called("y"), waiting("a")];
+    expect(assignUpdate(r, visits, "a", T0, ["x"])).toEqual(CHANGED);
+  });
+  it("a yes naming the line joins the line", () => {
+    const visits = [treating("t"), nextUp("n"), waiting("a")];
+    expect(
+      fieldsOf(assignUpdate(two(timerRunning), visits, "a", T0, ["n"]))
+    ).toEqual(lined);
+  });
+  it("no answer on a room with a line is refused, by name", () => {
+    const visits = [treating("t"), nextUp("n"), waiting("a")];
+    expect(
+      assignUpdate(named({ capacity: 2, ...timerRunning }), visits, "a", T0)
+    ).toEqual({
+      ok: false,
+      error: "Room 5 already has someone waiting for it",
+    });
+    expect(assignUpdate(two(timerRunning), visits, "a", T0)).toEqual({
+      ok: false,
+      error: "That room already has someone waiting for it",
+    });
+  });
+  it.each<[string, FlowRoom, FlowVisit[], string[]]>([
+    [
+      "a line appeared behind the room",
+      named({ capacity: 2 }),
+      [called("x"), nextUp("n")],
+      ["x"],
+    ],
+    ["the line it named is gone", named({ capacity: 2 }), [called("x")], ["n"]],
+    ["the occupant was replaced", named({ capacity: 2 }), [called("y")], ["x"]],
+    ["room emptied", named({ capacity: 2 }), [], ["x"]],
+    [
+      "the room filled up",
+      named({ capacity: 2, ...timerRunning }),
+      [treating("x"), treating("y")],
+      ["x"],
+    ],
+    [
+      "it names someone in another room",
+      named({ capacity: 2 }),
+      [called("x"), called("z", "r2")],
+      ["z"],
+    ],
+  ])("a stale yes is refused: %s", (_name, r, others, togetherWith) => {
+    const visits = [...others, waiting("a")];
+    expect(assignUpdate(r, visits, "a", T0, togetherWith)).toEqual(CHANGED);
+  });
 });
 
 describe("promotionUpdates", () => {
@@ -272,7 +420,7 @@ describe("promotionUpdates", () => {
       { id: "early", fields: { called_at: iso(T0) } },
     ]);
   });
-  it("fills both beds of a two-bed room", () => {
+  it("calls the whole line of an empty two-bed room, oldest first", () => {
     const visits = [nextUp("b", T0 - MIN), nextUp("a", T0 - 9 * MIN)];
     const updates = promotionUpdates(room({ capacity: 2 }), visits, T0);
     expect(updates.map((u) => u.id)).toEqual(["a", "b"]);
@@ -283,6 +431,30 @@ describe("promotionUpdates", () => {
   it("calls nobody while the room is turning over", () => {
     const r = room({ turnover_started_at: iso(T0 - MIN) });
     expect(promotionUpdates(r, [nextUp("a")], T0)).toEqual([]);
+  });
+  it("calls nobody while anyone is still in a shared room", () => {
+    expect(promotionUpdates(two(), [treating("x"), nextUp("a")], T0)).toEqual(
+      []
+    );
+  });
+  it("calls a waiting couple together once the last occupant has left", () => {
+    const before = [
+      treating("x"),
+      treating("y"),
+      nextUp("a", T0 - 9 * MIN),
+      nextUp("b", T0 - MIN),
+    ];
+    const oneLeft = applyVisitUpdates(before, [removeUpdate("x", T0)]).filter(
+      (v) => v.done_at === null
+    );
+    expect(promotionUpdates(two(), oneLeft, T0)).toEqual([]);
+    const empty = applyVisitUpdates(oneLeft, [removeUpdate("y", T0)]).filter(
+      (v) => v.done_at === null
+    );
+    expect(promotionUpdates(two(), empty, T0).map((u) => u.id)).toEqual([
+      "a",
+      "b",
+    ]);
   });
   it("calls nobody into an over-full room", () => {
     const visits = [called("x"), called("y"), nextUp("a")];
@@ -365,6 +537,35 @@ describe("timerFlowUpdates", () => {
     });
   });
 
+  it("again finishes nobody and calls nobody, with or without the route's flag", () => {
+    const visits = [treating("x"), nextUp("a")];
+    expect(timerFlowUpdates("again", room(timerRunning), visits, T0)).toEqual(
+      []
+    );
+    expect(
+      timerFlowUpdates("again", room(timerRunning), visits, T0, {
+        wasTurningOver: true,
+      })
+    ).toEqual([]);
+  });
+  it("again marks a late partner as seen, like start", () => {
+    const visits = [treating("x"), called("y")];
+    expect(timerFlowUpdates("again", two(timerRunning), visits, T0)).toEqual([
+      { id: "y", fields: { seen_at: iso(T0) } },
+    ]);
+  });
+  it("a line kept through another session is still called by room ready", () => {
+    const visits = [treating("x"), nextUp("a")];
+    const afterAgain = applyVisitUpdates(
+      visits,
+      timerFlowUpdates("again", room(timerRunning), visits, T0)
+    );
+    const updates = timerFlowUpdates("ready", room(), afterAgain, T0);
+    expect(updates).toEqual([
+      { id: "x", fields: { done_at: iso(T0) } },
+      { id: "a", fields: { called_at: iso(T0) } },
+    ]);
+  });
   it("other actions change no visits", () => {
     const visits = [called("a"), nextUp("n")];
     for (const action of ["pause", "resume", "adjust", "set", "clear"]) {
@@ -495,5 +696,55 @@ describe("doctor in / still waiting", () => {
     expect(after[0].seen_at).toBeNull();
     expect(after[0].called_at).not.toBeNull();
     expect(roomWaitingForDoctor(after, "r1").map((v) => v.id)).toEqual(["a"]);
+  });
+});
+
+describe("join question", () => {
+  const rooms = [two({ id: "r1" })];
+  it("asks about the occupants of a shared room with a spare bed", () => {
+    expect(joinQuestionFor(two(), [called("x"), waiting("a")], "a")).toEqual({
+      visitId: "a",
+      roomId: "r1",
+      kind: "ask_join_room",
+      companionIds: ["x"],
+    });
+  });
+  it("asks about the line when the room has one", () => {
+    const visits = [treating("t"), nextUp("n"), waiting("a")];
+    expect(joinQuestionFor(two(timerRunning), visits, "a")).toMatchObject({
+      kind: "ask_join_line",
+      companionIds: ["n"],
+    });
+  });
+  it("is null when there is nothing to ask", () => {
+    expect(joinQuestionFor(two(), [waiting("a")], "a")).toBeNull();
+    expect(
+      joinQuestionFor(room(), [called("x"), waiting("a")], "a")
+    ).toBeNull();
+  });
+  it("stays open while nothing changed", () => {
+    const visits = [called("x"), waiting("a")];
+    const q = joinQuestionFor(rooms[0], visits, "a")!;
+    expect(joinQuestionOpen(q, rooms, visits)).toBe(true);
+  });
+  it.each<[string, FlowRoom[], FlowVisit[]]>([
+    ["the occupant was replaced", rooms, [called("y"), waiting("a")]],
+    [
+      "a second occupant joined",
+      [room({ capacity: 3 })],
+      [called("x"), called("y"), waiting("a")],
+    ],
+    ["a line appeared", rooms, [called("x"), nextUp("n"), waiting("a")]],
+    ["the room emptied", rooms, [waiting("a")]],
+    ["the room was deleted", [], [called("x"), waiting("a")]],
+    [
+      "the patient got a room elsewhere",
+      rooms,
+      [called("x"), called("a", "r2")],
+    ],
+    ["the patient left the board", rooms, [called("x")]],
+  ])("closes when %s", (_name, roomsNow, visitsNow) => {
+    const q = joinQuestionFor(rooms[0], [called("x"), waiting("a")], "a")!;
+    expect(joinQuestionOpen(q, roomsNow, visitsNow)).toBe(false);
   });
 });

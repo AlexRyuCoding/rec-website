@@ -13,13 +13,17 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { ArrowLeft, Bell, Pencil, X } from "lucide-react";
-import { deriveRoomState } from "@/lib/room-status";
+import { deriveRoomState, RoomRow } from "@/lib/room-status";
 import {
   assignOutcome,
+  JoinQuestion,
+  joinQuestionFor,
+  joinQuestionOpen,
   roomNextUp,
   roomOccupants,
   roomWaitingForDoctor,
   visitState,
+  VisitView,
 } from "@/lib/patient-flow";
 import { gridStyle } from "./grid";
 import { useRooms } from "./useRooms";
@@ -39,6 +43,9 @@ const SILENT_DRAG_ANNOUNCEMENTS = {
   onDragEnd: () => undefined,
   onDragCancel: () => undefined,
 };
+
+// How long a tile stays inert after withdrawing its question.
+const QUESTION_CHANGED_HOLD_MS = 2500;
 
 export default function RoomsPage() {
   const {
@@ -70,6 +77,17 @@ export default function RoomsPage() {
   // The waiting patient staff are about to place. While set, every room
   // tile turns into a "Send here" / "Next up here" target.
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
+  // A room with someone in it never takes a second patient by itself:
+  // the tile first asks whether they came together. This is that
+  // question — for one patient, one room, and exactly the people it
+  // named when it opened.
+  const [question, setQuestion] = useState<JoinQuestion | null>(null);
+  // Every way of picking, changing or dropping the selection also drops
+  // the question: it belongs to the patient who was selected.
+  const select = (visitId: string | null) => {
+    setSelectedVisitId(visitId);
+    setQuestion(null);
+  };
   // Desktop shortcut for the same thing: drag a waiting chip onto a room.
   // The MOUSE sensor on purpose — on the iPads a finger on the list must
   // keep scrolling and tapping exactly as before. A few pixels of travel
@@ -89,6 +107,36 @@ export default function RoomsPage() {
   const otherVisits = selectedVisit
     ? visits.filter((v) => v.id !== selectedVisit.id)
     : visits;
+
+  // The question stays up only while everything it rests on still holds.
+  // If another board changes who is in the room (or its line), it closes
+  // rather than quietly showing a different name above the same "Yes".
+  const openQuestion =
+    question &&
+    question.visitId === selectedVisit?.id &&
+    joinQuestionOpen(question, rooms, visits)
+      ? question
+      : null;
+  // A question that closes this way does so under a finger that may
+  // already be on its way to "Yes". Whatever the tile would show next —
+  // another question about other people, "Send here", or the room's own
+  // Start / Room ready buttons — must not catch that tap. So the tile
+  // says it changed and takes no presses for a moment.
+  const [changedRoomId, setChangedRoomId] = useState<string | null>(null);
+  useEffect(() => {
+    if (question && !openQuestion) {
+      setQuestion(null);
+      setChangedRoomId(question.roomId);
+    }
+  }, [question, openQuestion]);
+  useEffect(() => {
+    if (!changedRoomId) return;
+    const t = setTimeout(
+      () => setChangedRoomId(null),
+      QUESTION_CHANGED_HOLD_MS
+    );
+    return () => clearTimeout(t);
+  }, [changedRoomId]);
 
   // One alert per room where a patient is waiting and no doctor has come
   // yet, longest wait first. Shown on every board: a board has no idea
@@ -116,7 +164,10 @@ export default function RoomsPage() {
     if (!selectedVisitId) return;
     const onPointerDown = (e: PointerEvent) => {
       const target = e.target as Element | null;
-      if (!target?.closest?.("[data-assign-keep]")) setSelectedVisitId(null);
+      if (!target?.closest?.("[data-assign-keep]")) {
+        setSelectedVisitId(null);
+        setQuestion(null);
+      }
     };
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
@@ -125,7 +176,7 @@ export default function RoomsPage() {
   // Picking a chip up selects it, so the tiles show the very same "Send
   // here" / "Next up here" / "Full" answers a tap would.
   const onDragStart = ({ active }: DragStartEvent) => {
-    setSelectedVisitId(String(active.id));
+    select(String(active.id));
     setDraggingVisitId(String(active.id));
   };
 
@@ -136,7 +187,38 @@ export default function RoomsPage() {
   const endDrag = () => {
     setDraggingVisitId(null);
     setDragOverRoomId(null);
-    setSelectedVisitId(null);
+    select(null);
+  };
+
+  // Put a waiting patient on a room — the one action behind both the tap
+  // on a tile and the drop of a dragged chip. If the room has someone in
+  // it (or lined up for it) whom this patient could be together with,
+  // nothing is sent yet: the tile asks, and the patient stays selected so
+  // it is plain who the question is about.
+  const assignTo = (visit: VisitView, room: RoomRow) => {
+    const ask = joinQuestionFor(room, visits, visit.id);
+    if (ask) {
+      setSelectedVisitId(visit.id);
+      setQuestion(ask);
+      return;
+    }
+    select(null);
+    const others = visits.filter((v) => v.id !== visit.id);
+    if (assignOutcome(room, others) === "full") return;
+    visitAction(visit.id, "assign", room.id);
+  };
+
+  // "Yes" names the people the question showed; the server refuses it if
+  // they are no longer the ones there. "No" sends no names: lined up.
+  const answerQuestion = (together: boolean) => {
+    if (!openQuestion) return;
+    select(null);
+    visitAction(
+      openQuestion.visitId,
+      "assign",
+      openQuestion.roomId,
+      together ? openQuestion.companionIds : undefined
+    );
   };
 
   // What letting go right now would do — the dragged chip says it, since
@@ -161,9 +243,7 @@ export default function RoomsPage() {
     const visit = waiting.find((v) => v.id === active.id);
     const room = over ? rooms.find((r) => r.id === over.id) : undefined;
     if (!visit || !room || busyRoomIds.has(room.id)) return;
-    const others = visits.filter((v) => v.id !== visit.id);
-    if (assignOutcome(room, others) === "full") return;
-    visitAction(visit.id, "assign", room.id);
+    assignTo(visit, room);
   };
 
   return (
@@ -252,7 +332,7 @@ export default function RoomsPage() {
             nowMs={serverNowMs}
             selectedId={selectedVisit?.id ?? null}
             dragging={draggingVisit !== null}
-            onSelect={setSelectedVisitId}
+            onSelect={select}
             onRemove={(visitId) => visitAction(visitId, "remove")}
           />
           {rooms.length === 0 ? (
@@ -265,6 +345,18 @@ export default function RoomsPage() {
               <div className="grid gap-3" style={gridStyle}>
                 {rooms.map((room) => {
                   const occupants = roomOccupants(visits, room.id);
+                  const asking =
+                    openQuestion?.roomId === room.id && selectedVisit
+                      ? {
+                          patientName: selectedVisit.display_name,
+                          companionNames: openQuestion.companionIds.map(
+                            (id) =>
+                              visits.find((v) => v.id === id)?.display_name ??
+                              ""
+                          ),
+                          kind: openQuestion.kind,
+                        }
+                      : null;
                   return (
                     <div
                       key={room.id}
@@ -298,11 +390,13 @@ export default function RoomsPage() {
                         onAssignDoctor={(doctorName) =>
                           updateRoom(room.id, { doctorName })
                         }
+                        question={asking}
+                        changed={changedRoomId === room.id}
                         onAssignHere={() => {
-                          if (!selectedVisit) return;
-                          setSelectedVisitId(null);
-                          visitAction(selectedVisit.id, "assign", room.id);
+                          if (selectedVisit) assignTo(selectedVisit, room);
                         }}
+                        onAnswer={answerQuestion}
+                        onCancelQuestion={() => select(null)}
                         onVisitAction={(visitId, action) =>
                           visitAction(visitId, action)
                         }

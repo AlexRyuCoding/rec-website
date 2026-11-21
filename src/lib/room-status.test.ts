@@ -222,8 +222,30 @@ describe("timerActionUpdate", () => {
     });
   });
 
+  it("again starts another session from the room default and ends setting up", () => {
+    const settingUp = { ...baseRoom, turnover_started_at: iso(T0) };
+    expect(timerActionUpdate(settingUp, "again", T0 + 1000)).toEqual({
+      ok: true,
+      fields: {
+        timer_started_at: iso(T0 + 1000),
+        timer_duration_seconds: baseRoom.default_duration_seconds,
+        timer_paused_at: null,
+        turnover_started_at: null,
+      },
+    });
+  });
+
+  it("again is refused unless the room is setting up", () => {
+    const refused = { ok: false, error: "Room is not setting up" };
+    expect(timerActionUpdate(baseRoom, "again", T0)).toEqual(refused);
+    expect(timerActionUpdate(running(), "again", T0)).toEqual(refused);
+  });
+
   it("ready fails when the room is not turning over", () => {
-    expect(timerActionUpdate(baseRoom, "ready", T0).ok).toBe(false);
+    expect(timerActionUpdate(baseRoom, "ready", T0)).toEqual({
+      ok: false,
+      error: "Room is not setting up",
+    });
     expect(timerActionUpdate(running(), "ready", T0).ok).toBe(false);
   });
 
