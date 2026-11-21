@@ -44,6 +44,9 @@ const SILENT_DRAG_ANNOUNCEMENTS = {
   onDragCancel: () => undefined,
 };
 
+// How long a tile stays inert after withdrawing its question.
+const QUESTION_CHANGED_HOLD_MS = 2500;
+
 export default function RoomsPage() {
   const {
     rooms,
@@ -114,9 +117,26 @@ export default function RoomsPage() {
     joinQuestionOpen(question, rooms, visits)
       ? question
       : null;
+  // A question that closes this way does so under a finger that may
+  // already be on its way to "Yes". Whatever the tile would show next —
+  // another question about other people, "Send here", or the room's own
+  // Start / Room ready buttons — must not catch that tap. So the tile
+  // says it changed and takes no presses for a moment.
+  const [changedRoomId, setChangedRoomId] = useState<string | null>(null);
   useEffect(() => {
-    if (question && !openQuestion) setQuestion(null);
+    if (question && !openQuestion) {
+      setQuestion(null);
+      setChangedRoomId(question.roomId);
+    }
   }, [question, openQuestion]);
+  useEffect(() => {
+    if (!changedRoomId) return;
+    const t = setTimeout(
+      () => setChangedRoomId(null),
+      QUESTION_CHANGED_HOLD_MS
+    );
+    return () => clearTimeout(t);
+  }, [changedRoomId]);
 
   // One alert per room where a patient is waiting and no doctor has come
   // yet, longest wait first. Shown on every board: a board has no idea
@@ -371,6 +391,7 @@ export default function RoomsPage() {
                           updateRoom(room.id, { doctorName })
                         }
                         question={asking}
+                        changed={changedRoomId === room.id}
                         onAssignHere={() => {
                           if (selectedVisit) assignTo(selectedVisit, room);
                         }}

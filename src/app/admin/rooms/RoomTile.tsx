@@ -74,6 +74,7 @@ export default function RoomTile({
   nextUp,
   assignMode,
   question,
+  changed,
   onAction,
   onAssignDoctor,
   onAssignHere,
@@ -99,6 +100,10 @@ export default function RoomTile({
   // Set while this tile is asking whether the selected patient is
   // together with the people here. Takes the place of the assign target.
   question: TileQuestion | null;
+  // This tile's question just closed by itself because the room changed
+  // on another board. For a moment the tile only says so and takes no
+  // presses — a tap aimed at the vanished "Yes" must land on nothing.
+  changed: boolean;
   onAction: (action: TimerAction, valueSeconds?: number) => void;
   onAssignDoctor: (doctorName: string | null) => void;
   onAssignHere: () => void;
@@ -630,11 +635,28 @@ export default function RoomTile({
         </div>
       )}
 
-      {question && (
+      {changed && (
+        // Not a button, and it keeps the selection: there is nothing here
+        // to press, by design.
         <div
           data-assign-keep
-          className="absolute inset-0 z-20 flex flex-col justify-center gap-1 rounded-2xl bg-neutral-900/95 p-2 ring-2 ring-inset ring-white/70"
+          role="status"
+          className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-1 rounded-2xl bg-neutral-900/95 p-3 ring-2 ring-inset ring-amber-300/80"
         >
+          <p className="text-sm font-semibold leading-tight">
+            {room.name} changed — choose again
+          </p>
+        </div>
+      )}
+
+      {question && !changed && (
+        <div
+          data-assign-keep
+          className="absolute inset-0 z-20 flex flex-col justify-center gap-1.5 rounded-2xl bg-neutral-900/95 p-2 ring-2 ring-inset ring-white/70"
+        >
+          {/* The answers are the one choice on this board that decides
+              whether a patient walks in on someone: full finger height,
+              and apart from each other. */}
           <p className="truncate text-xs font-medium text-white/70">
             {question.patientName} → {room.name}
           </p>
@@ -645,7 +667,7 @@ export default function RoomTile({
           <button
             disabled={busy}
             onClick={() => answer(true)}
-            className="w-full rounded-lg bg-white/90 px-2 py-1.5 text-sm font-semibold text-neutral-900 hover:bg-white disabled:opacity-40"
+            className="w-full rounded-lg bg-white/90 px-2 py-2.5 text-sm font-semibold text-neutral-900 hover:bg-white disabled:opacity-40"
           >
             {question.kind === "ask_join_room"
               ? "Yes, send in"
@@ -655,7 +677,7 @@ export default function RoomTile({
             <button
               disabled={busy}
               onClick={() => answer(false)}
-              className="w-full rounded-lg bg-white/15 px-2 py-1.5 text-sm font-semibold hover:bg-white/25 disabled:opacity-40"
+              className="mt-0.5 w-full rounded-lg bg-white/15 px-2 py-2.5 text-sm font-semibold hover:bg-white/25 disabled:opacity-40"
             >
               No, next up
             </button>
@@ -675,7 +697,7 @@ export default function RoomTile({
         </div>
       )}
 
-      {assignMode && !question && (
+      {assignMode && !question && !changed && (
         <button
           data-assign-keep
           disabled={assignMode === "full" || busy}

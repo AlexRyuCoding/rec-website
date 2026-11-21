@@ -301,20 +301,23 @@ describe("assignUpdate", () => {
       ],
     });
   });
-  it("moves a patient already called in another room", () => {
-    const result = assignUpdate(room(), [treating("a", "r2")], "a", T0);
-    expect(result.ok && result.updates[0].fields).toEqual({
-      room_id: "r1",
-      room_assigned_at: iso(T0),
-      called_at: iso(T0),
-      seen_at: null,
+  // The board only ever assigns from the waiting list, so an assign for
+  // a patient who already has a room can only come from a board whose
+  // picture is out of date. Moving them would free the room they are
+  // physically in — and call whoever is lined up for it in on them.
+  it("refuses a patient who is already in a room", () => {
+    expect(assignUpdate(room(), [treating("a", "r2")], "a", T0)).toEqual({
+      ok: false,
+      error: "That patient already has a room — please choose again",
     });
+    expect(assignUpdate(room(), [called("a")], "a", T0).ok).toBe(false);
   });
-  it("does not count the patient against the room they are already in", () => {
-    // Re-assigning the sole occupant of a one-bed room to the same room
-    // must not be refused as full.
-    const result = assignUpdate(room(), [called("a")], "a", T0);
-    expect(result.ok).toBe(true);
+  it("refuses a patient who is already lined up for a room", () => {
+    const visits = [treating("t", "r2"), nextUp("a", T0 - 5 * MIN, "r2")];
+    expect(assignUpdate(room(), visits, "a", T0)).toEqual({
+      ok: false,
+      error: "That patient already has a room — please choose again",
+    });
   });
   it("refuses a full room", () => {
     const visits = [treating("t"), nextUp("n"), waiting("a")];

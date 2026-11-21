@@ -168,6 +168,17 @@ Two things make privacy fail closed:
 A patient who joins a room whose timer is already running is handled as
 the flow spec's "late partner" (unchanged).
 
+### Only from the waiting list (added after the branch review)
+
+An assign for a visit that already has a room (in it, or lined up for
+it) is refused: 409 "That patient already has a room — please choose
+again". The board only offers rooms for patients in the waiting list, so
+such a request can only come from a board whose picture is out of date —
+and moving the patient would mark the room they are physically in as
+empty and call its line in on them. This replaces the flow spec's "an
+assigned patient can be moved by assigning again"; to move someone,
+staff use "Back to waiting list" first, as the board already requires.
+
 ### Late partners that the table does not let in *(call)*
 
 Two cases line a partner up instead of offering "together", on purpose:
@@ -206,6 +217,12 @@ Assignments are read-then-write. Two boards assigning two different
 patients to the same empty shared room in the same instant can both be
 sent in. The tile shows both names and staff move one. Still not worth a
 transaction for one clinic.
+
+The same instant-race exists for two boards answering "No, next up" for
+two unrelated patients on the same room (both are lined up, and "Room
+ready" would call them together — the tile shows "Next: P, Q" until
+then), and for a "Yes" racing a "Room ready". Same class, same
+acceptance.
 
 ## 2. Asking "Together?" on the board
 
@@ -249,6 +266,15 @@ Together with Dana K. (next up)?
   never re-words itself in place — a different name must not appear
   under a finger already heading for Yes. It must not be dismissed by
   the pointer-down that the drop itself produces.
+- When it closes by itself, the tile shows "{room} changed — choose
+  again" and takes no presses for 2.5 s, whether or not a patient is
+  still selected. Without this the tap already on its way to "Yes" would
+  land on whatever the tile shows next: a new question about other
+  people, "Send here", or the room's own Start / Room ready. (Added
+  after the branch review.)
+- The answer buttons are at least 40 px tall and 8 px apart, and ignore
+  presses for 350 ms after the panel opens (it appears under the finger
+  that just tapped the tile).
 - While the panel is open the patient stays selected in the waiting
   list, so staff can see who the question is about.
 - Before the tap/drop, the tile's assign overlay and the dragged chip

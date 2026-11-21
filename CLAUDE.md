@@ -203,7 +203,13 @@ through src/lib/flow-server.ts.
   still exactly the room's occupants / line. Absent = not together, so a
   board that never asked (old page, stale picture) lines the patient up.
   The question on the tile closes by itself when its names change; it
-  never re-words in place.
+  never re-words in place, and the tile then reads "Room 5 changed —
+  choose again" and takes no presses for 2.5 s (a tap already heading
+  for "Yes" must land on nothing). The answers ignore presses for 350 ms
+  after the question opens. An assign for a patient who already has a
+  room is refused — rooms are given from the waiting list only, so that
+  request can only come from a stale board, and moving the patient would
+  free the room they are physically in.
 - With a mouse the chip can also be dragged onto a room (@dnd-kit, in
   page.tsx / WaitingList.tsx / RoomTile.tsx). It is the same action as
   tap-then-tap: picking a chip up selects it, letting go over a room is

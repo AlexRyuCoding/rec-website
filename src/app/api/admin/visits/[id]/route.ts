@@ -105,11 +105,10 @@ export async function POST(
     updates.push(removeUpdate(id, nowMs));
   }
 
-  // The room the patient is leaving may now be empty.
+  // The room the patient is leaving may now be empty. (Only unassign and
+  // remove leave a room: assign is refused for a patient who has one.)
   const leftRoomId =
-    visit.room_id &&
-    input.action !== "mark_waiting" &&
-    !(input.action === "assign" && input.roomId === visit.room_id)
+    input.action === "unassign" || input.action === "remove"
       ? visit.room_id
       : null;
   if (leftRoomId) {

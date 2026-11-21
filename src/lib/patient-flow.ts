@@ -244,11 +244,22 @@ export function assignUpdate(
   nowMs: number,
   togetherWith: string[] = []
 ): { ok: true; updates: VisitUpdate[] } | { ok: false; error: string } {
-  if (!visits.some((v) => v.id === visitId)) {
+  const visit = visits.find((v) => v.id === visitId);
+  if (!visit) {
     return { ok: false, error: "Visit not found" };
   }
-  // The patient may already be in (or lined up for) this very room;
-  // they must not count against it.
+  // Rooms are given from the waiting list only (the board offers nothing
+  // else; a patient in a room goes "Back to waiting list" first). So an
+  // assign for someone who already has a room comes from a board whose
+  // picture is out of date. Moving them would mark the room they are
+  // physically in as empty — and call whoever is lined up for it in on
+  // them.
+  if (visit.room_id !== null) {
+    return {
+      ok: false,
+      error: "That patient already has a room — please choose again",
+    };
+  }
   const others = visits.filter((v) => v.id !== visitId);
   const outcome = assignOutcome(room, others);
   if (outcome === "full") {
