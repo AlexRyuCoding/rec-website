@@ -162,6 +162,16 @@ policies on both tables; all access goes through the service-role key.
 | seen_at        | timestamp | nullable; the room's timer was started (0011) |
 | done_at        | timestamp | nullable; visit finished or removed (0011)    |
 
+Records from Practice Better: the webhook, the dashboard sync and
+scripts/sync-patients.js all turn a PB client record into a patients row
+with toPatientRow (src/lib/patient-record.ts; the script keeps a copy of
+the same rules, and patient-record.test.ts runs both). Names lose the
+spaces around them, runs of blanks (tabs, non-breaking spaces) become one
+space and invisible pasted characters are dropped, so "Ann " and "Ann"
+are one spelling; the email is trimmed and lowercased; a blank email or
+phone is stored as null; a blank mobile falls back to the home phone.
+Rows already stored are cleaned the next time they are synced (Full sync).
+
 A check-in logs who + when + a snapshot of the appointment (time, service
 name and practitioner, fetched live from PB at check-in; null if PB is
 unreachable or there is no session that day).
@@ -416,6 +426,7 @@ src/app/waiting-room/music/ (useRadio, useYouTube, useSpotify, MusicBar).
 - Authenticates with Practice Better API
 - Fetches all client records (GET /consultant/records, paginated)
 - Upserts into Supabase patients table using pb_client_id as the unique key
+- Cleans each record on the way in — see "Records from Practice Better"
 - Run manually from terminal: node scripts/sync-patients.js
 - Safe to re-run — upsert won't duplicate records
 
