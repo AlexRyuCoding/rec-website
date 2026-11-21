@@ -64,7 +64,7 @@ throughout the day unassisted.
 - /api/admin/rooms — GET rooms + doctor roster + open visits + server
   time; POST creates a room. /api/admin/rooms/[id] PATCH/DELETE (PATCH
   accepts capacity 1–4 = beds). /api/admin/rooms/[id]/timer POST timer
-  actions (start/pause/resume/adjust/set/reset/clear/ready)
+  actions (start/pause/resume/adjust/set/reset/clear/ready/again)
 - /api/admin/visits/[id] — POST {action: assign(roomId, togetherWith?) |
   unassign | remove | mark_waiting} moves a checked-in patient through
   the flow (togetherWith = the visit ids staff said the patient is
@@ -210,8 +210,9 @@ through src/lib/flow-server.ts.
   the tap. MouseSensor only, on purpose — a finger on the iPads must keep
   tapping and scrolling the list. The dragged copy covers the tile's
   label, so it says what the drop will do itself ("Send to Room 1").
-- Room status with no timer running: turnover_started_at set → Turning
-  over; else any occupant not yet seen → Patient waiting; else any
+- Room status with no timer running: turnover_started_at set → Setting
+  Up (the status is still called `turnover` in code); else any occupant
+  not yet seen → Patient waiting; else any
   occupant → With doctor; else Available. The timer is started once the
   needles are in, so "With doctor" covers the gap before that.
 - Doctor alert: while a room has an unseen patient, every rooms board
@@ -219,14 +220,21 @@ through src/lib/flow-server.ts.
   "Doctor in" button) and rings the doorbell sound when it appears. It cannot be
   dismissed — only "Doctor in" or Start clears it. Tapping a patient's
   name on a With-doctor tile offers "Doctor hasn't come yet" to undo.
-- ✓ (clear) = "needles out": silences the alarm and starts Turning over;
-  the patient is still in the room, so nobody is called. "Room ready"
-  finishes the room's patients and calls whoever is lined up. Reset only
-  cancels the timer (the patient stays, still "seen" → With doctor). A Start sent during turnover
-  (only an old, un-reloaded board can do that) counts as Room ready +
-  Start.
+- ✓ (clear) = "needles out": silences the alarm and starts Setting Up;
+  the patient is still in the room, so nobody is called. From there the
+  tile offers two buttons. "Room ready" finishes the room's patients and
+  calls whoever is lined up. "Another session" (timer action `again`)
+  starts the timer again for the same patients, at the time shown on the
+  tile: nobody is finished, nobody is called. It is how a patient gets
+  several timed sessions in a row — fire cupping is two 8-minute
+  sessions; the doctor sets up the next one in the room, walks out and
+  taps it. A mistaken "Another session" is undone with ✓. Reset only
+  cancels the timer (the patient stays, still "seen" → With doctor). A
+  Start sent during Setting Up (only an old, un-reloaded board can do
+  that) counts as Room ready + Start — which is why "Another session" is
+  its own action.
 - Promotion is a rule, not a button: after every change, an idle room
-  (no timer, not turning over) with NO occupants calls its whole line,
+  (no timer, not setting up) with NO occupants calls its whole line,
   oldest first. Empty, not "a free bed": if one of a couple leaves early,
   the line must not be pulled in beside the partner who is still there.
 - When a patient is called, the room's doctor pill switches to the roster

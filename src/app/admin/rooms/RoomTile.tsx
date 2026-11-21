@@ -58,7 +58,7 @@ const STATUS_STYLES: Record<
   // Deliberately calm and dark next to the loud purple of "Patient
   // waiting": the doctor is there, nothing needs attention.
   with_doctor: { card: "bg-indigo-950", label: "With doctor" },
-  turnover: { card: "bg-slate-600", label: "Turning over" },
+  turnover: { card: "bg-slate-600", label: "Setting Up" },
   in_use: { card: "bg-sky-800", label: "In Use" },
   complete: { card: "bg-amber-600", label: "Remove Needles" },
   overtime: { card: "bg-rose-700", label: "Overtime" },
@@ -364,125 +364,140 @@ export default function RoomTile({
         )}
       </div>
 
-      {turningOver ? (
-        // Needles are out but the patient is still getting ready: nobody
-        // is called in until staff confirm the room is empty.
+      {/* With no timer running this edits the room's default — on a free
+          room, and equally while Setting Up, where it is the length of
+          the session "Another session" would start. */}
+      <div className="flex w-full items-center justify-center gap-1.5">
         <button
+          aria-label="Less time"
           disabled={busy}
-          onClick={() => onAction("ready")}
-          className="flex items-center gap-2 rounded-xl bg-white/90 px-4 py-3 text-base font-semibold text-slate-800 hover:bg-white disabled:opacity-40"
+          onClick={() => onAction("adjust", -ADJUST_STEP_SECONDS)}
+          className="shrink-0 rounded-full bg-white/15 p-1.5 hover:bg-white/25 disabled:opacity-40"
         >
-          <DoorOpen className="h-5 w-5" /> Room ready
+          <Minus className="h-4 w-4" />
         </button>
-      ) : (
-        <>
-          <div className="flex w-full items-center justify-center gap-1.5">
-            <button
-              aria-label="Less time"
-              disabled={busy}
-              onClick={() => onAction("adjust", -ADJUST_STEP_SECONDS)}
-              className="shrink-0 rounded-full bg-white/15 p-1.5 hover:bg-white/25 disabled:opacity-40"
-            >
-              <Minus className="h-4 w-4" />
-            </button>
-            {editingTime ? (
-              <input
-                autoFocus
-                type="number"
-                min={1}
-                max={60}
-                value={minutesInput}
-                onChange={(e) => setMinutesInput(e.target.value)}
-                onBlur={commitTime}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") commitTime();
-                  if (e.key === "Escape") setEditingTime(false);
-                }}
-                aria-label="Minutes"
-                className="w-20 rounded-lg bg-white/15 px-1 py-0.5 text-center text-2xl font-bold tabular-nums outline-none ring-2 ring-white/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-              />
-            ) : (
-              <button
-                aria-label="Type a time in minutes"
-                disabled={busy}
-                onClick={openTimeEditor}
-                className={`rounded-lg px-1 text-3xl font-bold tabular-nums transition-opacity duration-200 hover:bg-white/10 disabled:opacity-70 ${
-                  state.paused ? "animate-pulse" : ""
-                } ${adjustPending ? "opacity-50" : ""}`}
-              >
-                {formatTimerDisplay(displaySeconds)}
-              </button>
-            )}
-            <button
-              aria-label="More time"
-              disabled={busy}
-              onClick={() => onAction("adjust", ADJUST_STEP_SECONDS)}
-              className="shrink-0 rounded-full bg-white/15 p-1.5 hover:bg-white/25 disabled:opacity-40"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          </div>
+        {editingTime ? (
+          <input
+            autoFocus
+            type="number"
+            min={1}
+            max={60}
+            value={minutesInput}
+            onChange={(e) => setMinutesInput(e.target.value)}
+            onBlur={commitTime}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitTime();
+              if (e.key === "Escape") setEditingTime(false);
+            }}
+            aria-label="Minutes"
+            className="w-20 rounded-lg bg-white/15 px-1 py-0.5 text-center text-2xl font-bold tabular-nums outline-none ring-2 ring-white/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          />
+        ) : (
+          <button
+            aria-label="Type a time in minutes"
+            disabled={busy}
+            onClick={openTimeEditor}
+            className={`rounded-lg px-1 font-bold tabular-nums ${
+              turningOver ? "text-2xl" : "text-3xl"
+            } transition-opacity duration-200 hover:bg-white/10 disabled:opacity-70 ${
+              state.paused ? "animate-pulse" : ""
+            } ${adjustPending ? "opacity-50" : ""}`}
+          >
+            {formatTimerDisplay(displaySeconds)}
+          </button>
+        )}
+        <button
+          aria-label="More time"
+          disabled={busy}
+          onClick={() => onAction("adjust", ADJUST_STEP_SECONDS)}
+          className="shrink-0 rounded-full bg-white/15 p-1.5 hover:bg-white/25 disabled:opacity-40"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
 
-          <div className="flex w-full items-center justify-center gap-1.5">
-            {state.status === "patient_waiting" && (
+      {turningOver ? (
+        // Needles are out, or the next session is being set up: the
+        // patient is still in the room, so nobody is called in until
+        // staff say the room is empty. The doctor walking out to run
+        // one more session (fire cupping is two in a row) starts it here
+        // instead; that finishes nobody and calls nobody.
+        <div className="flex w-full flex-col gap-1">
+          <button
+            disabled={busy}
+            onClick={() => onAction("again")}
+            className="flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-white/20 px-2 py-1 text-sm font-medium hover:bg-white/30 disabled:opacity-40"
+          >
+            <Play className="h-4 w-4" /> Another session
+          </button>
+          <button
+            disabled={busy}
+            onClick={() => onAction("ready")}
+            className="flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-white/90 px-2 py-1 text-sm font-semibold text-slate-800 hover:bg-white disabled:opacity-40"
+          >
+            <DoorOpen className="h-4 w-4" /> Room ready
+          </button>
+        </div>
+      ) : (
+        <div className="flex w-full items-center justify-center gap-1.5">
+          {state.status === "patient_waiting" && (
+            <button
+              disabled={busy}
+              onClick={onDoctorIn}
+              className="whitespace-nowrap rounded-xl bg-white/90 px-2.5 py-1.5 text-sm font-semibold text-purple-800 hover:bg-white disabled:opacity-40"
+            >
+              Doctor in
+            </button>
+          )}
+          {(state.status === "available" ||
+            state.status === "patient_waiting" ||
+            state.status === "with_doctor") && (
+            <button
+              disabled={busy}
+              onClick={() => onAction("start")}
+              className="flex items-center gap-1.5 whitespace-nowrap rounded-xl bg-white/20 px-2.5 py-1.5 text-sm font-medium hover:bg-white/30 disabled:opacity-40"
+            >
+              <Play className="h-4 w-4" /> Start
+            </button>
+          )}
+          {state.status === "in_use" && (
+            <button
+              disabled={busy}
+              onClick={() => onAction(state.paused ? "resume" : "pause")}
+              className="flex items-center gap-1.5 rounded-xl bg-white/20 px-3 py-1.5 text-sm font-medium hover:bg-white/30 disabled:opacity-40"
+            >
+              {state.paused ? (
+                <>
+                  <Play className="h-4 w-4" /> Resume
+                </>
+              ) : (
+                <>
+                  <Pause className="h-4 w-4" /> Pause
+                </>
+              )}
+            </button>
+          )}
+          {sessionActive && (
+            <>
               <button
+                aria-label="Reset timer"
                 disabled={busy}
-                onClick={onDoctorIn}
-                className="whitespace-nowrap rounded-xl bg-white/90 px-2.5 py-1.5 text-sm font-semibold text-purple-800 hover:bg-white disabled:opacity-40"
+                onClick={() => onAction("reset")}
+                className="rounded-xl bg-white/15 p-2 hover:bg-white/25 disabled:opacity-40"
               >
-                Doctor in
+                <RotateCcw className="h-4 w-4" />
               </button>
-            )}
-            {(state.status === "available" ||
-              state.status === "patient_waiting" ||
-              state.status === "with_doctor") && (
               <button
+                aria-label="Clear room"
                 disabled={busy}
-                onClick={() => onAction("start")}
-                className="flex items-center gap-1.5 whitespace-nowrap rounded-xl bg-white/20 px-2.5 py-1.5 text-sm font-medium hover:bg-white/30 disabled:opacity-40"
+                onClick={() => onAction("clear")}
+                className="rounded-xl bg-white/90 p-2 text-emerald-700 hover:bg-white disabled:opacity-40"
               >
-                <Play className="h-4 w-4" /> Start
+                <Check className="h-4 w-4" />
               </button>
-            )}
-            {state.status === "in_use" && (
-              <button
-                disabled={busy}
-                onClick={() => onAction(state.paused ? "resume" : "pause")}
-                className="flex items-center gap-1.5 rounded-xl bg-white/20 px-3 py-1.5 text-sm font-medium hover:bg-white/30 disabled:opacity-40"
-              >
-                {state.paused ? (
-                  <>
-                    <Play className="h-4 w-4" /> Resume
-                  </>
-                ) : (
-                  <>
-                    <Pause className="h-4 w-4" /> Pause
-                  </>
-                )}
-              </button>
-            )}
-            {sessionActive && (
-              <>
-                <button
-                  aria-label="Reset timer"
-                  disabled={busy}
-                  onClick={() => onAction("reset")}
-                  className="rounded-xl bg-white/15 p-2 hover:bg-white/25 disabled:opacity-40"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                </button>
-                <button
-                  aria-label="Clear room"
-                  disabled={busy}
-                  onClick={() => onAction("clear")}
-                  className="rounded-xl bg-white/90 p-2 text-emerald-700 hover:bg-white disabled:opacity-40"
-                >
-                  <Check className="h-4 w-4" />
-                </button>
-              </>
-            )}
-          </div>
-        </>
+            </>
+          )}
+        </div>
       )}
 
       <p

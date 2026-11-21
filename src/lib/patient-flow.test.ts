@@ -534,6 +534,35 @@ describe("timerFlowUpdates", () => {
     });
   });
 
+  it("again finishes nobody and calls nobody, with or without the route's flag", () => {
+    const visits = [treating("x"), nextUp("a")];
+    expect(timerFlowUpdates("again", room(timerRunning), visits, T0)).toEqual(
+      []
+    );
+    expect(
+      timerFlowUpdates("again", room(timerRunning), visits, T0, {
+        wasTurningOver: true,
+      })
+    ).toEqual([]);
+  });
+  it("again marks a late partner as seen, like start", () => {
+    const visits = [treating("x"), called("y")];
+    expect(timerFlowUpdates("again", two(timerRunning), visits, T0)).toEqual([
+      { id: "y", fields: { seen_at: iso(T0) } },
+    ]);
+  });
+  it("a line kept through another session is still called by room ready", () => {
+    const visits = [treating("x"), nextUp("a")];
+    const afterAgain = applyVisitUpdates(
+      visits,
+      timerFlowUpdates("again", room(timerRunning), visits, T0)
+    );
+    const updates = timerFlowUpdates("ready", room(), afterAgain, T0);
+    expect(updates).toEqual([
+      { id: "x", fields: { done_at: iso(T0) } },
+      { id: "a", fields: { called_at: iso(T0) } },
+    ]);
+  });
   it("other actions change no visits", () => {
     const visits = [called("a"), nextUp("n")];
     for (const action of ["pause", "resume", "adjust", "set", "clear"]) {

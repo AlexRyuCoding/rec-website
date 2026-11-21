@@ -360,7 +360,7 @@ export function promotionUpdates(
 // state before the action; `roomAfter` already carries the new timer
 // fields. Actions that don't move patients return nothing.
 //
-// wasTurningOver: the room was turning over when Start arrived (only a
+// wasTurningOver: the room was setting up when Start arrived (only a
 // board on an older version of the page can send that). It is then
 // "Room ready" followed by Start: last session's patients are finished,
 // whoever was lined up takes the beds, and they are the ones being
@@ -392,9 +392,11 @@ export function timerFlowUpdates(
 
   const occupants = roomOccupants(visits, roomAfter.id);
 
-  if (action === "start") {
+  if (action === "start" || action === "again") {
     // Starting the timer (needles in) implies the doctor is in, for
-    // anyone not already marked seen with "Doctor in".
+    // anyone not already marked seen with "Doctor in". "Another session"
+    // is nothing more than that: the same patients stay, nobody is
+    // finished and — the timer is running — nobody lined up is called.
     return doctorInUpdates(roomAfter.id, visits, nowMs);
   }
 

@@ -24,6 +24,7 @@ const bodySchema = z.object({
     "set",
     "clear",
     "ready",
+    "again",
   ]),
   // "adjust": the client debounces rapid +/- taps and sends the summed
   // delta, so any non-zero multiple of the step within the duration range
@@ -51,11 +52,13 @@ const bodySchema = z.object({
 // broadcast. Last write wins if two devices act at once — both converge on
 // the next refetch.
 //
-// Three actions also move the patients in the room (see patient-flow.ts):
-// start = the doctor is in, ready = the room is empty so its patients are
-// finished and whoever is lined up gets called, reset = the timer was a
-// mistake and the patient is waiting again. That part is best effort: a
-// timer action never fails because the patient bookkeeping did.
+// Some actions also move the patients in the room (see patient-flow.ts):
+// start = the doctor is in; ready = the room is empty, so its patients
+// are finished and whoever is lined up gets called; reset = the timer was
+// a mistake (the patients stay); again = another session for the people
+// already in the room — nobody is finished and nobody is called. That
+// part is best effort: a timer action never fails because the patient
+// bookkeeping did.
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -131,7 +134,7 @@ export async function POST(
       latestRoom,
       before,
       nowMs,
-      // Start sent while the room was turning over (an older board)
+      // Start sent while the room was setting up (an older board)
       { wasTurningOver: Boolean((room as RoomRow).turnover_started_at) }
     );
     if (updates.length > 0) {

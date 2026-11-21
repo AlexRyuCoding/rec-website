@@ -60,7 +60,8 @@ export interface RoomRow {
   timer_paused_at: string | null;
   // Beds. More than one means patients share the room on one timer.
   capacity: number;
-  // Set by the check button ("needles out"), cleared by "Room ready".
+  // Set by the check button ("needles out"); the tile then reads
+  // "Setting Up". Cleared by "Room ready" or "Another session".
   turnover_started_at: string | null;
   updated_at: string;
 }
@@ -96,7 +97,7 @@ function timerIdle(room: RoomRow): boolean {
 // occupantCount: patients called to or being treated in the room;
 // waitingCount: how many of them the doctor has not seen yet (see
 // patient-flow.ts). A running timer always wins; without one the room is
-// turning over (cleared but not yet marked ready), waiting for the doctor
+// setting up (cleared but not yet marked ready), waiting for the doctor
 // (someone was sent in and nobody has come), with the doctor (the doctor
 // is in but the needles are not, so no timer yet), or genuinely free.
 // waitingCount defaults to "all of them" so a caller that only knows the
@@ -140,7 +141,8 @@ export type TimerAction =
   | "adjust"
   | "set"
   | "clear"
-  | "ready";
+  | "ready"
+  | "again";
 
 export type TimerUpdate =
   | { ok: true; fields: Partial<RoomRow> }
@@ -244,7 +246,7 @@ export function timerActionUpdate(
     }
 
     // Abandon the session (the timer was a mistake). The room does not
-    // turn over: nobody was treated.
+    // go to Setting Up: nobody was treated.
     case "reset":
       return {
         ok: true,
@@ -256,8 +258,8 @@ export function timerActionUpdate(
       };
 
     // Staff tap the check when they go in to remove needles, so the
-    // patient is still in the room: the alarm stops and the room turns
-    // over until someone taps "Room ready".
+    // patient is still in the room: the alarm stops and the room is
+    // "Setting Up" until someone taps "Room ready" or "Another session".
     case "clear":
       if (idle) {
         return { ok: false, error: "No session to clear" };
@@ -274,9 +276,29 @@ export function timerActionUpdate(
 
     case "ready":
       if (!idle || !room.turnover_started_at) {
-        return { ok: false, error: "Room is not turning over" };
+        return { ok: false, error: "Room is not setting up" };
       }
       return { ok: true, fields: { turnover_started_at: null } };
+
+    // "Another session": the same patients stay for one more timed
+    // session (fire cupping is two in a row; or a second service). The
+    // doctor silenced the alarm with the check, set up the next session
+    // in the room, and starts the timer on the way out. Unlike Start it
+    // is only offered from there, so it can never be mistaken for "Room
+    // ready + Start" — the patient side is in patient-flow.ts.
+    case "again":
+      if (!idle || !room.turnover_started_at) {
+        return { ok: false, error: "Room is not setting up" };
+      }
+      return {
+        ok: true,
+        fields: {
+          timer_started_at: new Date(nowMs).toISOString(),
+          timer_duration_seconds: room.default_duration_seconds,
+          timer_paused_at: null,
+          turnover_started_at: null,
+        },
+      };
   }
 }
 
