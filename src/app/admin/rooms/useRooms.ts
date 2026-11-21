@@ -314,16 +314,30 @@ export function useRooms() {
 
   // Send a waiting patient to a room, back to the list, or off the board.
   // No local guess here: the server decides (called now vs lined up, who
-  // gets promoted) and its answer replaces the list.
+  // gets promoted, whether a "together" answer still holds) and its
+  // answer replaces the list.
   const visitAction = useCallback(
-    async (visitId: string, action: VisitAction, roomId?: string) => {
+    async (
+      visitId: string,
+      action: VisitAction,
+      roomId?: string,
+      // The visits staff just said this patient is together with (the
+      // names in the board's question). Left out = not together.
+      togetherWith?: string[]
+    ) => {
       const body = await mutate(
         action === "assign" ? (roomId ?? null) : null,
         `/api/admin/visits/${visitId}`,
         {
           method: "POST",
           body: JSON.stringify(
-            action === "assign" ? { action, roomId } : { action }
+            action === "assign"
+              ? {
+                  action,
+                  roomId,
+                  ...(togetherWith?.length ? { togetherWith } : {}),
+                }
+              : { action }
           ),
         }
       );

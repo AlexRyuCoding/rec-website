@@ -23,7 +23,22 @@ import {
   RoomState,
   TimerAction,
 } from "@/lib/room-status";
-import { AssignOutcome, CALL_DISPLAY_MS, VisitView } from "@/lib/patient-flow";
+import {
+  AssignOutcome,
+  CALL_DISPLAY_MS,
+  JoinQuestion,
+  VisitView,
+} from "@/lib/patient-flow";
+import { createTapGuard, SCREEN_CHANGE_GUARD_MS } from "@/lib/tap-guard";
+
+// "Together with Alex R.?" — shown over the tile before a patient is put
+// in a room that has someone in it, or behind people already lined up.
+export interface TileQuestion {
+  // The patient being placed, and the people they would join.
+  patientName: string;
+  companionNames: string[];
+  kind: JoinQuestion["kind"];
+}
 
 const ASSIGN_LABELS: Record<AssignOutcome, string> = {
   send: "Send here",
@@ -59,9 +74,12 @@ export default function RoomTile({
   occupants,
   nextUp,
   assignMode,
+  question,
   onAction,
   onAssignDoctor,
   onAssignHere,
+  onAnswer,
+  onCancelQuestion,
   onVisitAction,
   onDoctorIn,
 }: {
@@ -79,9 +97,15 @@ export default function RoomTile({
   // Set while staff have a waiting patient selected: what tapping this
   // tile would do with them. Null = normal board.
   assignMode: AssignOutcome | null;
+  // Set while this tile is asking whether the selected patient is
+  // together with the people here. Takes the place of the assign target.
+  question: TileQuestion | null;
   onAction: (action: TimerAction, valueSeconds?: number) => void;
   onAssignDoctor: (doctorName: string | null) => void;
   onAssignHere: () => void;
+  // true = "yes, together with the people named"; false = "no, next up".
+  onAnswer: (together: boolean) => void;
+  onCancelQuestion: () => void;
   onVisitAction: (
     visitId: string,
     action: "unassign" | "remove" | "mark_waiting"
@@ -117,6 +141,18 @@ export default function RoomTile({
     },
     [setDropRef]
   );
+
+  // The question appears right where the tile was just tapped, with
+  // "Yes" under the same finger. A double tap must not answer it: for a
+  // moment after it opens, its buttons ignore presses (the kiosk's rule).
+  const questionGuard = useRef(createTapGuard()).current;
+  const questionOpen = question !== null;
+  useEffect(() => {
+    if (questionOpen) questionGuard.block(SCREEN_CHANGE_GUARD_MS);
+  }, [questionOpen, questionGuard]);
+  const answer = (together: boolean) => {
+    if (!questionGuard.blocked()) onAnswer(together);
+  };
 
   // Tapping anywhere outside this tile dismisses the doctor list and the
   // patient menu, so an abandoned panel doesn't sit open on the board.
@@ -573,7 +609,52 @@ export default function RoomTile({
         </div>
       )}
 
-      {assignMode && (
+      {question && (
+        <div
+          data-assign-keep
+          className="absolute inset-0 z-20 flex flex-col justify-center gap-1 rounded-2xl bg-neutral-900/95 p-2 ring-2 ring-inset ring-white/70"
+        >
+          <p className="truncate text-xs font-medium text-white/70">
+            {question.patientName} → {room.name}
+          </p>
+          <p className="line-clamp-2 text-sm font-semibold leading-tight">
+            Together with {question.companionNames.join(" & ")}
+            {question.kind === "ask_join_line" && " (next up)"}?
+          </p>
+          <button
+            disabled={busy}
+            onClick={() => answer(true)}
+            className="w-full rounded-lg bg-white/90 px-2 py-1.5 text-sm font-semibold text-neutral-900 hover:bg-white disabled:opacity-40"
+          >
+            {question.kind === "ask_join_room"
+              ? "Yes, send in"
+              : "Yes, line up together"}
+          </button>
+          {question.kind === "ask_join_room" ? (
+            <button
+              disabled={busy}
+              onClick={() => answer(false)}
+              className="w-full rounded-lg bg-white/15 px-2 py-1.5 text-sm font-semibold hover:bg-white/25 disabled:opacity-40"
+            >
+              No, next up
+            </button>
+          ) : (
+            // No "No" here: this room's line is another group, so the
+            // answer would be a refusal. Say why instead.
+            <p className="text-[11px] leading-tight text-white/60">
+              {room.name} already has someone waiting for it.
+            </p>
+          )}
+          <button
+            onClick={onCancelQuestion}
+            className="w-full rounded-lg px-2 py-0.5 text-xs text-white/60 hover:bg-white/10"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {assignMode && !question && (
         <button
           data-assign-keep
           disabled={assignMode === "full" || busy}

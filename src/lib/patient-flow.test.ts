@@ -11,6 +11,8 @@ import {
   FlowRoom,
   FlowVisit,
   isActiveVisit,
+  joinQuestionFor,
+  joinQuestionOpen,
   markWaitingUpdate,
   matchRosterDoctor,
   previewTimerFlow,
@@ -662,5 +664,55 @@ describe("doctor in / still waiting", () => {
     expect(after[0].seen_at).toBeNull();
     expect(after[0].called_at).not.toBeNull();
     expect(roomWaitingForDoctor(after, "r1").map((v) => v.id)).toEqual(["a"]);
+  });
+});
+
+describe("join question", () => {
+  const rooms = [two({ id: "r1" })];
+  it("asks about the occupants of a shared room with a spare bed", () => {
+    expect(joinQuestionFor(two(), [called("x"), waiting("a")], "a")).toEqual({
+      visitId: "a",
+      roomId: "r1",
+      kind: "ask_join_room",
+      companionIds: ["x"],
+    });
+  });
+  it("asks about the line when the room has one", () => {
+    const visits = [treating("t"), nextUp("n"), waiting("a")];
+    expect(joinQuestionFor(two(timerRunning), visits, "a")).toMatchObject({
+      kind: "ask_join_line",
+      companionIds: ["n"],
+    });
+  });
+  it("is null when there is nothing to ask", () => {
+    expect(joinQuestionFor(two(), [waiting("a")], "a")).toBeNull();
+    expect(
+      joinQuestionFor(room(), [called("x"), waiting("a")], "a")
+    ).toBeNull();
+  });
+  it("stays open while nothing changed", () => {
+    const visits = [called("x"), waiting("a")];
+    const q = joinQuestionFor(rooms[0], visits, "a")!;
+    expect(joinQuestionOpen(q, rooms, visits)).toBe(true);
+  });
+  it.each<[string, FlowRoom[], FlowVisit[]]>([
+    ["the occupant was replaced", rooms, [called("y"), waiting("a")]],
+    [
+      "a second occupant joined",
+      [room({ capacity: 3 })],
+      [called("x"), called("y"), waiting("a")],
+    ],
+    ["a line appeared", rooms, [called("x"), nextUp("n"), waiting("a")]],
+    ["the room emptied", rooms, [waiting("a")]],
+    ["the room was deleted", [], [called("x"), waiting("a")]],
+    [
+      "the patient got a room elsewhere",
+      rooms,
+      [called("x"), called("a", "r2")],
+    ],
+    ["the patient left the board", rooms, [called("x")]],
+  ])("closes when %s", (_name, roomsNow, visitsNow) => {
+    const q = joinQuestionFor(rooms[0], [called("x"), waiting("a")], "a")!;
+    expect(joinQuestionOpen(q, roomsNow, visitsNow)).toBe(false);
   });
 });

@@ -168,6 +168,56 @@ function sameIds(a: string[], b: string[]): boolean {
   return setA.size === setB.size && [...setA].every((id) => setB.has(id));
 }
 
+// The "Together with …?" question the board has open: for one patient,
+// one room, one kind of question, about exactly these people.
+export interface JoinQuestion {
+  visitId: string;
+  roomId: string;
+  kind: "ask_join_room" | "ask_join_line";
+  companionIds: string[];
+}
+
+// The question that assigning this visit to this room raises right now,
+// or null when there is nothing to ask. `visits` may include the visit
+// itself; it is left out of the room's lists.
+export function joinQuestionFor(
+  room: FlowRoom,
+  visits: InRoom[],
+  visitId: string
+): JoinQuestion | null {
+  const others = visits.filter((v) => v.id !== visitId);
+  const kind = assignOutcome(room, others);
+  if (kind !== "ask_join_room" && kind !== "ask_join_line") return null;
+  return {
+    visitId,
+    roomId: room.id,
+    kind,
+    companionIds: assignCompanions(room, others).map((v) => v.id),
+  };
+}
+
+// False as soon as anything an open question rests on has changed: the
+// patient is no longer waiting, the room is gone, it would now be a
+// different question, or it would name different people. The board then
+// closes the question instead of re-wording it — a different name must
+// never appear under a finger already heading for Yes.
+export function joinQuestionOpen(
+  question: JoinQuestion,
+  rooms: FlowRoom[],
+  visits: InRoom[]
+): boolean {
+  const visit = visits.find((v) => v.id === question.visitId);
+  if (!visit || visit.room_id !== null) return false;
+  const room = rooms.find((r) => r.id === question.roomId);
+  if (!room) return false;
+  const now = joinQuestionFor(room, visits, question.visitId);
+  return (
+    now !== null &&
+    now.kind === question.kind &&
+    sameIds(now.companionIds, question.companionIds)
+  );
+}
+
 export function applyVisitUpdates<T extends { id: string }>(
   visits: T[],
   updates: { id: string; fields: Partial<T> }[]
