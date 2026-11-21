@@ -12,25 +12,34 @@ import {
   unassignUpdate,
   VisitUpdate,
 } from "@/lib/patient-flow";
-import type { RoomRow } from "@/lib/room-status";
+import { MAX_ROOM_CAPACITY, RoomRow } from "@/lib/room-status";
 import { loadActiveVisits, VisitDbRow } from "@/lib/visits-server";
 
 const bodySchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("assign"), roomId: z.string().uuid() }),
+  z.object({
+    action: z.literal("assign"),
+    roomId: z.string().uuid(),
+    // The visits staff said this patient is together with (the names the
+    // board's question showed). Absent = not together.
+    togetherWith: z.array(z.string().uuid()).max(MAX_ROOM_CAPACITY).optional(),
+  }),
   z.object({ action: z.literal("unassign") }),
   z.object({ action: z.literal("remove") }),
   z.object({ action: z.literal("mark_waiting") }),
 ]);
 
 // Staff move a checked-in patient through the flow:
-// - assign:   send to a room (called now if a bed is free, otherwise lined
-//             up and called automatically when the room is ready)
+// - assign:   send to a room. An empty room: called now. A room with
+//             someone in it: called now only together with the people
+//             named in togetherWith (and only if they are still the
+//             ones there), otherwise lined up and called automatically
+//             when the room is ready
 // - unassign: back to the waiting list
 // - remove:   finished / no-show / handled another way
 // - mark_waiting: undo a mistaken "Doctor in" — the patient is waiting
 //             for the doctor again and the board's alert comes back
-// Whatever the action, if it frees a bed in the room the patient leaves,
-// the people lined up for that room are called.
+// Whatever the action, if it empties the room the patient leaves, the
+// people lined up for that room are called.
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -76,7 +85,7 @@ export async function POST(
     if (!room) {
       return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
-    const result = assignUpdate(room, visits, id, nowMs);
+    const result = assignUpdate(room, visits, id, nowMs, input.togetherWith);
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 409 });
     }
@@ -96,7 +105,7 @@ export async function POST(
     updates.push(removeUpdate(id, nowMs));
   }
 
-  // The room the patient is leaving may now have a free bed.
+  // The room the patient is leaving may now be empty.
   const leftRoomId =
     visit.room_id &&
     input.action !== "mark_waiting" &&

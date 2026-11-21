@@ -28,6 +28,9 @@ import { AssignOutcome, CALL_DISPLAY_MS, VisitView } from "@/lib/patient-flow";
 const ASSIGN_LABELS: Record<AssignOutcome, string> = {
   send: "Send here",
   next_up: "Next up here",
+  // No promise here: what happens depends on the answer the tap asks for.
+  ask_join_room: "Together or next up…",
+  ask_join_line: "Join the line…",
   full: "Full",
 };
 

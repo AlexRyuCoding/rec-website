@@ -82,6 +82,9 @@ function ChipLabel({
 const DROP_LABELS: Record<AssignOutcome, (roomName: string) => string> = {
   send: (roomName) => `Send to ${roomName}`,
   next_up: (roomName) => `Next up in ${roomName}`,
+  // The drop asks a question first, so the chip must not promise an answer.
+  ask_join_room: (roomName) => `${roomName}: together or next up?`,
+  ask_join_line: (roomName) => `${roomName}: join the line?`,
   full: (roomName) => `${roomName} is full`,
 };
 
