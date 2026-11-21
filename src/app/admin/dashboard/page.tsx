@@ -137,6 +137,8 @@ export default function AdminDashboard() {
   const [patients, setPatients] = useState<PatientRow[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
+  // the search matched more patients than the list shows
+  const [moreMatches, setMoreMatches] = useState(false);
   // id of the patient whose Reset button is in confirm state
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [resetDoneId, setResetDoneId] = useState<string | null>(null);
@@ -145,6 +147,7 @@ export default function AdminDashboard() {
     if (query.trim().length < 2) return;
     setSearching(true);
     setSearchError("");
+    setMoreMatches(false);
     setConfirmingId(null);
     setResetDoneId(null);
     try {
@@ -161,6 +164,7 @@ export default function AdminDashboard() {
         return;
       }
       setPatients(data.patients);
+      setMoreMatches(data.more === true);
       if (data.patients.length === 0) setSearchError("No patients found.");
     } catch {
       setSearchError("Search failed");
@@ -522,6 +526,12 @@ export default function AdminDashboard() {
                     ))}
                   </tbody>
                 </table>
+                {moreMatches && (
+                  <p className="pt-3 text-sm text-cream/50">
+                    Showing the {patients.length} closest matches. Type more of
+                    the name to narrow the list.
+                  </p>
+                )}
               </div>
             )}
           </div>

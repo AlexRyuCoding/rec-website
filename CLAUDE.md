@@ -47,7 +47,8 @@ throughout the day unassisted.
   service per check-in) and patient search with Reset PIN
 - /api/auth/[...nextauth] — NextAuth (Google sign-in, session, callbacks)
 - /api/admin/checkins — GET check-ins in a from/to range, joined with names
-- /api/admin/patients — GET staff patient search (returns has_pin, never the hash)
+- /api/admin/patients — GET staff patient search (returns has_pin, never the
+  hash); see "Patient search" below
 - /admin/rooms — staff rooms board: per-room timers, doctor pills, the
   waiting list of checked-in patients, and room assignment (see "Patient
   room flow" below)
@@ -176,6 +177,32 @@ default duration, timer_* timestamps, capacity (beds, default 1; Room 5 =
 2), turnover_started_at. doctors (0009–0010): roster of ≤5 names with a
 color each. display_devices (0011): paired waiting-room screens — pairing
 code, sha256 of the device secret, label, approved/revoked/last-seen.
+
+## Patient search (migration 0014 — should be applied)
+
+Dashboard → Patients. The typed text is split into words in
+src/lib/patient-search.ts (pure, tested); 4+ digits = a phone search
+(tried with and without a leading 1). The `search_patients` database
+function (0014) decides who matches and in what order;
+src/lib/patient-search-server.ts calls it.
+
+- EVERY word must match the patient: inside the first name, last name or
+  email, in any order ("Ann Lic", "Licater, Ann"). Accents are ignored
+  (unaccent) and a word of 4+ letters also matches a close spelling of a
+  name (pg_trgm word_similarity ≥ 0.5: "Licatr", "Micheal").
+- Order: whole name > start of a name > inside a name > close spelling >
+  email only. 20 are shown; the reply's `more` flag makes the dashboard
+  say "type more of the name".
+- The function is SECURITY INVOKER on purpose: RLS (no policies) is what
+  keeps it empty for the anon key. Never make it security definer.
+- Without 0014 the route falls back to a plain word-by-word query (no
+  accents, no typos) and logs a warning — search must not go down because
+  a migration was not applied yet.
+- Database tests: supabase/tests/*.sql, run with `npm run test:db` (a
+  throwaway local Postgres with every migration applied; needs Postgres
+  installed, touches nothing on Supabase).
+- The kiosk's phone/email lookup stays EXACT — do not point it at this
+  function: a fuzzy match there would show a patient someone else's name.
 
 ## Patient room flow (migration 0011 — must be applied)
 
