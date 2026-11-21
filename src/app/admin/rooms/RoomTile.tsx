@@ -6,7 +6,6 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
-  DoorOpen,
   Minus,
   Pause,
   Play,
@@ -422,20 +421,27 @@ export default function RoomTile({
         // staff say the room is empty. The doctor walking out to run
         // one more session (fire cupping is two in a row) starts it here
         // instead; that finishes nobody and calls nobody.
-        <div className="flex w-full flex-col gap-1">
+        // Side by side on two lines each: stacked full-width buttons do
+        // not fit the tile's fixed height once names and a line are shown
+        // (the status label below gets squeezed out).
+        <div className="grid w-full grid-cols-2 gap-1.5">
           <button
             disabled={busy}
             onClick={() => onAction("again")}
-            className="flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-white/20 px-2 py-1 text-sm font-medium hover:bg-white/30 disabled:opacity-40"
+            className="rounded-xl bg-white/20 px-1 py-1 text-sm font-medium leading-tight hover:bg-white/30 disabled:opacity-40"
           >
-            <Play className="h-4 w-4" /> Another session
+            Another
+            <br />
+            session
           </button>
           <button
             disabled={busy}
             onClick={() => onAction("ready")}
-            className="flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-white/90 px-2 py-1 text-sm font-semibold text-slate-800 hover:bg-white disabled:opacity-40"
+            className="rounded-xl bg-white/90 px-1 py-1 text-sm font-semibold leading-tight text-slate-800 hover:bg-white disabled:opacity-40"
           >
-            <DoorOpen className="h-4 w-4" /> Room ready
+            Room
+            <br />
+            ready
           </button>
         </div>
       ) : (
