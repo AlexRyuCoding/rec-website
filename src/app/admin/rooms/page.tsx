@@ -25,6 +25,7 @@ import {
   visitState,
   VisitView,
 } from "@/lib/patient-flow";
+import { isLongWait } from "@/lib/alert-escalation";
 import { gridStyle } from "./grid";
 import { useRooms } from "./useRooms";
 import { useAlarm } from "./useAlarm";
@@ -68,12 +69,14 @@ export default function RoomsPage() {
     deleteDoctor,
   } = useRooms();
   const [editMode, setEditMode] = useState(false);
-  const { soundEnabled, silentNotice, enableSound, testSound } = useAlarm(
-    rooms,
-    serverNowMs,
-    visits,
-    !loading
-  );
+  const {
+    soundEnabled,
+    silentNotice,
+    enableSound,
+    testSound,
+    doorbellDoctors,
+    setDoorbellDoctors,
+  } = useAlarm(rooms, serverNowMs, visits, !loading, doctors);
   // The waiting patient staff are about to place. While set, every room
   // tile turns into a "Send here" / "Next up here" target.
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
@@ -153,6 +156,9 @@ export default function RoomsPage() {
           doctors.find((d) => d.name === room.doctor_name)?.color ?? null,
         patientNames: unseen.map((v) => v.display_name),
         sinceMs: Math.min(...unseen.map((v) => Date.parse(v.called_at!))),
+        long: unseen.some((v) =>
+          isLongWait(Date.parse(v.called_at!), serverNowMs)
+        ),
       };
     })
     .filter((a): a is WaitingAlert => a !== null)
@@ -263,7 +269,12 @@ export default function RoomsPage() {
           {connectionError && (
             <span className="text-xs text-amber-400">Reconnecting…</span>
           )}
-          <SoundsPanel onPlay={testSound} />
+          <SoundsPanel
+            onPlay={testSound}
+            doctors={doctors}
+            doorbellDoctors={doorbellDoctors}
+            onDoorbellDoctors={setDoorbellDoctors}
+          />
           <button
             onClick={() => setEditMode((v) => !v)}
             className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20"
@@ -406,6 +417,10 @@ export default function RoomsPage() {
                         nowMs={serverNowMs}
                         doctors={doctors}
                         occupants={occupants}
+                        longWait={
+                          waitingAlerts.find((a) => a.roomId === room.id)
+                            ?.long ?? false
+                        }
                         nextUp={roomNextUp(visits, room.id)}
                         assignMode={
                           selectedVisit
