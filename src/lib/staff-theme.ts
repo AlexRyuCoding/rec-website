@@ -35,6 +35,24 @@ export function resolveTheme(
   return choice;
 }
 
+// What the login page does when nothing has been chosen on this
+// browser. It is the door to both themed pages and they differ: the
+// dashboard follows the computer, the rooms board stays dark. `next` is
+// the page signing in leads to (?next=, straight from the address bar);
+// anything that is not the dashboard — the board, the kiosk, nothing,
+// nonsense — is dark, the look every staff page had before themes.
+export function loginThemeFallback(
+  next: string | null | undefined
+): ThemeChoice {
+  const DASHBOARD = "/admin/dashboard";
+  if (!next) return "dark";
+  return next === DASHBOARD ||
+    next.startsWith(`${DASHBOARD}?`) ||
+    next.startsWith(`${DASHBOARD}/`)
+    ? "system"
+    : "dark";
+}
+
 // The source of a script to put in the page's HTML, so the right theme is
 // on <html> before anything is painted (no flash of the other one). It
 // must agree with parseThemeChoice + resolveTheme — staff-theme.test.ts

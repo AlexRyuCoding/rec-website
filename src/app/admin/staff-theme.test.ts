@@ -141,9 +141,12 @@ describe("one set of named colours", () => {
     "text-[#1ED760]",
   ];
 
-  it("dashboard and shared pieces use only the named colours and ledges", () => {
+  it("dashboard, login page and shared pieces use only the named colours and ledges", () => {
+    const login = sourceFiles(join(ADMIN, "login"));
+    expect(login.length).toBeGreaterThan(0);
     const files = [
       ...sourceFiles(join(ADMIN, "dashboard")),
+      ...login,
       ...sourceFiles(join(ADMIN, "ui")),
     ].filter((file) => !file.endsWith(".test.ts"));
     expect(files.length).toBeGreaterThan(15);
