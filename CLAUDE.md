@@ -454,6 +454,32 @@ through src/lib/flow-server.ts.
   dismissed — only "Doctor in" or Start clears it (it stays up in Edit
   layout too). Tapping a patient's
   name on a With-doctor tile offers "Doctor hasn't come yet" to undo.
+- Escalation (src/lib/alert-escalation.ts, pure, tested; useAlarm.ts asks
+  it once a second). The doorbell used to ring once and then only show.
+  Two rungs now:
+  1. At the call it rings on tablets set to that room's doctor, on
+     tablets set to everyone, and on every tablet if the room has no
+     doctor on its pill.
+  2. After 5 minutes with no "Doctor in" (LONG_WAIT_MS) it rings on EVERY
+     tablet, whoever each is set to, and again every 3 minutes
+     (REPEAT_MS) until someone goes. The banner gets a red outline and
+     "Long wait 5:13"; the tile is outlined and its status line reads
+     "Long wait 5:13".
+  Rung 1 is the per-tablet setting in the board's Sounds panel ("Doorbell
+  on this tablet rings for": Everyone, or one or more doctors), kept in
+  that tablet's localStorage and shown on the Sounds button. Rung 2 is
+  what makes it safe (do not weaken it): a tablet is only ever quiet for
+  the first five minutes, so a quiet tablet is never why a patient is
+  forgotten. The setting changes SOUND only — every banner shows on
+  every board, as before — and not the timer sounds. A tablet set only
+  to doctors no longer on the roster rings for everyone. Patients
+  already waiting when a page loads do not ring at once (history, not
+  news); a long wait rings 3 minutes after the load.
+- Waiting-list chips are coloured by how long the patient has been KEPT
+  waiting (waitLevel): amber from 10 minutes, red from 20, counted from
+  the appointment time — or from check-in if they arrived after it or
+  have no appointment. Someone who checks in half an hour early has not
+  been kept waiting for half an hour. Colour only; it rings nothing.
 - ✓ (clear) = "needles out": silences the alarm and starts Setting Up;
   the patient is still in the room, so nobody is called. From there the
   tile offers two buttons. "Room ready" finishes the room's patients and
@@ -481,7 +507,7 @@ through src/lib/flow-server.ts.
   unmistakably different from one another in melody, tone colour, rhythm
   AND pitch range (sounds.test.ts enforces it — keep those tests when
   retuning). Staff board (useAlarm.ts): patient waiting = doorbell
-  ding-dong ×3; timer done = kitchen-timer beeps (very high, pulsed),
+  ding-dong ×3 (repeats while nobody goes — see Escalation above); timer done = kitchen-timer beeps (very high, pulsed),
   repeating every 20 s until ✓; overtime (5 min past zero) = low buzzing
   two-tone alarm, repeating the same way; a board with both plays both in
   turn. Waiting-room TV: a soft rising four-note chime per call, and once

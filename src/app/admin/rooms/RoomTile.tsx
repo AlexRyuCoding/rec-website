@@ -69,6 +69,7 @@ export default function RoomTile({
   nowMs,
   doctors,
   occupants,
+  longWait,
   nextUp,
   assignMode,
   question,
@@ -91,6 +92,9 @@ export default function RoomTile({
   // Patients called to or being treated in this room, and those lined up
   // behind it (called automatically once the room is ready).
   occupants: VisitView[];
+  // A patient here has waited five minutes for the doctor: the tile is
+  // outlined and says so.
+  longWait: boolean;
   nextUp: VisitView[];
   // Set while staff have a waiting patient selected: what tapping this
   // tile would do with them. Null = normal board.
@@ -199,7 +203,7 @@ export default function RoomTile({
         : state.status === "patient_waiting" && waitingSinceMs !== null
           ? // "Waiting", not "Patient waiting": at this size the full
             // words would push the minutes — the news — off the tile.
-            `Waiting ${formatTimerDisplay(
+            `${longWait ? "Long wait" : "Waiting"} ${formatTimerDisplay(
               Math.max(0, Math.floor((nowMs - waitingSinceMs) / 1000))
             )}`
           : style.label;
@@ -273,7 +277,9 @@ export default function RoomTile({
     <div
       ref={setRootRef}
       data-room-tile={room.name}
-      className={`${style.card} relative flex h-full flex-col items-center justify-between overflow-hidden rounded-2xl px-2.5 pt-2 text-center text-white shadow-lg transition-colors duration-500 select-none`}
+      className={`${style.card} ${
+        longWait ? "ring-4 ring-inset ring-rose-400" : ""
+      } relative flex h-full flex-col items-center justify-between overflow-hidden rounded-2xl px-2.5 pt-2 text-center text-white shadow-lg transition-colors duration-500 select-none`}
     >
       <div className="w-full min-w-0">
         <h2 className="truncate text-base font-semibold leading-5">

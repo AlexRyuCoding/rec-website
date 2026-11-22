@@ -10,6 +10,7 @@ import {
   VisitView,
 } from "@/lib/patient-flow";
 import { doctorColorClasses, DoctorRow, RoomRow } from "@/lib/room-status";
+import { waitLevel } from "@/lib/alert-escalation";
 import FinishedPanel from "./FinishedPanel";
 import { CLINIC_TZ } from "@/lib/clinic-time";
 
@@ -47,6 +48,7 @@ function ChipLabel({
   selected: boolean;
 }) {
   const rosterName = matchRosterDoctor(visit.practitioner_name, doctors);
+  const level = waitLevel(visit, nowMs);
   const rosterColor = doctors.find((d) => d.name === rosterName)?.color;
   return (
     <>
@@ -90,7 +92,17 @@ function ChipLabel({
           <span className="max-w-40 truncate">{visit.service_name}</span>
         )}
         {visit.service_name && <span aria-hidden>·</span>}
-        <span>{formatWaited(visit.checked_in_at, nowMs)}</span>
+        <span
+          className={
+            level === "long"
+              ? `font-bold ${selected ? "text-rose-700" : "text-rose-300"}`
+              : level === "warn"
+                ? `font-semibold ${selected ? "text-amber-700" : "text-amber-300"}`
+                : ""
+          }
+        >
+          {formatWaited(visit.checked_in_at, nowMs)}
+        </span>
       </span>
     </>
   );
@@ -167,15 +179,28 @@ function WaitingChip({
   // `attributes` are deliberately not spread — they would announce a
   // keyboard drag that does not exist and overwrite aria-pressed.
   const { setNodeRef, listeners, isDragging } = useDraggable({ id: visit.id });
+  const level = waitLevel(visit, nowMs);
   return (
     <div
       ref={setNodeRef}
       data-visit-chip={visit.id}
+      data-wait-level={level}
       data-assign-keep
+      // The longer a patient has been kept waiting (waitLevel), the
+      // harder the chip is to overlook: an amber outline from ten
+      // minutes, a red one on a red ground from twenty.
       className={`flex shrink-0 items-stretch overflow-hidden rounded-xl text-left transition-[background-color,color,opacity] duration-200 ${
         selected
           ? "bg-white text-neutral-900"
-          : "bg-white/10 text-white hover:bg-white/15"
+          : level === "long"
+            ? "bg-rose-950/80 text-white hover:bg-rose-950"
+            : "bg-white/10 text-white hover:bg-white/15"
+      } ${
+        level === "long"
+          ? "ring-2 ring-inset ring-rose-400"
+          : level === "warn"
+            ? "ring-1 ring-inset ring-amber-300/80"
+            : ""
       } ${isDragging ? "opacity-40" : ""}`}
     >
       <button

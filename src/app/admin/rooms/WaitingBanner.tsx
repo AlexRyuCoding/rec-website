@@ -14,6 +14,9 @@ export interface WaitingAlert {
   patientNames: string[];
   // When the longest-waiting of them was called.
   sinceMs: number;
+  // Nobody has come for five minutes: by now it rings on every tablet,
+  // and keeps ringing (alert-escalation.ts).
+  long: boolean;
 }
 
 // The doctor's alert: one large, bright bar per room where a patient is
@@ -98,7 +101,9 @@ export default function WaitingBanner({
           <div
             key={alert.roomId}
             data-alert={alert.roomId}
-            className={`relative flex flex-wrap items-center gap-x-5 gap-y-3 overflow-hidden rounded-2xl px-5 py-4 shadow-2xl ring-4 ring-white/40 ${
+            className={`relative flex flex-wrap items-center gap-x-5 gap-y-3 overflow-hidden rounded-2xl px-5 py-4 shadow-2xl ${
+              alert.long ? "ring-[6px] ring-rose-500" : "ring-4 ring-white/40"
+            } ${
               alert.doctorName
                 ? doctorColorClasses(alert.doctorColor)
                 : "bg-amber-300 text-amber-950"
@@ -126,9 +131,15 @@ export default function WaitingBanner({
               </p>
               <p className="truncate text-lg font-semibold sm:text-xl">
                 {alert.patientNames.join(" · ")}
-                <span className="ml-2 font-normal tabular-nums opacity-75">
-                  waiting {formatTimerDisplay(waited)}
-                </span>
+                {alert.long ? (
+                  <span className="ml-2 inline-block rounded-md bg-rose-600 px-2 align-middle text-base font-bold tabular-nums text-white">
+                    Long wait {formatTimerDisplay(waited)}
+                  </span>
+                ) : (
+                  <span className="ml-2 font-normal tabular-nums opacity-75">
+                    waiting {formatTimerDisplay(waited)}
+                  </span>
+                )}
               </p>
             </div>
             <button

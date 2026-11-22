@@ -1,8 +1,14 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { deriveRoomState, RoomRow } from "@/lib/room-status";
+import { deriveRoomState, DoctorRow, RoomRow } from "@/lib/room-status";
 import { VisitView } from "@/lib/patient-flow";
 import { alertSoundStatus, playSound, SoundId } from "@/lib/sounds";
+import {
+  DoctorWait,
+  doorbellStep,
+  effectiveDoctors,
+  RungAt,
+} from "@/lib/alert-escalation";
 
 // The sounds themselves — what each one is and why they differ — live in
 // src/lib/sounds.ts. This hook decides WHEN they play:
@@ -13,7 +19,9 @@ import { alertSoundStatus, playSound, SoundId } from "@/lib/sounds";
 //   zero. Same repeat. If one room is done and another is in overtime,
 //   each cycle plays both, one after the other, so neither hides the other.
 // - patient_waiting (doorbell ×3): a patient started waiting for the
-//   doctor. Plays once per patient; the banner is what persists.
+//   doctor. Rings at the call on the tablets set to that doctor (or to
+//   everyone); after five minutes with nobody going it rings on every
+//   tablet, and again every three minutes. Rules: alert-escalation.ts.
 //
 // Browsers block audio until the user interacts with the page, so the
 // page shows an enable-sound button that calls enableSound() (creating
@@ -22,6 +30,9 @@ const ALARM_PAUSE_MS = 20_000;
 const BETWEEN_SOUNDS_S = 0.5;
 
 const SOUND_PREF_KEY = "rooms-chime-enabled";
+// Per device: the doctors this tablet rings the doorbell for (JSON list
+// of roster names; empty = everyone).
+const DOORBELL_PREF_KEY = "rooms-doorbell-doctors";
 // How long sounds must have been blocked before the board says so. Long
 // enough that the instant between a tap and audio starting shows nothing.
 const SILENT_NOTICE_DELAY_MS = 600;
@@ -33,7 +44,8 @@ export function useAlarm(
   rooms: RoomRow[],
   serverNowMs: number,
   visits: VisitView[] = [],
-  ready = true
+  ready = true,
+  doctors: DoctorRow[] = []
 ) {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [audioReady, setAudioReady] = useState(false);
@@ -139,31 +151,64 @@ export function useAlarm(
     return () => clearInterval(interval);
   }, [completeCount, overtimeCount, soundEnabled, audioReady]);
 
-  // Doctor alert: three rings whenever a patient starts waiting for the
+  // Which doctors' patients this tablet rings the doorbell for — a choice
+  // remembered per device (the "Sounds" panel). Nothing chosen = everyone.
+  const [chosenDoctors, setChosenDoctors] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(DOORBELL_PREF_KEY) ?? "[]");
+      if (Array.isArray(saved)) {
+        setChosenDoctors(saved.filter((n) => typeof n === "string"));
+      }
+    } catch {
+      // Storage unavailable or garbled — ring for everyone.
+    }
+  }, []);
+  const setDoorbellDoctors = useCallback((names: string[]) => {
+    setChosenDoctors(names);
+    try {
+      localStorage.setItem(DOORBELL_PREF_KEY, JSON.stringify(names));
+    } catch {
+      // Not remembered past this page load.
+    }
+  }, []);
+  const doorbellDoctors = effectiveDoctors(chosenDoctors, doctors);
+
+  // Doctor alert: the doorbell, when a patient starts waiting for the
   // doctor — newly called to a room (including a late partner joining a
   // room whose timer is already running), or put back to "waiting" after
-  // a mistaken "Doctor in". Tracked by visit id. The first list a device
-  // loads is history, not news, and only primes the set — and "first
-  // list" means the first one after the board has data, not the empty
-  // list it renders with while loading.
-  const waitingIdsRef = useRef<Set<string> | null>(null);
-  const waitingKey = visits
-    .filter(
-      (v) => v.room_id !== null && v.called_at !== null && v.seen_at === null
-    )
-    .map((v) => v.id)
-    .sort()
-    .join(",");
+  // a mistaken "Doctor in" — and again, on every tablet, for as long as
+  // nobody goes. When it rings, and on which tablets, is decided in
+  // src/lib/alert-escalation.ts (doorbellStep); this only asks it, once
+  // per render (the board rerenders every second).
+  //
+  // The first list a device loads is history, not news, and only primes
+  // the bookkeeping — and "first list" means the first one after the
+  // board has data, not the empty list it renders with while loading.
+  const rungAtRef = useRef<RungAt | null>(null);
   useEffect(() => {
     if (!ready) return;
-    const current = new Set(waitingKey ? waitingKey.split(",") : []);
-    const previous = waitingIdsRef.current;
-    waitingIdsRef.current = current;
-    if (!previous) return;
-    const hasNew = [...current].some((id) => !previous.has(id));
-    if (!hasNew || !soundEnabled || !audioReady || !ctxRef.current) return;
-    playSound(ctxRef.current, "patient_waiting");
-  }, [waitingKey, ready, soundEnabled, audioReady]);
+    const waits: DoctorWait[] = visits
+      .filter(
+        (v) => v.room_id !== null && v.called_at !== null && v.seen_at === null
+      )
+      .map((v) => ({
+        visitId: v.id,
+        doctorName: rooms.find((r) => r.id === v.room_id)?.doctor_name ?? null,
+        calledAtMs: Date.parse(v.called_at!),
+      }));
+    const step = doorbellStep(
+      waits,
+      doorbellDoctors,
+      rungAtRef.current ?? new Map(),
+      serverNowMs,
+      rungAtRef.current === null
+    );
+    rungAtRef.current = step.rungAt;
+    if (step.ring && soundEnabled && audioReady && ctxRef.current) {
+      playSound(ctxRef.current, "patient_waiting");
+    }
+  });
 
   // Keep the display awake where the browser allows it (tablets on a wall).
   useEffect(() => {
@@ -197,5 +242,12 @@ export function useAlarm(
     [enableSound]
   );
 
-  return { soundEnabled, silentNotice, enableSound, testSound };
+  return {
+    soundEnabled,
+    silentNotice,
+    enableSound,
+    testSound,
+    doorbellDoctors,
+    setDoorbellDoctors,
+  };
 }
