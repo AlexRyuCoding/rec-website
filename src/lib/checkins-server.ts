@@ -21,6 +21,8 @@ export interface CheckinPage {
   total: number;
   // There are more after this page.
   more: boolean;
+  // The patients listed on this page — for the audit log, not the browser.
+  patientIds: string[];
 }
 
 // One page of check-ins in [from, to), newest first. Throws on a database
@@ -34,7 +36,7 @@ export async function loadCheckinPage(
   const { data, error, count } = await supabase
     .from("checkins")
     .select(
-      "id, checked_in_at, appointment_at, service_name, practitioner_name, room_id, called_at, seen_at, done_at, patients(first_name, last_name), rooms(name)",
+      "id, patient_id, checked_in_at, appointment_at, service_name, practitioner_name, room_id, called_at, seen_at, done_at, patients(first_name, last_name), rooms(name)",
       { count: "exact" }
     )
     .gte("checked_in_at", from)
@@ -62,7 +64,19 @@ export async function loadCheckinPage(
     };
   });
   const total = count ?? checkins.length;
-  return { checkins, total, more: offset + checkins.length < total };
+  const patientIds = [
+    ...new Set(
+      (data ?? [])
+        .map((c) => c.patient_id as string | null)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  return {
+    checkins,
+    total,
+    more: offset + checkins.length < total,
+    patientIds,
+  };
 }
 
 export type TimingRow = VisitTimestamps & { practitioner_name: string | null };

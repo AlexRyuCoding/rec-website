@@ -11,6 +11,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type Row = Record<string, unknown>;
+
+// Numbers compare as numbers (ids), everything else as text (ISO
+// timestamps sort correctly that way).
+const below = (a: unknown, b: unknown) =>
+  typeof a === "number" && typeof b === "number"
+    ? a < b
+    : String(a) < String(b);
 type Filter = (row: Row) => boolean;
 interface Reply {
   data: unknown;
@@ -117,9 +124,7 @@ export function fakeSupabase(
         }
         if (orderBy) {
           const key = orderBy;
-          result = [...result].sort((a, b) =>
-            String(a[key]) < String(b[key]) ? -1 : 1
-          );
+          result = [...result].sort((a, b) => (below(a[key], b[key]) ? -1 : 1));
           if (descending) result.reverse();
         }
         if (range) result = result.slice(range[0], range[1] + 1);
@@ -174,10 +179,14 @@ export function fakeSupabase(
       },
       eq: (c: string, v: unknown) => where(c, (x) => x === v),
       neq: (c: string, v: unknown) => where(c, (x) => x !== v),
-      gte: (c: string, v: string) =>
-        where(c, (x) => x != null && String(x) >= v),
-      lt: (c: string, v: string) => where(c, (x) => x != null && String(x) < v),
+      gte: (c: string, v: string | number) =>
+        where(c, (x) => x != null && !below(x, v)),
+      lt: (c: string, v: string | number) =>
+        where(c, (x) => x != null && below(x, v)),
       in: (c: string, v: unknown[]) => where(c, (x) => v.includes(x)),
+      // array column holds every one of these
+      contains: (c: string, v: unknown[]) =>
+        where(c, (x) => Array.isArray(x) && v.every((i) => x.includes(i))),
       is: (c: string, v: null) => where(c, (x) => (x ?? null) === v),
       not(c: string, operator: string, v: unknown) {
         if (operator !== "is") throw new Error(`fake: not.${operator}`);

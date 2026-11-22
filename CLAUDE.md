@@ -45,13 +45,17 @@ patients use it unassisted; it needs no staff sign-in.
   holds no patient data (like /waiting-room): it has to open on a tablet
   with no credentials, to show a pairing code. Its API routes answer only
   a paired kiosk or a staff session
-- /admin/dashboard — staff dashboard, three tabs: Check-ins (today or
+- /admin/dashboard — staff dashboard, four tabs: Check-ins (today or
   any range: where each visit stands and how long patients waited — see
-  "Dashboard check-ins"), Patients (search with Check in + Reset PIN) and
-  Setup (paired screens and kiosks, waiting-room music, Practice Better
-  sync). The header shows who is signed in and has Sign out. ?tab=patients
+  "Dashboard check-ins"), Patients (search with Check in + Reset PIN, and
+  "Log" = that patient's audit trail), Setup (paired screens and kiosks,
+  waiting-room music, Practice Better sync) and Log (the staff audit
+  log). The header shows who is signed in and has Sign out. ?tab=patients
   opens the search directly (the rooms board's "Check in a patient"
-  link); ?tab=setup, or the way back from Spotify, opens Setup
+  link); ?tab=setup, or the way back from Spotify, opens Setup; ?tab=log
+- /api/admin/audit — GET the staff audit log, newest first, 100 a page
+  (&before=<id>), optionally &action=, &staff=<email>, &patient=<uuid>
+  (never a name — it would sit in request logs). no-store
 - /api/auth/[...nextauth] — NextAuth (Google sign-in, session, callbacks)
 - /api/admin/checkins — GET check-ins in a from/to range, newest first,
   500 a page (&offset= for more), each with names, practitioner, room and
@@ -369,25 +373,53 @@ patient lands in the board's waiting list like any check-in.
 - The search stays on the dashboard, not on the rooms board: it shows
   full names and contact details, and the board is "First L." only.
 
-## Staff audit log (migrations 0015 + 0016 — should be applied)
+## Staff audit log (migrations 0015, 0016, 0019 — should be applied)
 
-staff_audit_log: one row per dashboard patient search (the text typed and
-the ids of the patients listed), per PIN reset and per staff check-in —
-id, at, staff_email, action ('patient_search' | 'pin_reset' |
-'staff_checkin' — the last needs 0016), patient_ids uuid[], detail.
-Written by src/lib/audit-server.ts (recordStaffAction); the staff email
-comes from getAdminEmail() in src/lib/admin-auth.ts. There is no page
-for it: read it in the Supabase table editor.
+staff_audit_log: who did what with patient information, when, and to
+which patients — id, at, staff_email, action, patient_ids uuid[], detail.
+Actions, their names on the page and the wording of a range are in
+src/lib/audit-log.ts (pure, tested); writing and reading is
+src/lib/audit-server.ts. The staff email comes from getAdminEmail().
 
-- It fails OPEN, by decision: if the row cannot be written (0015 not
-  applied, database hiccup) the search / reset still happens and the app
-  logs "audit log write failed" with the error code only. The front desk
-  must not be locked out of finding a patient by the logbook.
+| action | written when | detail |
+| --- | --- | --- |
+| patient_search | a dashboard search listed patients | the text typed |
+| pin_reset | a PIN was cleared | — |
+| staff_checkin (0016) | staff checked a patient in | — |
+| checkins_view (0019) | the check-in history was shown | the dates covered |
+| checkins_export (0019) | it was exported as CSV | the dates covered |
+| visit_remove (0019) | a patient was taken off the rooms board | from where |
+| visit_restore (0019) | a finished patient was put back | to where |
+| device_pair (0019) | a screen or kiosk was paired | kind and name |
+| device_revoke (0019) | one was revoked | kind and name |
+
+- Read on Dashboard → Log (AuditPanel.tsx): newest first, filter by kind
+  of activity or staff member, "Show older entries". "Log" on a patient
+  search result opens it narrowed to that patient — the question the log
+  exists for is "who looked at this patient?" (GIN index on patient_ids,
+  0019). A row shows its first three patients by name and counts the
+  rest. Read-only: no route edits or deletes a row. Reading the log is
+  not itself logged.
+- It fails OPEN, by decision: if the row cannot be written (migration not
+  applied, database hiccup) the action still happens and the app logs
+  "audit log write failed" with the error code only. The front desk must
+  not be locked out of finding a patient by the logbook.
 - Searching while typing writes a row per request, so one lookup is
   often 2–4 rows ("an", "ann", "ann lic"). Each one did list patients.
+- A check-in history VIEW is written at most once per 15 minutes for the
+  same person and dates (recordStaffActionOnce): the list refreshes
+  itself every minute, and a row a minute would bury everything else.
+  The server decides this, not the page — a view cannot be hidden by
+  what the browser sends. Each row lists the patients on that page.
+- An EXPORT is written every time, one row per 500 check-ins exported.
+  "Export CSV" always asks the server again (&export=1) even when the
+  list on screen is complete: the file is what leaves the building.
+- Not logged, on purpose: sending patients to rooms, "Doctor in", timers
+  (the board's ordinary work, dozens of times a day) and anything the
+  kiosk does (a patient acting for themselves).
 - Nothing prunes the table.
 - RLS on, no policies; patient_ids is deliberately not a foreign key
-  (the record outlives the patient).
+  (the record outlives the patient — the page then shows "1 patient").
 
 ## Patient room flow (migration 0011 — must be applied)
 
@@ -819,7 +851,9 @@ Input rules (do not regress these — each fixes a way presses were lost):
   that opens only the kiosk's own routes; a browser carrying one is never
   treated as staff
 - Staff sign-ins end at 3 am clinic time; the dashboard has Sign out
-- Dashboard patient searches, PIN resets and staff check-ins are recorded
+- Dashboard patient searches, PIN resets, staff check-ins, check-in
+  history views and exports, removals from the rooms board and device
+  pairing are recorded
   in staff_audit_log (who, when, which patients); patient names are never
   put in a request address
 - setup-pin PATCH refuses to overwrite an existing PIN (403) and enforces

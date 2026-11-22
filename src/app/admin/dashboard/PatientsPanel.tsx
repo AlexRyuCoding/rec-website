@@ -29,7 +29,15 @@ const SEARCH_MIN_LENGTH = 2;
 // Dashboard → Patients: find a patient (by name, email or phone), check
 // them in, or reset their PIN. Rules for the search itself are in
 // CLAUDE.md under "Patient search".
-export default function PatientsPanel({ autoFocus }: { autoFocus: boolean }) {
+export default function PatientsPanel({
+  autoFocus,
+  onShowLog,
+}: {
+  autoFocus: boolean;
+  // Open the Log tab narrowed to this patient: who searched for them,
+  // reset their PIN, saw them in the check-in history.
+  onShowLog: (patient: { id: string; name: string }) => void;
+}) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   // Opened from the rooms board's "Check in a patient": ready to type.
   useEffect(() => {
@@ -232,6 +240,20 @@ export default function PatientsPanel({ autoFocus }: { autoFocus: boolean }) {
                   <td className="py-2 pr-4">{p.has_pin ? "Set" : "None"}</td>
                   <td className="py-2 text-right">
                     <span className="flex flex-wrap items-center justify-end gap-2">
+                      {confirmingId !== p.id && (
+                        <button
+                          onClick={() =>
+                            onShowLog({
+                              id: p.id,
+                              name: `${p.first_name} ${p.last_name}`.trim(),
+                            })
+                          }
+                          aria-label={`Log for ${p.first_name} ${p.last_name}`}
+                          className="px-2 py-1 text-sm text-cream/60 underline hover:text-cream"
+                        >
+                          Log
+                        </button>
+                      )}
                       {/* Hidden while the reset question is open:
                           that row holds one decision at a time. */}
                       {confirmingId !== p.id &&

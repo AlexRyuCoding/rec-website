@@ -1,4 +1,4 @@
--- Tests for public.staff_audit_log (migrations 0015 + 0016). Run with: npm run test:db
+-- Tests for public.staff_audit_log (migrations 0015, 0016, 0019). Run with: npm run test:db
 -- One transaction, rolled back.
 
 begin;
@@ -12,11 +12,19 @@ values ('desk@example.com', 'pin_reset', array[gen_random_uuid()]);
 insert into public.staff_audit_log (staff_email, action, patient_ids)
 values ('desk@example.com', 'staff_checkin', array[gen_random_uuid()]);
 
+-- 0019: six more known actions
+insert into public.staff_audit_log (staff_email, action, detail)
+select 'desk@example.com', a, 'x'
+from unnest(array[
+  'checkins_view', 'checkins_export', 'visit_remove', 'visit_restore',
+  'device_pair', 'device_revoke'
+]) as a;
+
 do $$
 declare n int; ok boolean;
 begin
   select count(*) into n from public.staff_audit_log where at > now() - interval '1 minute';
-  assert n = 3, format('three rows with a time: got %s', n);
+  assert n = 9, format('nine rows with a time: got %s', n);
 
   -- only the known actions
   ok := false;
@@ -48,6 +56,20 @@ begin
   assert n = 1, 'the audit row outlives the patient';
 end $$;
 
+-- 0019: "everything involving this patient" finds the rows that name them.
+do $$
+declare pid uuid := gen_random_uuid(); n int;
+begin
+  insert into public.staff_audit_log (staff_email, action, patient_ids)
+  values ('desk@example.com', 'checkins_view', array[gen_random_uuid(), pid, gen_random_uuid()]),
+         ('desk@example.com', 'visit_remove', array[pid]),
+         ('desk@example.com', 'checkins_view', array[gen_random_uuid()]);
+  select count(*) into n from public.staff_audit_log where patient_ids @> array[pid];
+  assert n = 2, format('two rows name the patient: got %s', n);
+  delete from public.staff_audit_log where patient_ids @> array[pid];
+  delete from public.staff_audit_log where action = 'checkins_view' and detail is null;
+end $$;
+
 -- Privacy: row-level security with no policies. Another role sees nothing
 -- and cannot add or change rows, even with every grant.
 create role audit_test_outsider;
@@ -70,7 +92,7 @@ end $$;
 reset role;
 do $$
 begin
-  assert (select count(*) from public.staff_audit_log) = 4, 'rows untouched by the other role';
+  assert (select count(*) from public.staff_audit_log) = 10, 'rows untouched by the other role';
   assert not exists (select 1 from public.staff_audit_log where staff_email = 'changed'), 'rows unchanged';
 end $$;
 
