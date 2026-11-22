@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
-import { authOptions } from "@/lib/auth";
-import { isAllowedAdminEmail } from "@/lib/admin-allowlist";
+import { getAdminEmail } from "@/lib/admin-auth";
 import {
   LINK_MAX_LENGTH,
   MUSIC_SOURCES,
@@ -46,14 +44,8 @@ function settingsReply(row: MusicRow) {
   };
 }
 
-async function staffEmail(): Promise<string | null> {
-  const session = await getServerSession(authOptions);
-  const email = session?.user?.email ?? null;
-  return isAllowedAdminEmail(email) ? email : null;
-}
-
 export async function GET() {
-  if (!(await staffEmail())) {
+  if (!(await getAdminEmail())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const supabase = createServiceClient();
@@ -86,7 +78,7 @@ const patchSchema = z.object({
 // Only the fields sent are changed, so "pause" and the volume slider do
 // not have to resend (or accidentally save) what is typed in the form.
 export async function PATCH(req: Request) {
-  const email = await staffEmail();
+  const email = await getAdminEmail();
   if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

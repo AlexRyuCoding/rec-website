@@ -1,4 +1,4 @@
--- Tests for public.staff_audit_log (migration 0015). Run with: npm run test:db
+-- Tests for public.staff_audit_log (migrations 0015 + 0016). Run with: npm run test:db
 -- One transaction, rolled back.
 
 begin;
@@ -8,11 +8,15 @@ values ('desk@example.com', 'patient_search', array[gen_random_uuid()], 'ann lic
 insert into public.staff_audit_log (staff_email, action, patient_ids)
 values ('desk@example.com', 'pin_reset', array[gen_random_uuid()]);
 
+-- 0016: a check-in made by staff is a known action too
+insert into public.staff_audit_log (staff_email, action, patient_ids)
+values ('desk@example.com', 'staff_checkin', array[gen_random_uuid()]);
+
 do $$
 declare n int; ok boolean;
 begin
   select count(*) into n from public.staff_audit_log where at > now() - interval '1 minute';
-  assert n = 2, format('two rows with a time: got %s', n);
+  assert n = 3, format('three rows with a time: got %s', n);
 
   -- only the known actions
   ok := false;
@@ -66,7 +70,7 @@ end $$;
 reset role;
 do $$
 begin
-  assert (select count(*) from public.staff_audit_log) = 3, 'rows untouched by the other role';
+  assert (select count(*) from public.staff_audit_log) = 4, 'rows untouched by the other role';
   assert not exists (select 1 from public.staff_audit_log where staff_email = 'changed'), 'rows unchanged';
 end $$;
 

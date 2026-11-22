@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { MonitorPlay } from "lucide-react";
+import { goToStaffLogin } from "@/lib/staff-login-redirect";
 
 interface Display {
   id: string;
@@ -42,7 +43,7 @@ export default function ScreensPanel() {
     try {
       const res = await fetch("/api/admin/displays");
       if (res.status === 401) {
-        window.location.href = "/admin/login";
+        goToStaffLogin();
         return;
       }
       if (!res.ok) return;

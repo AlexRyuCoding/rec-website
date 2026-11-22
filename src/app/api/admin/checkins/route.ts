@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
-import { isAdminAuthorized } from "@/lib/admin-auth";
+import { getAdminEmail, isAdminAuthorized } from "@/lib/admin-auth";
+import { recordStaffAction } from "@/lib/audit-server";
+import { createCheckin } from "@/lib/checkin-server";
 
 const MAX_ROWS = 500;
 
@@ -49,5 +52,46 @@ export async function GET(req: Request) {
     }),
     total: count ?? 0,
     truncated: (count ?? 0) > MAX_ROWS,
+  });
+}
+
+const checkInSchema = z.object({ patient_id: z.string().uuid() });
+
+// Staff check a patient in themselves — a walk-in, a forgotten PIN, the
+// kiosk being down, or someone taken off the board by mistake. The
+// patient lands in the rooms board's waiting list exactly as after a
+// kiosk check-in. Only a visit that is still open counts as "already
+// checked in" (see repeatRule in src/lib/checkin-server.ts). Written to
+// the staff audit log.
+export async function POST(req: Request) {
+  const staffEmail = await getAdminEmail();
+  if (!staffEmail) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const parsed = checkInSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+  const patientId = parsed.data.patient_id;
+
+  const supabase = createServiceClient();
+  const outcome = await createCheckin(supabase, patientId, "staff", Date.now());
+  if (outcome === "error") {
+    return NextResponse.json(
+      { error: "Couldn't check the patient in" },
+      { status: 500 }
+    );
+  }
+  if (outcome === "created") {
+    await recordStaffAction(supabase, {
+      staffEmail,
+      action: "staff_checkin",
+      patientIds: [patientId],
+    });
+  }
+  return NextResponse.json({
+    success: true,
+    duplicate: outcome === "duplicate",
   });
 }

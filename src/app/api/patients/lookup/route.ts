@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import { createServiceClient, fetchAllPatientsWithPins } from "@/lib/supabase";
+import { createServiceClient } from "@/lib/supabase";
+import { findPatientByPin } from "@/lib/pin-server";
 import { isAdminAuthorized } from "@/lib/admin-auth";
 import { pinAttemptsExhausted, recordPinFailure } from "@/lib/pin-rate-limit";
 
@@ -24,24 +24,21 @@ export async function POST(req: Request) {
     );
   }
 
-  const supabase = createServiceClient();
-  let patients;
+  // One indexed query for most patients; the compare-against-everyone
+  // way only for PINs not fingerprinted yet (see src/lib/pin-server.ts).
+  let patient;
   try {
-    patients = await fetchAllPatientsWithPins(supabase);
+    patient = await findPatientByPin(createServiceClient(), pin);
   } catch {
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
-
-  for (const patient of patients) {
-    const match = await bcrypt.compare(pin, patient.pin);
-    if (match) {
-      return NextResponse.json({
-        id: patient.id,
-        first_name: patient.first_name,
-        last_name: patient.last_name,
-        pb_client_id: patient.pb_client_id,
-      });
-    }
+  if (patient) {
+    return NextResponse.json({
+      id: patient.id,
+      first_name: patient.first_name,
+      last_name: patient.last_name,
+      pb_client_id: patient.pb_client_id,
+    });
   }
 
   await recordPinFailure();

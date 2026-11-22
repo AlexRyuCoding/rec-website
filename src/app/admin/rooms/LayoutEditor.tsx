@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -143,6 +143,16 @@ export default function LayoutEditor({
   const [beds, setBeds] = useState(1);
   const [doctorInput, setDoctorInput] = useState("");
   const [saving, setSaving] = useState(false);
+  // Deleting a room is two taps on the bin: the first arms it.
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  useEffect(() => {
+    if (!deleteArmed) return;
+    const t = setTimeout(() => setDeleteArmed(false), 4000);
+    return () => clearTimeout(t);
+  }, [deleteArmed]);
+  useEffect(() => {
+    setDeleteArmed(false);
+  }, [panel]);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
@@ -401,17 +411,30 @@ export default function LayoutEditor({
               </button>
               {panel.mode === "edit" && panel.room && (
                 <button
-                  aria-label="Delete room"
+                  aria-label={
+                    deleteArmed
+                      ? `Confirm: delete ${panel.room.name}`
+                      : "Delete room"
+                  }
                   disabled={saving}
                   onClick={async () => {
+                    if (!deleteArmed) {
+                      setDeleteArmed(true);
+                      return;
+                    }
                     setSaving(true);
                     await onDelete(panel.room!.id);
                     setSaving(false);
                     setPanel(null);
                   }}
-                  className="ml-auto rounded-lg bg-rose-900/70 p-2.5"
+                  className={`ml-auto flex items-center gap-1.5 rounded-lg p-2.5 text-sm font-semibold ${
+                    deleteArmed
+                      ? "bg-rose-600 ring-2 ring-white"
+                      : "bg-rose-900/70"
+                  }`}
                 >
                   <Trash2 className="h-4 w-4" />
+                  {deleteArmed && "Delete?"}
                 </button>
               )}
             </div>

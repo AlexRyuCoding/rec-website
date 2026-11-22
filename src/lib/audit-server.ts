@@ -1,10 +1,10 @@
 // The record of what staff did with patient data: who, when, what, and
-// which patients (staff_audit_log, migration 0015). Read it in the
-// Supabase table editor — there is no page for it.
+// which patients (staff_audit_log, migration 0015; 'staff_checkin' needs
+// 0016). Read it in the Supabase table editor — there is no page for it.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type StaffAction = "patient_search" | "pin_reset";
+export type StaffAction = "patient_search" | "pin_reset" | "staff_checkin";
 
 export interface StaffActionEntry {
   staffEmail: string;

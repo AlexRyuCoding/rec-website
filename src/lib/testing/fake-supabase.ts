@@ -1,0 +1,194 @@
+// A small in-memory stand-in for the Supabase client, for tests of the
+// server-side code that reads, decides and writes (flow-server.ts,
+// pin-server.ts). It runs the handful of query shapes this app uses
+// against plain arrays, so a test can set up rows, run the real code and
+// look at the rows afterwards — including what happens when another
+// request changes them halfway through.
+//
+// Not a PostgREST emulator: select() does not project columns or embed
+// related tables (rows come back whole), and only the filters below exist.
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+type Row = Record<string, unknown>;
+type Filter = (row: Row) => boolean;
+interface Reply {
+  data: unknown;
+  error: { code: string } | null;
+}
+
+export interface FakeQuery {
+  table: string;
+  kind: "select" | "insert" | "update" | "delete";
+  columns: string[];
+}
+
+export interface FakeDbOptions {
+  // Columns the "database" does not have yet (a migration not applied):
+  // any query naming one is refused with Postgres's 42703.
+  missingColumns?: Record<string, string[]>;
+  // Unique columns: a write that would repeat a non-null value is refused
+  // with 23505.
+  unique?: Record<string, string[]>;
+  // Runs before each query is answered; return an error code to make that
+  // query fail. Also the place to change rows "from another request".
+  onQuery?: (query: FakeQuery, index: number) => string | void;
+}
+
+export function fakeSupabase(
+  tables: Record<string, object[]>,
+  options: FakeDbOptions = {}
+) {
+  const queries: FakeQuery[] = [];
+
+  const from = (table: string) => {
+    const rows = (tables[table] ??= []) as Row[];
+    let kind: FakeQuery["kind"] = "select";
+    let payload: Row | Row[] | null = null;
+    let returning = false;
+    let one: "single" | "maybeSingle" | null = null;
+    let limit: number | null = null;
+    let range: [number, number] | null = null;
+    let orderBy: string | null = null;
+    const filters: Filter[] = [];
+    const columns = new Set<string>();
+
+    const named = (list: string) =>
+      list
+        .split(",")
+        .map((c) => c.trim())
+        .filter((c) => c && c !== "*" && !c.includes("("))
+        .forEach((c) => columns.add(c));
+
+    const run = (): Reply => {
+      const query: FakeQuery = { table, kind, columns: [...columns] };
+      const index = queries.push(query) - 1;
+      const forced = options.onQuery?.(query, index);
+      if (forced) return { data: null, error: { code: forced } };
+      const missing = options.missingColumns?.[table] ?? [];
+      if (query.columns.some((c) => missing.includes(c))) {
+        return { data: null, error: { code: "42703" } };
+      }
+      const matches = () => rows.filter((r) => filters.every((f) => f(r)));
+      const clash = (candidate: Row, self?: Row) =>
+        (options.unique?.[table] ?? []).some(
+          (col) =>
+            candidate[col] != null &&
+            rows.some((r) => r !== self && r[col] === candidate[col])
+        );
+
+      let result: Row[];
+      if (kind === "insert") {
+        const added = (Array.isArray(payload) ? payload : [payload!]).map(
+          (r) => ({ ...r })
+        );
+        if (added.some((r) => clash(r))) {
+          return { data: null, error: { code: "23505" } };
+        }
+        rows.push(...added);
+        result = added;
+      } else if (kind === "update") {
+        const hit = matches();
+        if (hit.some((r) => clash({ ...r, ...(payload as Row) }, r))) {
+          return { data: null, error: { code: "23505" } };
+        }
+        hit.forEach((r) => Object.assign(r, payload as Row));
+        result = hit;
+      } else if (kind === "delete") {
+        result = matches();
+        result.forEach((r) => rows.splice(rows.indexOf(r), 1));
+      } else {
+        result = matches();
+        if (orderBy) {
+          const key = orderBy;
+          result = [...result].sort((a, b) =>
+            String(a[key]) < String(b[key]) ? -1 : 1
+          );
+        }
+        if (range) result = result.slice(range[0], range[1] + 1);
+        if (limit !== null) result = result.slice(0, limit);
+      }
+
+      const copies = result.map((r) => ({ ...r }));
+      if (kind !== "select" && !returning) return { data: null, error: null };
+      if (one) {
+        if (copies.length > 1 || (one === "single" && copies.length === 0)) {
+          return { data: null, error: { code: "PGRST116" } };
+        }
+        return { data: copies[0] ?? null, error: null };
+      }
+      return { data: copies, error: null };
+    };
+
+    const where = (column: string, test: (value: unknown) => boolean) => {
+      columns.add(column);
+      filters.push((r) => test(r[column]));
+      return builder;
+    };
+
+    const builder = {
+      select(list = "*") {
+        named(list);
+        if (kind !== "select") returning = true;
+        return builder;
+      },
+      insert(value: Row | Row[]) {
+        kind = "insert";
+        payload = value;
+        (Array.isArray(value) ? value : [value]).forEach((r) =>
+          Object.keys(r).forEach((c) => columns.add(c))
+        );
+        return builder;
+      },
+      update(value: Row) {
+        kind = "update";
+        payload = value;
+        Object.keys(value).forEach((c) => columns.add(c));
+        return builder;
+      },
+      delete() {
+        kind = "delete";
+        return builder;
+      },
+      eq: (c: string, v: unknown) => where(c, (x) => x === v),
+      neq: (c: string, v: unknown) => where(c, (x) => x !== v),
+      gte: (c: string, v: string) => where(c, (x) => String(x) >= v),
+      lt: (c: string, v: string) => where(c, (x) => String(x) < v),
+      in: (c: string, v: unknown[]) => where(c, (x) => v.includes(x)),
+      is: (c: string, v: null) => where(c, (x) => (x ?? null) === v),
+      not(c: string, operator: string, v: unknown) {
+        if (operator !== "is") throw new Error(`fake: not.${operator}`);
+        return where(c, (x) => (x ?? null) !== v);
+      },
+      order(c: string) {
+        orderBy = c;
+        return builder;
+      },
+      limit(n: number) {
+        limit = n;
+        return builder;
+      },
+      range(a: number, b: number) {
+        range = [a, b];
+        return builder;
+      },
+      single() {
+        one = "single";
+        return builder;
+      },
+      maybeSingle() {
+        one = "maybeSingle";
+        return builder;
+      },
+      then(
+        resolve: (reply: Reply) => unknown,
+        reject?: (reason: unknown) => unknown
+      ) {
+        return new Promise<Reply>((done) => done(run())).then(resolve, reject);
+      },
+    };
+    return builder;
+  };
+
+  return { client: { from } as unknown as SupabaseClient, tables, queries };
+}

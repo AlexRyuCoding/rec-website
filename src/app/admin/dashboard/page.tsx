@@ -1,10 +1,12 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { getSession, signOut } from "next-auth/react";
 import MusicPanel from "./MusicPanel";
 import ScreensPanel from "./ScreensPanel";
 import { createSearchRunner, type SearchRunner } from "@/lib/latest-search";
-import { KeyRound, RefreshCw, Timer } from "lucide-react";
+import { KeyRound, LogOut, RefreshCw, Timer } from "lucide-react";
+import { goToStaffLogin } from "@/lib/staff-login-redirect";
 
 interface CheckinRow {
   id: string;
@@ -23,6 +25,9 @@ interface PatientRow {
   phone: string | null;
   has_pin: boolean;
 }
+
+// Where a staff check-in from the search results stands, per patient.
+type CheckinStatus = "busy" | "created" | "duplicate" | "error";
 
 interface SearchReply {
   status: number;
@@ -72,6 +77,24 @@ const dateInputValue = (d: Date) => d.toLocaleDateString("en-CA");
 
 export default function AdminDashboard() {
   const [tab, setTab] = useState<"checkins" | "patients">("checkins");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // The rooms board's "Check in a patient" opens this page at
+  // ?tab=patients: straight to the search, ready to type.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tab") === "patients") {
+      setTab("patients");
+      requestAnimationFrame(() => searchInputRef.current?.focus());
+    }
+  }, []);
+
+  // Who is signed in on this device, next to the way out.
+  const [staffEmail, setStaffEmail] = useState("");
+  useEffect(() => {
+    getSession()
+      .then((session) => setStaffEmail(session?.user?.email ?? ""))
+      .catch(() => {});
+  }, []);
 
   // --- Check-ins ---
   const [preset, setPreset] = useState<Preset>("today");
@@ -99,7 +122,7 @@ export default function AdminDashboard() {
         `/api/admin/checkins?from=${from.toISOString()}&to=${to.toISOString()}`
       );
       if (res.status === 401) {
-        window.location.href = "/admin/login";
+        goToStaffLogin();
         return;
       }
       const data = await res.json();
@@ -153,6 +176,8 @@ export default function AdminDashboard() {
   // id of the patient whose Reset button is in confirm state
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [resetDoneId, setResetDoneId] = useState<string | null>(null);
+  const [resetFailedId, setResetFailedId] = useState<string | null>(null);
+  const [checkins, setCheckins] = useState<Record<string, CheckinStatus>>({});
 
   // Searches as the staff member types (and at once on Enter / Search).
   // The runner sends one request after typing pauses and only ever hands
@@ -165,6 +190,8 @@ export default function AdminDashboard() {
       setSearchError(message);
       setConfirmingId(null);
       setResetDoneId(null);
+      setResetFailedId(null);
+      setCheckins({});
     };
     const runner = createSearchRunner<SearchReply>({
       delayMs: SEARCH_DELAY_MS,
@@ -184,7 +211,7 @@ export default function AdminDashboard() {
       onResult: (reply) => {
         setSearching(false);
         if (reply.status === 401) {
-          window.location.href = "/admin/login";
+          goToStaffLogin();
           return;
         }
         if (!reply.ok) {
@@ -209,21 +236,60 @@ export default function AdminDashboard() {
     return () => runner.cancel();
   }, []);
 
+  // A reset that did not happen must say so: staff are about to tell the
+  // patient "your PIN is cleared, make a new one at the kiosk".
   const resetPin = async (id: string) => {
+    setResetFailedId(null);
     try {
       const res = await fetch("/api/admin/reset-pin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ patient_id: id }),
       });
+      if (res.status === 401) {
+        goToStaffLogin();
+        return;
+      }
       if (res.ok) {
         setPatients((ps) =>
           ps.map((p) => (p.id === id ? { ...p, has_pin: false } : p))
         );
         setResetDoneId(id);
+      } else {
+        setResetFailedId(id);
       }
+    } catch {
+      setResetFailedId(id);
     } finally {
       setConfirmingId(null);
+    }
+  };
+
+  // Staff check a patient in themselves: a walk-in, a forgotten PIN, the
+  // kiosk being down, or someone taken off the rooms board by mistake.
+  // The patient lands in the board's waiting list like any check-in.
+  const checkIn = async (id: string) => {
+    const mark = (status: CheckinStatus) =>
+      setCheckins((all) => ({ ...all, [id]: status }));
+    mark("busy");
+    try {
+      const res = await fetch("/api/admin/checkins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patient_id: id }),
+      });
+      if (res.status === 401) {
+        goToStaffLogin();
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        mark("error");
+        return;
+      }
+      mark(data.duplicate ? "duplicate" : "created");
+    } catch {
+      mark("error");
     }
   };
 
@@ -251,7 +317,7 @@ export default function AdminDashboard() {
           ),
         });
         if (res.status === 401) {
-          window.location.href = "/admin/login";
+          goToStaffLogin();
           return;
         }
         const data: {
@@ -263,7 +329,7 @@ export default function AdminDashboard() {
           total: number | null;
           created: number | null;
           error?: string;
-        } = await res.json();
+        } = await res.json().catch(() => ({}));
         if (!res.ok) {
           setSyncMsg(data.error ?? "Sync failed — try again.");
           return;
@@ -312,13 +378,25 @@ export default function AdminDashboard() {
     <div className="min-h-screen p-6 sm:p-10 mt-12 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-semibold">Office Dashboard</h1>
-        <Link
-          href="/admin/rooms"
-          className="flex items-center gap-2 px-4 py-2 rounded-full border border-brand-foreground hover:bg-brand-muted transition-colors"
-        >
-          <Timer className="size-4" />
-          Rooms
-        </Link>
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {staffEmail && (
+            <span className="text-sm text-cream/50">{staffEmail}</span>
+          )}
+          <Link
+            href="/admin/rooms"
+            className="flex items-center gap-2 px-4 py-2 rounded-full border border-brand-foreground hover:bg-brand-muted transition-colors"
+          >
+            <Timer className="size-4" />
+            Rooms
+          </Link>
+          <button
+            onClick={() => signOut({ callbackUrl: "/admin/login" })}
+            className="flex items-center gap-2 px-4 py-2 rounded-full border border-brand-foreground hover:bg-brand-muted transition-colors"
+          >
+            <LogOut className="size-4" />
+            Sign out
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-2">
@@ -465,6 +543,7 @@ export default function AdminDashboard() {
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <input
+                  ref={searchInputRef}
                   type="text"
                   value={query}
                   onChange={(e) => {
@@ -550,35 +629,86 @@ export default function AdminDashboard() {
                           {p.has_pin ? "Set" : "None"}
                         </td>
                         <td className="py-2 text-right">
-                          {resetDoneId === p.id ? (
-                            <span className="text-brand-primary">
-                              Cleared — patient can set a new PIN at the kiosk
-                            </span>
-                          ) : p.has_pin ? (
-                            confirmingId === p.id ? (
-                              <span className="flex gap-2 justify-end">
-                                <button
-                                  onClick={() => resetPin(p.id)}
-                                  className="px-3 py-1 rounded-full bg-error text-white hover:bg-error/80 transition-colors"
-                                >
-                                  Reset PIN for {p.first_name} {p.last_name}
-                                </button>
-                                <button
-                                  onClick={() => setConfirmingId(null)}
-                                  className="px-3 py-1 rounded-full border border-brand-foreground hover:bg-brand-muted transition-colors"
-                                >
-                                  Cancel
-                                </button>
+                          <span className="flex flex-wrap items-center justify-end gap-2">
+                            {/* Hidden while the reset question is open:
+                                that row holds one decision at a time. */}
+                            {confirmingId !== p.id &&
+                              (checkins[p.id] === "created" ? (
+                                <span className="text-brand-primary">
+                                  Checked in ·{" "}
+                                  <Link
+                                    href="/admin/rooms"
+                                    className="underline"
+                                  >
+                                    Rooms board
+                                  </Link>
+                                </span>
+                              ) : checkins[p.id] === "duplicate" ? (
+                                <span className="text-cream/60">
+                                  Already on the{" "}
+                                  <Link
+                                    href="/admin/rooms"
+                                    className="underline"
+                                  >
+                                    rooms board
+                                  </Link>
+                                </span>
+                              ) : (
+                                <>
+                                  {checkins[p.id] === "error" && (
+                                    <span role="alert" className="text-error">
+                                      Couldn&apos;t check in — try again
+                                    </span>
+                                  )}
+                                  <button
+                                    onClick={() => checkIn(p.id)}
+                                    disabled={checkins[p.id] === "busy"}
+                                    aria-label={`Check in ${p.first_name} ${p.last_name}`}
+                                    className="px-3 py-1 rounded-full bg-brand-primary text-white hover:bg-brand-secondary disabled:opacity-50 transition-colors"
+                                  >
+                                    {checkins[p.id] === "busy"
+                                      ? "Checking in…"
+                                      : "Check in"}
+                                  </button>
+                                </>
+                              ))}
+                            {resetDoneId === p.id ? (
+                              <span className="text-brand-primary">
+                                Cleared — patient can set a new PIN at the kiosk
                               </span>
-                            ) : (
-                              <button
-                                onClick={() => setConfirmingId(p.id)}
-                                className="px-3 py-1 rounded-full border border-brand-foreground hover:bg-brand-muted transition-colors"
-                              >
-                                Reset PIN
-                              </button>
-                            )
-                          ) : null}
+                            ) : p.has_pin ? (
+                              confirmingId === p.id ? (
+                                <span className="flex gap-2 justify-end">
+                                  <button
+                                    onClick={() => resetPin(p.id)}
+                                    className="px-3 py-1 rounded-full bg-error text-white hover:bg-error/80 transition-colors"
+                                  >
+                                    Reset PIN for {p.first_name} {p.last_name}
+                                  </button>
+                                  <button
+                                    onClick={() => setConfirmingId(null)}
+                                    className="px-3 py-1 rounded-full border border-brand-foreground hover:bg-brand-muted transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                </span>
+                              ) : (
+                                <>
+                                  {resetFailedId === p.id && (
+                                    <span role="alert" className="text-error">
+                                      PIN not reset — try again
+                                    </span>
+                                  )}
+                                  <button
+                                    onClick={() => setConfirmingId(p.id)}
+                                    className="px-3 py-1 rounded-full border border-brand-foreground hover:bg-brand-muted transition-colors"
+                                  >
+                                    Reset PIN
+                                  </button>
+                                </>
+                              )
+                            ) : null}
+                          </span>
                         </td>
                       </tr>
                     ))}

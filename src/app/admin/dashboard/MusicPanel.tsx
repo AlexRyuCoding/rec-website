@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Music, Pause, Play, Plus, Radio } from "lucide-react";
 import type { MusicSource, RadioPreset, SavedStation } from "@/lib/music";
+import { goToStaffLogin } from "@/lib/staff-login-redirect";
 
 interface Settings {
   source: MusicSource;
@@ -151,7 +152,7 @@ export default function MusicPanel() {
     try {
       const res = await fetch("/api/admin/music");
       if (res.status === 401) {
-        window.location.href = "/admin/login";
+        goToStaffLogin();
         return;
       }
       if (!res.ok) {
@@ -200,7 +201,7 @@ export default function MusicPanel() {
           body: JSON.stringify(change),
         });
         if (res.status === 401) {
-          window.location.href = "/admin/login";
+          goToStaffLogin();
           return;
         }
         const data = (await res.json().catch(() => ({}))) as Partial<Reply> & {
@@ -285,7 +286,7 @@ export default function MusicPanel() {
         body: JSON.stringify({ name: draft.radioName, url: draft.radioUrl }),
       });
       if (res.status === 401) {
-        window.location.href = "/admin/login";
+        goToStaffLogin();
         return;
       }
       const data = (await res.json().catch(() => ({}))) as {
@@ -331,7 +332,7 @@ export default function MusicPanel() {
         method: "DELETE",
       });
       if (res.status === 401) {
-        window.location.href = "/admin/login";
+        goToStaffLogin();
         return;
       }
       // 404 = someone else already removed it: the same outcome.

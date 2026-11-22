@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Users, X } from "lucide-react";
+import Link from "next/link";
+import { UserPlus, Users, X } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
 import { gsap, useGSAP } from "@/lib/gsap";
 import {
@@ -9,8 +10,7 @@ import {
   VisitView,
 } from "@/lib/patient-flow";
 import { doctorColorClasses, DoctorRow } from "@/lib/room-status";
-
-const CLINIC_TZ = "America/Los_Angeles";
+import { CLINIC_TZ } from "@/lib/clinic-time";
 
 function formatAppointment(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-US", {
@@ -302,6 +302,16 @@ export default function WaitingList({
             ))}
           </div>
         )}
+        {/* For a patient who is here but not on the list — a walk-in, a
+            forgotten PIN, someone removed by mistake. The search itself
+            is on the dashboard: it shows full names and contact details,
+            which do not belong on a board patients walk past. */}
+        <Link
+          href="/admin/dashboard?tab=patients"
+          className="ml-auto flex shrink-0 items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1.5 text-xs font-medium text-white/80 hover:bg-white/20 hover:text-white"
+        >
+          <UserPlus className="h-3.5 w-3.5" /> Check in a patient
+        </Link>
       </div>
       {selectedId && !dragging && (
         <p className="mt-1.5 text-xs text-white/60">

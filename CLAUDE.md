@@ -44,9 +44,13 @@ throughout the day unassisted.
 - /admin/patient-signin — the kiosk page (protected by middleware)
 - /admin/dashboard — staff dashboard: check-ins viewer (Today/Yesterday/
   week/month/custom + Refresh + CSV export; shows appointment time and
-  service per check-in) and patient search with Reset PIN
+  service per check-in) and patient search with Check in + Reset PIN;
+  the header shows who is signed in and has Sign out. ?tab=patients opens
+  the search directly (the rooms board's "Check in a patient" link)
 - /api/auth/[...nextauth] — NextAuth (Google sign-in, session, callbacks)
-- /api/admin/checkins — GET check-ins in a from/to range, joined with names
+- /api/admin/checkins — GET check-ins in a from/to range, joined with names;
+  POST {patient_id} = staff check a patient in themselves (see "Staff
+  check-in" below)
 - /api/admin/patients — POST {q} staff patient search (returns has_pin,
   never the hash); see "Patient search" below
 - /admin/rooms — staff rooms board: per-room timers, doctor pills, the
@@ -64,7 +68,9 @@ throughout the day unassisted.
   Nothing on it pops in or blinks out (see "Waiting-room TV motion")
 - /api/admin/rooms — GET rooms + doctor roster + open visits + server
   time; POST creates a room. /api/admin/rooms/[id] PATCH/DELETE (PATCH
-  accepts capacity 1–4 = beds). /api/admin/rooms/[id]/timer POST timer
+  accepts capacity 1–4 = beds; DELETE is refused with 409 while the room
+  has patients, a line, a running timer or is setting up —
+  roomDeleteBlocker). /api/admin/rooms/[id]/timer POST timer
   actions (start/pause/resume/adjust/set/reset/clear/ready/again)
 - /api/admin/visits/[id] — POST {action: assign(roomId, togetherWith?) |
   unassign | remove | mark_waiting} moves a checked-in patient through
@@ -101,18 +107,33 @@ throughout the day unassisted.
   free-tier Supabase project never pauses for inactivity
 - /api/patients/lookup — matches PIN, returns patient record
 - /api/patients/setup-pin — creates PIN for new patient
+  (both through src/lib/pin-server.ts — see "PIN lookup" below)
 - /api/appointments/today — fetches today's appointment from Practice Better
 - /api/checkins — writes check-in record to Supabase (patient_id + timestamp,
   plus a snapshot of today's PB appointment time, service name and
   practitioner; nullable, fails open if PB is unreachable). The new row is
-  also the patient's visit: it appears in the rooms board's waiting list
+  also the patient's visit: it appears in the rooms board's waiting list.
+  The kiosk's route; the writing itself is src/lib/checkin-server.ts
 - /api/webhooks/practice-better — PB webhook: GET = verification handshake, POST = signed client.record.created/updated events → upsert patient into Supabase (PB is the source of truth for contact info; staff fix wrong numbers/emails in PB, never in Supabase)
 
 ## Auth (Google sign-in via NextAuth)
 
 - Staff unlock the kiosk by signing in with Google at /admin/login. There is
   no password — nothing to brute-force; Google supplies MFA and account
-  security. NextAuth v4, JWT sessions, 24h maxAge (config: src/lib/auth.ts).
+  security. NextAuth v4, JWT sessions (config: src/lib/auth.ts).
+- A sign-in ends at the clinic's next 3 am (src/lib/staff-session.ts,
+  pure, tested), not 24 h after the button was pressed: NextAuth never
+  refreshes the cookie here, so a plain 24 h session signed in at 8:10
+  dropped the kiosk and the boards to the login screen at 8:10 the next
+  day, mid-clinic. The end is stamped into the token at sign-in (`dayEnd`)
+  and checked wherever the allowlist is. Staff still sign in once at the
+  start of each day. (24 h maxAge remains as the cookie's outer limit.)
+- Every staff API route must get its session through getAdminEmail() /
+  isAdminAuthorized() (src/lib/admin-auth.ts). A route that calls
+  getServerSession itself skips the day's-end check.
+- The login page returns staff to the page they came from (?next=, only
+  /admin/* paths are accepted; default = the kiosk). Pages that get a 401
+  use goToStaffLogin() (src/lib/staff-login-redirect.ts).
 - Only Google accounts listed in ALLOWED_ADMIN_EMAILS may sign in
   (src/lib/admin-allowlist.ts). The allowlist is enforced in the signIn
   callback AND re-checked on every request (middleware + API guard), so
@@ -142,6 +163,7 @@ policies on both tables; all access goes through the service-role key.
 | email        | string    | NOT unique — legacy PB import has families sharing emails; stored lowercase |
 | phone        | string    |                           |
 | pin          | string    | bcrypt hashed, nullable   |
+| pin_lookup   | string    | nullable, unique; keyed fingerprint of the PIN for one-query lookup (migration 0017) |
 | pb_client_id | string    | Practice Better client ID |
 | phone_digits | string    | generated: phone stripped to digits; indexed for kiosk lookup |
 | created_at   | timestamp | auto                      |
@@ -227,11 +249,60 @@ src/lib/patient-search-server.ts calls it.
 - The kiosk's phone/email lookup stays EXACT — do not point it at this
   function: a fuzzy match there would show a patient someone else's name.
 
-## Staff audit log (migration 0015 — should be applied)
+## PIN lookup (migration 0017 — should be applied)
+
+bcrypt hashes cannot be searched, so signing in used to mean comparing
+the PIN against every patient's hash in turn (~15 ms each): seconds once
+a few hundred patients have PINs. patients.pin_lookup now holds a
+fingerprint of the PIN — an HMAC under a key derived from NEXTAUTH_SECRET
+(src/lib/pin-lookup.ts, pure, tested) — in a unique index. Server side:
+src/lib/pin-server.ts (findPatientByPin, pinUsedByAnother, saveNewPin;
+tested).
+
+- Lookup = one indexed query for the fingerprint, then ONE bcrypt compare
+  to confirm. The bcrypt hash stays the authority; a fingerprint alone
+  never signs anyone in.
+- Nothing is backfilled (a fingerprint needs the PIN, which is not
+  stored). A patient without a current fingerprint is found the old way
+  once and stamped. So wrong PINs still cost a compare against every
+  not-yet-stamped patient; that shrinks as patients return.
+- The fingerprint starts with an id of its key. Rotating NEXTAUTH_SECRET
+  makes every fingerprint "old": patients are found the old way once and
+  re-stamped. Nobody is locked out and nothing needs clearing by hand.
+- A database trigger clears pin_lookup whenever pin changes without a new
+  fingerprint in the same statement (staff Reset PIN), so reset-pin did
+  not need to learn about the column. Do not remove the trigger: a stale
+  fingerprint would block another patient from choosing that PIN.
+- The unique index also closes the race where two patients choose the
+  same PIN at the same moment (saveNewPin answers "taken").
+- Without 0017, or without NEXTAUTH_SECRET, everything works as before
+  (compare against everyone) — the kiosk must never depend on it.
+- Why an HMAC and not a plain hash: with only 10,000 possible PINs any
+  unkeyed hash is reversed by trying them all; the key lives only on the
+  server.
+
+## Staff check-in
+
+Dashboard → Patients → "Check in" on a search result (the rooms board
+links there with "Check in a patient"). For a walk-in, a forgotten PIN,
+the kiosk being down, or a patient taken off the board by mistake. The
+patient lands in the board's waiting list like any check-in.
+
+- Rules in src/lib/checkin-server.ts (repeatRule + createCheckin,
+  tested), shared with the kiosk. What counts as "already checked in"
+  differs on purpose: at the kiosk, ANY check-in in the last 4 hours
+  (finished or not — a PIN re-typed on the way out must not put the
+  patient back on the board); for staff, only a visit that is still OPEN.
+  So a staff check-in is the way back for a patient removed by mistake.
+- The search stays on the dashboard, not on the rooms board: it shows
+  full names and contact details, and the board is "First L." only.
+
+## Staff audit log (migrations 0015 + 0016 — should be applied)
 
 staff_audit_log: one row per dashboard patient search (the text typed and
-the ids of the patients listed) and per PIN reset — id, at, staff_email,
-action ('patient_search' | 'pin_reset'), patient_ids uuid[], detail.
+the ids of the patients listed), per PIN reset and per staff check-in —
+id, at, staff_email, action ('patient_search' | 'pin_reset' |
+'staff_checkin' — the last needs 0016), patient_ids uuid[], detail.
 Written by src/lib/audit-server.ts (recordStaffAction); the staff email
 comes from getAdminEmail() in src/lib/admin-auth.ts. There is no page
 for it: read it in the Supabase table editor.
@@ -279,6 +350,21 @@ through src/lib/flow-server.ts.
   room is refused — rooms are given from the waiting list only, so that
   request can only come from a stale board, and moving the patient would
   free the room they are physically in.
+- Two boards assigning at the same instant (do not regress): the rules
+  only see what a request read, so an assign is written through
+  commitAssign (src/lib/flow-server.ts, tested with the in-memory
+  database in src/lib/testing/fake-supabase.ts). The write lands only if
+  the patient still has no room; the visits are then read AGAIN, and if
+  the patient is beside anyone the request did not name (assignCollision)
+  the write is undone before any board is told to refetch, and the board
+  gets "Room 5 changed — please choose again". Whichever request reads
+  second always sees the other, so strangers are never both left in a
+  room; if both see each other, both are undone. If the second read
+  fails, the assign is undone too. The same step calls a patient who was
+  lined up for a room that emptied in the meantime.
+- A flow write the database refuses is an error on the board that asked
+  (commitFlow throws), never a silent "nothing happened"; the other
+  boards are told to refetch first.
 - With a mouse the chip can also be dragged onto a room (@dnd-kit, in
   page.tsx / WaitingList.tsx / RoomTile.tsx). It is the same action as
   tap-then-tap: picking a chip up selects it, letting go over a room is
@@ -293,7 +379,8 @@ through src/lib/flow-server.ts.
 - Doctor alert: while a room has an unseen patient, every rooms board
   shows a large banner in that doctor's color (pinned to the top, with a
   "Doctor in" button) and rings the doorbell sound when it appears. It cannot be
-  dismissed — only "Doctor in" or Start clears it. Tapping a patient's
+  dismissed — only "Doctor in" or Start clears it (it stays up in Edit
+  layout too). Tapping a patient's
   name on a With-doctor tile offers "Doctor hasn't come yet" to undo.
 - ✓ (clear) = "needles out": silences the alarm and starts Setting Up;
   the patient is still in the room, so nobody is called. From there the
@@ -304,7 +391,10 @@ through src/lib/flow-server.ts.
   several timed sessions in a row — fire cupping is two 8-minute
   sessions; the doctor sets up the next one in the room, walks out and
   taps it. A mistaken "Another session" is undone with ✓. Reset only
-  cancels the timer (the patient stays, still "seen" → With doctor). A
+  cancels the timer (the patient stays, still "seen" → With doctor). Reset
+  takes two taps (the first arms it for 4 s — it sits beside ✓ and throws
+  the running time away); so do "Remove" in a tile's patient menu and the
+  bin in Edit layout. A
   Start sent during Setting Up (only an old, un-reloaded board can do
   that) counts as Room ready + Start — which is why "Another session" is
   its own action.
@@ -325,6 +415,16 @@ through src/lib/flow-server.ts.
   turn. Waiting-room TV: a soft rising four-note chime per call, and once
   when sound is switched on. The board's "Sounds" button lets staff play
   each one.
+- A browser plays no sound after a page load until the screen is touched
+  once. A board with sounds turned on that is in that state (a tablet
+  that reloaded by itself) shows an amber bar fixed to the bottom edge —
+  "Alert sounds are silent on this screen until it is touched" — driven
+  by the AudioContext's real state (alertSoundStatus in sounds.ts). Fixed
+  position on purpose: the tap that clears it must not move the board.
+- Typing a time on a tile: Enter sets it; leaving the box sets it only if
+  the number was changed; an emptied box and Escape set nothing
+  (typedMinutesToSeconds in room-status.ts). Leaving must never move a
+  timer by itself — the box opens rounded to whole minutes.
 - Patient names leave the server only as "First L." (display_name).
 - NEVER put patient data in a Realtime broadcast: the channel is readable
   with the public anon key. Room broadcasts carry anonymous room rows;
@@ -414,6 +514,9 @@ src/app/waiting-room/music/ (useRadio, useYouTube, useSpotify, MusicBar).
 - Base URL: https://api.practicebetter.io (see src/lib/practice-better.ts)
 - Auth: POST /oauth2/token (client_credentials) → bearer token
 - Token is short-lived — fetch a fresh one per API call server-side
+- Every call has a timeout (PB_TIMEOUT_MS, 5 s; 20 s for a page of the
+  bulk sync): a request that never settles must not hold a kiosk
+  check-in — it fails open like an outage does
 - Get today's sessions for a client:
   GET /consultant/sessions?records={pb_client_id}&date_eq={today}
 - Get a single client record: GET /consultant/records/{id}
@@ -442,10 +545,17 @@ src/app/waiting-room/music/ (useRadio, useYouTube, useSpotify, MusicBar).
 
 ### Admin Login Screen (/admin/login)
 
-- Single password field + submit button
+- One "Sign in with Google" button (no password field)
 - Clean, minimal — staff-facing only
 
 ### Kiosk Screen (main UI) — two modes:
+
+The kiosk page has NO link to any other staff page (do not add one back):
+the tablet is signed in as staff and left with patients, and a corner
+icon was a one-tap door to patient search and PIN resets. The tablet does
+still hold a staff session — typing /admin/dashboard in its address bar
+works. Closing that fully means pairing the kiosk as a device, like the
+TV (not built).
 
 Written for patients who are not comfortable with screens. Three rules:
 one question per screen in plain words; nothing changes without the
@@ -526,15 +636,17 @@ Input rules (do not regress these — each fixes a way presses were lost):
 
 ## Security Notes
 
-- PINs hashed with bcryptjs (never stored plain text)
+- PINs hashed with bcryptjs (never stored plain text); the lookup
+  fingerprint beside the hash is keyed with a server-only secret
 - All DB and API calls in server-side API routes only
 - Supabase service role key used server-side only; RLS enabled with no
   policies, so the anon key can read nothing
 - Staff auth = Google sign-in (NextAuth) restricted to ALLOWED_ADMIN_EMAILS;
   no shared password exists
 - Patient API routes require the staff session (401 otherwise)
-- Dashboard patient searches and PIN resets are recorded in
-  staff_audit_log (who, when, which patients); patient names are never
+- Staff sign-ins end at 3 am clinic time; the dashboard has Sign out
+- Dashboard patient searches, PIN resets and staff check-ins are recorded
+  in staff_audit_log (who, when, which patients); patient names are never
   put in a request address
 - setup-pin PATCH refuses to overwrite an existing PIN (403) and enforces
   PIN uniqueness across patients

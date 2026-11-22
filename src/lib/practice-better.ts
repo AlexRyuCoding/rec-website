@@ -1,20 +1,37 @@
 export const PB_BASE = "https://api.practicebetter.io";
-export const CLINIC_TZ = "America/Los_Angeles";
+import { CLINIC_TZ } from "./clinic-time";
+import { fetchWithTimeout } from "./fetch-timeout";
+
+export { CLINIC_TZ };
+
+// Every call here gives up after this long. A Practice Better request
+// that never settles would otherwise hold a kiosk check-in (which waits
+// for the appointment snapshot) until the platform kills the function;
+// with a limit it fails open in a few seconds, as it does for an outage.
+// One check-in makes two calls (token, then sessions), so the worst case
+// is twice this.
+export const PB_TIMEOUT_MS = 5_000;
+// A page of 100 client records for the bulk sync is a bigger answer.
+export const PB_LIST_TIMEOUT_MS = 20_000;
 
 export async function getPbToken(): Promise<string> {
   if (!process.env.PB_CLIENT_ID || !process.env.PB_CLIENT_SECRET) {
     throw new Error("PB credentials not configured");
   }
-  const res = await fetch(`${PB_BASE}/oauth2/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "client_credentials",
-      client_id: process.env.PB_CLIENT_ID,
-      client_secret: process.env.PB_CLIENT_SECRET,
-      scope: "read",
-    }),
-  });
+  const res = await fetchWithTimeout(
+    `${PB_BASE}/oauth2/token`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: process.env.PB_CLIENT_ID,
+        client_secret: process.env.PB_CLIENT_SECRET,
+        scope: "read",
+      }),
+    },
+    PB_TIMEOUT_MS
+  );
   if (!res.ok) throw new Error("Failed to get Practice Better token");
   const data = await res.json();
   return data.access_token as string;
@@ -66,9 +83,11 @@ export async function fetchTodaySession(
     date_gte: `${today}T00:00:00${offset}`,
     date_lte: `${today}T23:59:59${offset}`,
   });
-  const res = await fetch(`${PB_BASE}/consultant/sessions?${params}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await fetchWithTimeout(
+    `${PB_BASE}/consultant/sessions?${params}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+    PB_TIMEOUT_MS
+  );
   if (!res.ok) {
     console.error("PB sessions fetch failed:", res.status);
     return null;
@@ -114,9 +133,10 @@ export async function fetchClientRecord(
   recordId: string
 ): Promise<PbClientRecord | null> {
   const token = await getPbToken();
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `${PB_BASE}/consultant/records/${encodeURIComponent(recordId)}`,
-    { headers: { Authorization: `Bearer ${token}` } }
+    { headers: { Authorization: `Bearer ${token}` } },
+    PB_TIMEOUT_MS
   );
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`PB record fetch failed: ${res.status}`);

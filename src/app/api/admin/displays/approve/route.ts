@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
-import { authOptions } from "@/lib/auth";
-import { isAllowedAdminEmail } from "@/lib/admin-allowlist";
+import { getAdminEmail } from "@/lib/admin-auth";
 import {
   isApprovable,
   normalizePairCode,
@@ -19,9 +17,8 @@ const bodySchema = z.object({
 // TV. Only this turns a pending pairing into a working screen, so only
 // staff can ever create one.
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  const email = session?.user?.email ?? null;
-  if (!isAllowedAdminEmail(email)) {
+  const email = await getAdminEmail();
+  if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

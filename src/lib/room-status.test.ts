@@ -5,6 +5,7 @@ import {
   formatTimerDisplay,
   pickDoctorColor,
   timerActionUpdate,
+  typedMinutesToSeconds,
   DOCTOR_COLORS,
   OVERTIME_GRACE_SECONDS,
   RoomRow,
@@ -370,5 +371,36 @@ describe("formatTimerDisplay", () => {
 
   it("formats negative values as count-up with a plus sign", () => {
     expect(formatTimerDisplay(-150)).toBe("+2:30");
+  });
+});
+
+describe("typedMinutesToSeconds", () => {
+  it("sets the minutes typed", () => {
+    expect(typedMinutesToSeconds("20", "15", "leave")).toBe(1200);
+    expect(typedMinutesToSeconds(" 8 ", "15", "enter")).toBe(480);
+  });
+
+  it("changes nothing when the box is left as it opened", () => {
+    // A running 12:34 opens as "13": tapping away must not make it 13:00.
+    expect(typedMinutesToSeconds("13", "13", "leave")).toBeNull();
+  });
+
+  it("Enter on the number shown does set it", () => {
+    expect(typedMinutesToSeconds("13", "13", "enter")).toBe(780);
+  });
+
+  it("changes nothing when the box was emptied", () => {
+    expect(typedMinutesToSeconds("", "15", "leave")).toBeNull();
+    expect(typedMinutesToSeconds("  ", "15", "enter")).toBeNull();
+  });
+
+  it("changes nothing for something that is not a number", () => {
+    expect(typedMinutesToSeconds("abc", "15", "enter")).toBeNull();
+  });
+
+  it("keeps a typed number inside 1 to 60 minutes", () => {
+    expect(typedMinutesToSeconds("0", "15", "enter")).toBe(60);
+    expect(typedMinutesToSeconds("90", "15", "leave")).toBe(3600);
+    expect(typedMinutesToSeconds("12.4", "15", "leave")).toBe(720);
   });
 });

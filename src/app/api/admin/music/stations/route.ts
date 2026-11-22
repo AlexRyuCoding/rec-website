@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
-import { authOptions } from "@/lib/auth";
-import { isAllowedAdminEmail } from "@/lib/admin-allowlist";
+import { getAdminEmail } from "@/lib/admin-auth";
 import {
   checkNewStation,
   LINK_MAX_LENGTH,
@@ -23,9 +21,8 @@ const bodySchema = z.object({
 // GET /api/admin/music, so the panel loads everything in one request.
 // Adding a station does not change what is playing.
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  const email = session?.user?.email ?? null;
-  if (!isAllowedAdminEmail(email)) {
+  const email = await getAdminEmail();
+  if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

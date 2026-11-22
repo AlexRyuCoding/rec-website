@@ -21,6 +21,7 @@ import {
   RoomRow,
   RoomState,
   TimerAction,
+  typedMinutesToSeconds,
 } from "@/lib/room-status";
 import {
   AssignOutcome,
@@ -47,6 +48,9 @@ const ASSIGN_LABELS: Record<AssignOutcome, string> = {
   ask_join_line: "Join the line…",
   full: "Full",
 };
+
+// How long an armed Remove / Reset waits for its second tap.
+const ARMED_MS = 4000;
 
 const STATUS_STYLES: Record<
   RoomState["status"],
@@ -119,11 +123,36 @@ export default function RoomTile({
 }) {
   const [editingTime, setEditingTime] = useState(false);
   const [minutesInput, setMinutesInput] = useState("");
+  // What the box showed when it opened, and whether it has been closed
+  // already (Enter and Escape close it; the box going away can then still
+  // report a "blur", which must not count as a second answer).
+  const openedMinutesRef = useRef("");
+  const timeEditClosedRef = useRef(true);
   const [doctorListOpen, setDoctorListOpen] = useState(false);
   // The patient whose name was tapped (opens the move/remove menu).
   const [menuVisitId, setMenuVisitId] = useState<string | null>(null);
   const menuVisit =
     [...occupants, ...nextUp].find((v) => v.id === menuVisitId) ?? null;
+  // Two actions here end something with no way back, and both sit a
+  // finger's width from a button pressed all day: "Remove" finishes the
+  // patient's visit, Reset throws away a running timer. Like the × in
+  // the waiting list, each takes two taps — the first arms it, the
+  // second does it — and an armed button disarms itself.
+  const [armed, setArmed] = useState<"remove" | "reset" | null>(null);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(null), ARMED_MS);
+    return () => clearTimeout(t);
+  }, [armed]);
+  // The remove confirmation belongs to the menu it was armed in.
+  useEffect(() => {
+    setArmed((a) => (a === "remove" ? null : a));
+  }, [menuVisitId]);
+  // A reset can only be confirmed while the timer it was armed for runs.
+  const timerRunning = room.timer_started_at !== null;
+  useEffect(() => {
+    if (!timerRunning) setArmed((a) => (a === "reset" ? null : a));
+  }, [timerRunning]);
   // The nametag pill morphs through a ball on every assignment change:
   // collapse showing the old value, swap color/text at the smallest point,
   // expand to fit the new one. displayedDoctor is the lagging value that
@@ -189,17 +218,20 @@ export default function RoomTile({
   // Time's up: flash the label, alternating each second between the room
   // name and the instruction. The page rerenders every second (nowMs
   // ticks), so no local timer is needed.
-  const label = timeUp
-    ? Math.floor(nowMs / 1000) % 2 === 0
-      ? `${room.name} done`
-      : "Remove needles"
-    : state.paused
-      ? "Paused"
-      : state.status === "patient_waiting" && waitingSinceMs !== null
-        ? `Patient waiting ${formatTimerDisplay(
-            Math.max(0, Math.floor((nowMs - waitingSinceMs) / 1000))
-          )}`
-        : style.label;
+  const label =
+    armed === "reset"
+      ? "Tap again to reset"
+      : timeUp
+        ? Math.floor(nowMs / 1000) % 2 === 0
+          ? `${room.name} done`
+          : "Remove needles"
+        : state.paused
+          ? "Paused"
+          : state.status === "patient_waiting" && waitingSinceMs !== null
+            ? `Patient waiting ${formatTimerDisplay(
+                Math.max(0, Math.floor((nowMs - waitingSinceMs) / 1000))
+              )}`
+            : style.label;
   // A patient told to come in after the timer was already running (a late
   // partner in a shared room) is marked while they are on their way.
   const arriving = (v: VisitView) =>
@@ -209,15 +241,27 @@ export default function RoomTile({
 
   const openTimeEditor = () => {
     if (busy) return;
-    setMinutesInput(String(Math.max(1, Math.round(displaySeconds / 60))));
+    const shown = String(Math.max(1, Math.round(displaySeconds / 60)));
+    openedMinutesRef.current = shown;
+    timeEditClosedRef.current = false;
+    setMinutesInput(shown);
     setEditingTime(true);
   };
 
-  const commitTime = () => {
+  // Enter sets the number in the box. Leaving the box sets it only if it
+  // was changed: a tap elsewhere must never move a timer by itself (see
+  // typedMinutesToSeconds). Escape sets nothing.
+  const closeTimeEditor = (how: "enter" | "leave" | "cancel") => {
+    if (timeEditClosedRef.current) return;
+    timeEditClosedRef.current = true;
     setEditingTime(false);
-    const minutes = Math.min(60, Math.max(1, Number(minutesInput)));
-    if (!Number.isFinite(minutes)) return;
-    onAction("set", Math.round(minutes) * 60);
+    if (how === "cancel") return;
+    const seconds = typedMinutesToSeconds(
+      minutesInput,
+      openedMinutesRef.current,
+      how
+    );
+    if (seconds !== null) onAction("set", seconds);
   };
 
   const assignDoctor = (name: string | null) => {
@@ -384,14 +428,16 @@ export default function RoomTile({
           <input
             autoFocus
             type="number"
+            inputMode="numeric"
             min={1}
             max={60}
             value={minutesInput}
             onChange={(e) => setMinutesInput(e.target.value)}
-            onBlur={commitTime}
+            onFocus={(e) => e.target.select()}
+            onBlur={() => closeTimeEditor("leave")}
             onKeyDown={(e) => {
-              if (e.key === "Enter") commitTime();
-              if (e.key === "Escape") setEditingTime(false);
+              if (e.key === "Enter") closeTimeEditor("enter");
+              if (e.key === "Escape") closeTimeEditor("cancel");
             }}
             aria-label="Minutes"
             className="w-20 rounded-lg bg-white/15 px-1 py-0.5 text-center text-2xl font-bold tabular-nums outline-none ring-2 ring-white/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
@@ -491,10 +537,25 @@ export default function RoomTile({
           {sessionActive && (
             <>
               <button
-                aria-label="Reset timer"
+                aria-label={
+                  armed === "reset"
+                    ? "Confirm: cancel this timer"
+                    : "Reset timer"
+                }
                 disabled={busy}
-                onClick={() => onAction("reset")}
-                className="rounded-xl bg-white/15 p-2 hover:bg-white/25 disabled:opacity-40"
+                onClick={() => {
+                  if (armed === "reset") {
+                    setArmed(null);
+                    onAction("reset");
+                  } else {
+                    setArmed("reset");
+                  }
+                }}
+                className={`rounded-xl p-2 disabled:opacity-40 ${
+                  armed === "reset"
+                    ? "bg-rose-600 ring-2 ring-white"
+                    : "bg-white/15 hover:bg-white/25"
+                }`}
               >
                 <RotateCcw className="h-4 w-4" />
               </button>
@@ -619,12 +680,21 @@ export default function RoomTile({
           </button>
           <button
             onClick={() => {
+              if (armed !== "remove") {
+                setArmed("remove");
+                return;
+              }
+              setArmed(null);
               setMenuVisitId(null);
               onVisitAction(menuVisit.id, "remove");
             }}
-            className="w-full rounded-lg bg-rose-900/70 px-2 py-1.5 text-sm hover:bg-rose-900"
+            className={`w-full rounded-lg px-2 py-1.5 text-sm ${
+              armed === "remove"
+                ? "bg-rose-600 font-semibold ring-2 ring-inset ring-white"
+                : "bg-rose-900/70 hover:bg-rose-900"
+            }`}
           >
-            Remove
+            {armed === "remove" ? "Tap again to remove" : "Remove"}
           </button>
           <button
             onClick={() => setMenuVisitId(null)}

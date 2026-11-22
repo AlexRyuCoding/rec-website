@@ -19,6 +19,7 @@ import {
   ROOMS_EVENT,
   RoomsBroadcastPayload,
 } from "@/lib/rooms-realtime";
+import { goToStaffLogin } from "@/lib/staff-login-redirect";
 
 export type VisitAction = "assign" | "unassign" | "remove" | "mark_waiting";
 
@@ -91,7 +92,7 @@ export function useRooms() {
     try {
       const res = await fetch("/api/admin/rooms");
       if (res.status === 401) {
-        window.location.href = "/admin/login";
+        goToStaffLogin();
         return;
       }
       if (!res.ok) throw new Error();
@@ -182,7 +183,7 @@ export function useRooms() {
           ...init,
         });
         if (res.status === 401) {
-          window.location.href = "/admin/login";
+          goToStaffLogin();
           return null;
         }
         if (!res.ok) {

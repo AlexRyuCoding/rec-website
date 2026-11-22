@@ -1,12 +1,14 @@
 "use client";
-import Link from "next/link";
-import { LayoutDashboard } from "lucide-react";
 import SignInKeypad from "@/components/signin-keypad";
 import { useScrollLock } from "@/components/kiosk/use-scroll-lock";
 
 export default function Page() {
   // The page is pinned: no scroll, bounce, pan or zoom in any direction.
   useScrollLock();
+  // No link to the staff pages here, on purpose: this tablet is signed in
+  // as staff and left with patients, and a corner icon was a one-tap door
+  // to patient search and PIN resets. Staff open the dashboard on their
+  // own device (or type its address).
   return (
     // Kiosk: exactly one viewport tall. (Admin pages have no site header,
     // so no top offset is needed — the space goes to bigger keys instead.)
@@ -20,13 +22,6 @@ export default function Page() {
       <main className="flex w-full flex-col items-center">
         <SignInKeypad />
       </main>
-      <Link
-        href="/admin/dashboard"
-        aria-label="Staff dashboard"
-        className="fixed bottom-4 right-4 text-cream/20 transition-colors duration-300 hover:text-cream/60"
-      >
-        <LayoutDashboard className="size-5" />
-      </Link>
     </div>
   );
 }

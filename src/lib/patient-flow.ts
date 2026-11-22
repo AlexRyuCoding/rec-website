@@ -302,6 +302,62 @@ export function assignUpdate(
   };
 }
 
+// Two boards can assign at the same instant: each reads the room, finds
+// it free, and writes. The rules above cannot see that — both requests
+// were right about what they read. So after an assign is written, the
+// route reads the visits again and asks this: is the patient now beside
+// anyone the answer did not name? (Beside = in the room with them if the
+// patient was called in, or in the room's line with them if lined up.)
+//
+// If so, this assign is taken back and the board is told to choose again.
+// Whichever request reads second always sees the other one, so two
+// strangers are never both left standing; when both see each other, both
+// are taken back, which costs a second tap and puts nobody in a room with
+// someone they did not come with.
+//
+// `visitsAfter` is the list read after the write; togetherWith is what
+// the request said (the people the board's question named).
+export function assignCollision(
+  roomId: string,
+  visitsAfter: InRoom[],
+  visitId: string,
+  togetherWith: string[] = []
+): boolean {
+  const me = visitsAfter.find((v) => v.id === visitId);
+  // Gone from the room already (another board moved or finished them):
+  // nothing of this assign is left to take back.
+  if (!me || me.room_id !== roomId) return false;
+  const beside =
+    me.called_at !== null
+      ? roomOccupants(visitsAfter, roomId)
+      : roomNextUp(visitsAfter, roomId);
+  const named = new Set(togetherWith);
+  return beside.some((v) => v.id !== visitId && !named.has(v.id));
+}
+
+// Why a room cannot be deleted right now, or null if it can. Deleting a
+// room drops its timer and sends everyone in it (or lined up for it) back
+// to the waiting list without a word, so it is refused while the room is
+// in use: staff finish or move the patients first.
+export function roomDeleteBlocker(
+  room: FlowRoom & { timer_started_at: string | null },
+  visits: InRoom[]
+): string | null {
+  const name = room.name ?? "That room";
+  const people =
+    roomOccupants(visits, room.id).length + roomNextUp(visits, room.id).length;
+  if (people > 0) {
+    return `${name} has patients — finish or move them first`;
+  }
+  if (room.timer_started_at !== null) {
+    return `${name} has a timer running — clear it first`;
+  }
+  if (room.turnover_started_at !== null) {
+    return `${name} is setting up — tap "Room ready" first`;
+  }
+  return null;
+}
+
 export function unassignUpdate(visitId: string): VisitUpdate {
   return {
     id: visitId,
