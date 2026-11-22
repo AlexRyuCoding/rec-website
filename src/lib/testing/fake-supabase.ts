@@ -28,7 +28,7 @@ interface Reply {
 
 export interface FakeQuery {
   table: string;
-  kind: "select" | "insert" | "update" | "delete" | "upsert";
+  kind: "select" | "insert" | "update" | "delete" | "upsert" | "rpc";
   columns: string[];
 }
 
@@ -238,5 +238,52 @@ export function fakeSupabase(
     return builder;
   };
 
-  return { client: { from } as unknown as SupabaseClient, tables, queries };
+  // Database functions. Only apply_flow_change exists here, behaving as
+  // the real one does (migration 0021): every row changes, or none.
+  const rpc = (name: string, args: Record<string, unknown>) => ({
+    then(
+      resolve: (reply: Reply) => unknown,
+      reject?: (reason: unknown) => unknown
+    ) {
+      const run = (): Reply => {
+        const query: FakeQuery = { table: name, kind: "rpc", columns: [] };
+        const index = queries.push(query) - 1;
+        const forced = options.onQuery?.(query, index);
+        if (forced) return { data: null, error: { code: forced } };
+        if (name !== "apply_flow_change") {
+          return { data: null, error: { code: "PGRST202" } };
+        }
+        const updates = (args.visit_updates ?? []) as {
+          id: string;
+          fields: Row;
+        }[];
+        const visits = (tables.checkins ??= []) as Row[];
+        const rooms = (tables.rooms ??= []) as Row[];
+        const room = args.target_room
+          ? rooms.find((r) => r.id === args.target_room)
+          : null;
+        // nothing is written unless everything can be
+        if (
+          (args.target_room && !room) ||
+          updates.some((u) => !visits.some((v) => v.id === u.id))
+        ) {
+          return { data: null, error: { code: "P0002" } };
+        }
+        if (room && args.room_fields) {
+          Object.assign(room, args.room_fields, { updated_at: "updated" });
+        }
+        for (const u of updates) {
+          Object.assign(visits.find((v) => v.id === u.id)!, u.fields);
+        }
+        return { data: room ? { ...room } : null, error: null };
+      };
+      return new Promise<Reply>((done) => done(run())).then(resolve, reject);
+    },
+  });
+
+  return {
+    client: { from, rpc } as unknown as SupabaseClient,
+    tables,
+    queries,
+  };
 }

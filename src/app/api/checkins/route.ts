@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
-import { isKioskAuthorized } from "@/lib/kiosk-auth-server";
+import { kioskRoute } from "@/lib/kiosk-route";
 import { createCheckin } from "@/lib/checkin-server";
 
 // The kiosk's check-in: the patient confirmed "Yes — check me in". The
@@ -8,11 +8,7 @@ import { createCheckin } from "@/lib/checkin-server";
 // (what counts as a repeat, the appointment snapshot) are in
 // src/lib/checkin-server.ts; staff check a patient in themselves through
 // POST /api/admin/checkins.
-export async function POST(req: Request) {
-  if (!(await isKioskAuthorized())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const POST = kioskRoute(async (req) => {
   const body = await req.json().catch(() => null);
   const patient_id = body?.patient_id;
   if (typeof patient_id !== "string" || !patient_id) {
@@ -35,4 +31,4 @@ export async function POST(req: Request) {
     success: true,
     duplicate: outcome === "duplicate",
   });
-}
+});

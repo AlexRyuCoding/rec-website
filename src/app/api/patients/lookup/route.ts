@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
 import { findPatientByPin } from "@/lib/pin-server";
-import { isKioskAuthorized } from "@/lib/kiosk-auth-server";
+import { kioskRoute } from "@/lib/kiosk-route";
 import { pinAttemptsExhausted, recordPinFailure } from "@/lib/pin-rate-limit";
 
-export async function POST(req: Request) {
-  if (!(await isKioskAuthorized())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const POST = kioskRoute(async (req) => {
   if (await pinAttemptsExhausted()) {
     return NextResponse.json(
       { error: "Too many attempts. Please see the front desk." },
@@ -46,4 +43,4 @@ export async function POST(req: Request) {
     { error: "PIN not recognized, please see the front desk" },
     { status: 404 }
   );
-}
+});

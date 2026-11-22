@@ -1,9 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { commitAssign, commitFlow, commitRestore } from "./flow-server";
+import {
+  commitAssign,
+  commitFlow,
+  commitRestore,
+  commitRoomFlow,
+} from "./flow-server";
 import { assignUpdate, FlowVisit } from "./patient-flow";
 import type { RoomRow } from "./room-status";
 import { broadcastFlowUpdated } from "./rooms-realtime";
 import { fakeSupabase } from "./testing/fake-supabase";
+import { applyFlowChange } from "./visits-server";
 import type { VisitDbRow } from "./visits-server";
 
 vi.mock("./rooms-realtime", () => ({
@@ -232,7 +238,7 @@ describe("commitFlow", () => {
   it("fails loudly when a write is refused, after telling the boards to refetch", async () => {
     const db = fakeSupabase(
       { checkins: [inRoom("a")], rooms: [room()], doctors: [] },
-      { onQuery: (query) => (query.kind === "update" ? "XX000" : undefined) }
+      { onQuery: (query) => (query.kind === "rpc" ? "XX000" : undefined) }
     );
     await expect(
       commitFlow(db.client, {
@@ -349,5 +355,104 @@ describe("commitRestore", () => {
       }
     );
     expect(await restore(db, "a")).toEqual({ ok: false, reason: "gone" });
+  });
+});
+
+describe("an action is written whole or not at all", () => {
+  const settingUp = () => room({ turnover_started_at: iso(NOW - MIN) });
+  // "Room ready": a couple is finished and the patient lined up is called.
+  const roomReady = [
+    { id: "a", fields: { done_at: iso(NOW) } },
+    { id: "b", fields: { done_at: iso(NOW) } },
+    { id: "c", fields: { called_at: iso(NOW) } },
+  ];
+  const board = () => ({
+    checkins: [
+      inRoom("a"),
+      inRoom("b"),
+      visit("c", { room_id: "r1", room_assigned_at: iso(NOW - MIN) }),
+    ],
+    rooms: [settingUp()],
+    doctors: [],
+  });
+
+  it("Room ready lands on the room and all three patients together", async () => {
+    const db = fakeSupabase(board());
+    const result = await commitRoomFlow(db.client, {
+      room: { id: "r1", fields: { turnover_started_at: null } },
+      updates: roomReady,
+      visitsBefore: snapshot(db),
+      nowMs: NOW,
+    });
+    expect(result?.room.turnover_started_at).toBeNull();
+    expect(stored(db, "a").done_at).toBe(iso(NOW));
+    expect(stored(db, "b").done_at).toBe(iso(NOW));
+    expect(stored(db, "c").called_at).toBe(iso(NOW));
+    // one write for all of it
+    expect(db.queries.filter((q) => q.kind === "rpc")).toHaveLength(1);
+    expect(db.queries.filter((q) => q.kind === "update")).toHaveLength(0);
+  });
+
+  it("if one part cannot be written, none is: nobody is finished and the room is still setting up", async () => {
+    const db = fakeSupabase(board());
+    const result = await commitRoomFlow(db.client, {
+      room: { id: "r1", fields: { turnover_started_at: null } },
+      // the third visit is gone
+      updates: [
+        ...roomReady.slice(0, 2),
+        { id: "missing", fields: { called_at: iso(NOW) } },
+      ],
+      visitsBefore: snapshot(db),
+      nowMs: NOW,
+    });
+    expect(result).toBeNull();
+    expect(stored(db, "a").done_at).toBeNull();
+    expect(stored(db, "b").done_at).toBeNull();
+    expect((db.tables.rooms[0] as RoomRow).turnover_started_at).not.toBeNull();
+    expect(broadcastFlowUpdated).not.toHaveBeenCalled();
+  });
+
+  it("a couple is never half finished when the database refuses the write", async () => {
+    const db = fakeSupabase(board(), {
+      onQuery: (query) => (query.kind === "rpc" ? "XX000" : undefined),
+    });
+    await expect(
+      commitFlow(db.client, {
+        updates: roomReady,
+        visitsBefore: snapshot(db),
+        nowMs: NOW,
+      })
+    ).rejects.toThrow("visit write failed");
+    expect(["a", "b"].map((id) => stored(db, id).done_at)).toEqual([
+      null,
+      null,
+    ]);
+    // …and it did not then try the rows one by one
+    expect(db.queries.filter((q) => q.kind === "update")).toHaveLength(0);
+  });
+
+  it("nothing to write asks the database nothing", async () => {
+    const db = fakeSupabase(board());
+    expect(await applyFlowChange(db.client, { updates: [] })).toEqual({
+      ok: true,
+      room: null,
+    });
+    expect(db.queries).toHaveLength(0);
+  });
+
+  it("until migration 0021 is applied the rows are written one by one, as before", async () => {
+    const db = fakeSupabase(board(), {
+      onQuery: (query) => (query.kind === "rpc" ? "PGRST202" : undefined),
+    });
+    const result = await commitRoomFlow(db.client, {
+      room: { id: "r1", fields: { turnover_started_at: null } },
+      updates: roomReady,
+      visitsBefore: snapshot(db),
+      nowMs: NOW,
+    });
+    expect(result?.room.turnover_started_at).toBeNull();
+    expect(stored(db, "a").done_at).toBe(iso(NOW));
+    expect(stored(db, "c").called_at).toBe(iso(NOW));
+    expect(db.queries.filter((q) => q.kind === "update")).toHaveLength(4);
   });
 });
