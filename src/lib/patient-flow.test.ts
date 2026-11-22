@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   assignCollision,
+  firstVisitCandidates,
+  firstVisitIds,
+  NEW_PATIENT_WINDOW_MS,
+  restoreTarget,
+  restoreUpdate,
   roomDeleteBlocker,
   applyVisitUpdates,
   assignCompanions,
@@ -633,6 +638,8 @@ describe("previewTimerFlow", () => {
     id: v.id,
     display_name: name,
     appointment_at: null,
+    service_name: null,
+    first_visit: false,
     checked_in_at: v.checked_in_at,
     practitioner_name: v.practitioner_name,
     room_id: v.room_id,
@@ -827,5 +834,134 @@ describe("roomDeleteBlocker", () => {
 
   it("refuses while it is setting up", () => {
     expect(roomDeleteBlocker(named(settingUp), [])).toContain("setting up");
+  });
+});
+
+describe("first visit", () => {
+  const DAY = 24 * HOUR;
+  const v = (
+    id: string,
+    patientId: string | null,
+    recordAgeDays: number | null,
+    checkedInMs = T0 - 10 * MIN
+  ) => ({
+    id,
+    patient_id: patientId,
+    checked_in_at: iso(checkedInMs),
+    patient_created_at:
+      recordAgeDays === null ? null : iso(T0 - recordAgeDays * DAY),
+  });
+
+  it("only patients with a recent record are looked up at all", () => {
+    const visits = [v("a", "p1", 3), v("b", "p2", 400), v("c", "p3", null)];
+    expect(firstVisitCandidates(visits, T0)).toEqual(["p1"]);
+    expect(NEW_PATIENT_WINDOW_MS).toBe(60 * DAY);
+  });
+
+  it("a new record and no earlier check-in is a first visit", () => {
+    const visits = [v("a", "p1", 3)];
+    const history = [
+      { patient_id: "p1", checked_in_at: visits[0].checked_in_at },
+    ];
+    expect([...firstVisitIds(visits, history, T0)]).toEqual(["a"]);
+  });
+
+  it("a new record but an earlier check-in is not", () => {
+    const visits = [v("a", "p1", 10)];
+    const history = [
+      { patient_id: "p1", checked_in_at: iso(T0 - 7 * DAY) },
+      { patient_id: "p1", checked_in_at: visits[0].checked_in_at },
+    ];
+    expect(firstVisitIds(visits, history, T0).size).toBe(0);
+  });
+
+  it("a patient of many years using the kiosk for the first time is not", () => {
+    // Their record is old; the check-in log just does not go back that far.
+    expect(firstVisitIds([v("a", "p1", 900)], [], T0).size).toBe(0);
+  });
+
+  it("someone else's earlier check-in does not count against them", () => {
+    const visits = [v("a", "p1", 3)];
+    const history = [{ patient_id: "p2", checked_in_at: iso(T0 - 7 * DAY) }];
+    expect(firstVisitIds(visits, history, T0).has("a")).toBe(true);
+  });
+
+  it("a second visit the same day is no longer the first", () => {
+    const morning = v("a", "p1", 3, T0 - 5 * HOUR);
+    const afternoon = v("b", "p1", 3, T0 - 10 * MIN);
+    const history = [morning, afternoon].map((x) => ({
+      patient_id: "p1",
+      checked_in_at: x.checked_in_at,
+    }));
+    expect([...firstVisitIds([morning, afternoon], history, T0)]).toEqual([
+      "a",
+    ]);
+  });
+
+  it("anything unknown is not a first visit", () => {
+    expect(
+      firstVisitIds([v("a", null, 3), v("b", "p2", null)], [], T0).size
+    ).toBe(0);
+  });
+});
+
+describe("restoreTarget", () => {
+  const wasInRoom = { room_id: "r1", called_at: iso(T0 - 30 * MIN) };
+
+  it("back into their room when it stands idle and empty", () => {
+    expect(restoreTarget(wasInRoom, room(), [])).toBe("room");
+    expect(
+      restoreTarget(wasInRoom, room(), [called("x", "r2"), waiting("y")])
+    ).toBe("room");
+  });
+
+  it("to the waiting list when someone is in the room now", () => {
+    expect(restoreTarget(wasInRoom, room(), [called("x")])).toBe("waiting");
+    expect(restoreTarget(wasInRoom, two(), [treating("x")])).toBe("waiting");
+  });
+
+  it("to the waiting list when someone is lined up for the room", () => {
+    expect(restoreTarget(wasInRoom, room(), [nextUp("x")])).toBe("waiting");
+  });
+
+  it("to the waiting list while the room's timer runs or it is setting up", () => {
+    expect(restoreTarget(wasInRoom, room(timerRunning), [])).toBe("waiting");
+    expect(restoreTarget(wasInRoom, room(settingUp), [])).toBe("waiting");
+  });
+
+  it("to the waiting list if they were only lined up, or had no room", () => {
+    expect(restoreTarget({ room_id: "r1", called_at: null }, room(), [])).toBe(
+      "waiting"
+    );
+    expect(restoreTarget({ room_id: null, called_at: null }, room(), [])).toBe(
+      "waiting"
+    );
+  });
+
+  it("to the waiting list if the room is gone", () => {
+    expect(restoreTarget(wasInRoom, null, [])).toBe("waiting");
+    expect(restoreTarget(wasInRoom, room({ id: "r9" }), [])).toBe("waiting");
+  });
+});
+
+describe("restoreUpdate", () => {
+  it("into the room: only the ending is undone — same call, same 'seen'", () => {
+    expect(restoreUpdate("a", "room")).toEqual({
+      id: "a",
+      fields: { done_at: null },
+    });
+  });
+
+  it("to the waiting list: the room is let go as well", () => {
+    expect(restoreUpdate("a", "waiting")).toEqual({
+      id: "a",
+      fields: {
+        done_at: null,
+        room_id: null,
+        room_assigned_at: null,
+        called_at: null,
+        seen_at: null,
+      },
+    });
   });
 });

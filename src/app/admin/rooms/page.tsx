@@ -353,12 +353,15 @@ export default function RoomsPage() {
           />
           <WaitingList
             visits={waiting}
+            allVisits={visits}
+            rooms={rooms}
             doctors={doctors}
             nowMs={serverNowMs}
             selectedId={selectedVisit?.id ?? null}
             dragging={draggingVisit !== null}
             onSelect={select}
             onRemove={(visitId) => visitAction(visitId, "remove")}
+            onRestore={(visitId) => visitAction(visitId, "restore")}
           />
           {rooms.length === 0 ? (
             <p className="mx-auto max-w-5xl text-white/60">

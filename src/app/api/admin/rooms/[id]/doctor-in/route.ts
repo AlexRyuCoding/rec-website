@@ -4,7 +4,11 @@ import { createServiceClient } from "@/lib/supabase";
 import { isAdminAuthorized } from "@/lib/admin-auth";
 import { commitFlow } from "@/lib/flow-server";
 import { doctorInUpdates } from "@/lib/patient-flow";
-import { loadActiveVisits, toVisitView, VisitDbRow } from "@/lib/visits-server";
+import {
+  loadActiveVisits,
+  toVisitViews,
+  VisitDbRow,
+} from "@/lib/visits-server";
 
 // "Doctor in": the doctor has walked into the room. Every patient waiting
 // there is marked seen, which ends the board's "patient waiting" alert,
@@ -51,7 +55,10 @@ export async function POST(
 
   const updates = doctorInUpdates(id, visits, nowMs);
   if (updates.length === 0) {
-    return NextResponse.json({ visits: visits.map(toVisitView), rooms: [] });
+    return NextResponse.json({
+      visits: await toVisitViews(supabase, visits, nowMs),
+      rooms: [],
+    });
   }
 
   try {

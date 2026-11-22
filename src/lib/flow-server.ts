@@ -3,6 +3,8 @@ import {
   assignCollision,
   doctorForCalls,
   promotionUpdates,
+  restoreTarget,
+  restoreUpdate,
   unassignUpdate,
   VisitUpdate,
   VisitView,
@@ -11,7 +13,7 @@ import type { RoomRow } from "./room-status";
 import { broadcastFlowUpdated, broadcastRoomsUpdated } from "./rooms-realtime";
 import {
   loadActiveVisits,
-  toVisitView,
+  toVisitViews,
   VisitDbRow,
   writeVisitUpdates,
 } from "./visits-server";
@@ -61,8 +63,82 @@ async function finishFlow(
   // Empty hint only — patient data never goes on the broadcast channel.
   await broadcastFlowUpdated();
 
-  const visits = (await loadActiveVisits(supabase, nowMs)).map(toVisitView);
+  const visits = await toVisitViews(
+    supabase,
+    await loadActiveVisits(supabase, nowMs),
+    nowMs
+  );
   return { visits, rooms };
+}
+
+export type RestoreResult =
+  | ({ ok: true; restoredTo: "room" | "waiting" } & FlowResult)
+  // gone: the visit is not finished any more — another board restored it.
+  | { ok: false; reason: "gone" | "error" };
+
+// "Restore" on the board's Finished list: a visit that was ended (Room
+// ready on the wrong tile, a wrong Remove) is open again. Where it goes
+// is restoreTarget's decision; this applies it so that it stays true if
+// another board acts at the same instant:
+//
+// 1. The write only lands while the visit is still finished.
+// 2. If the patient went back into their room, the visits are read again.
+//    Anyone else in that room now (an assign that landed at the same
+//    moment) means the patient goes to the waiting list instead — the
+//    same check an assign gets (assignCollision). Unable to check counts
+//    as "someone is there".
+export async function commitRestore(
+  supabase: SupabaseClient,
+  args: {
+    visit: VisitDbRow;
+    room: RoomRow | null;
+    openVisits: VisitDbRow[];
+    nowMs: number;
+  }
+): Promise<RestoreResult> {
+  const { visit, room, openVisits, nowMs } = args;
+  let target = restoreTarget(visit, room, openVisits);
+  const update = restoreUpdate(visit.id, target);
+
+  const { data: landed, error } = await supabase
+    .from("checkins")
+    .update(update.fields)
+    .eq("id", visit.id)
+    .not("done_at", "is", null)
+    .select("id");
+  if (error) return { ok: false, reason: "error" };
+  if (!landed || landed.length === 0) return { ok: false, reason: "gone" };
+
+  if (target === "room" && room) {
+    let alone = false;
+    try {
+      const after = await loadActiveVisits(supabase, nowMs);
+      alone = !assignCollision(room.id, after, visit.id);
+    } catch {
+      alone = false;
+    }
+    if (!alone) {
+      target = "waiting";
+      const moved = await writeVisitUpdates(supabase, [
+        unassignUpdate(visit.id),
+      ]);
+      if (!moved) {
+        await broadcastFlowUpdated();
+        return { ok: false, reason: "error" };
+      }
+    }
+  }
+
+  try {
+    const flow = await finishFlow(supabase, {
+      updates: [],
+      visitsBefore: openVisits,
+      nowMs,
+    });
+    return { ok: true, restoredTo: target, ...flow };
+  } catch {
+    return { ok: false, reason: "error" };
+  }
 }
 
 export type AssignResult =

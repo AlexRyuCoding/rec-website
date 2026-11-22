@@ -56,6 +56,7 @@ export function fakeSupabase(
     let limit: number | null = null;
     let range: [number, number] | null = null;
     let orderBy: string | null = null;
+    let descending = false;
     const filters: Filter[] = [];
     const columns = new Set<string>();
 
@@ -112,6 +113,7 @@ export function fakeSupabase(
           result = [...result].sort((a, b) =>
             String(a[key]) < String(b[key]) ? -1 : 1
           );
+          if (descending) result.reverse();
         }
         if (range) result = result.slice(range[0], range[1] + 1);
         if (limit !== null) result = result.slice(0, limit);
@@ -170,8 +172,9 @@ export function fakeSupabase(
         if (operator !== "is") throw new Error(`fake: not.${operator}`);
         return where(c, (x) => (x ?? null) !== v);
       },
-      order(c: string) {
+      order(c: string, options?: { ascending?: boolean }) {
         orderBy = c;
+        descending = options?.ascending === false;
         return builder;
       },
       limit(n: number) {

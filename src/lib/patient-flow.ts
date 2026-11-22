@@ -33,6 +33,81 @@ export interface FlowVisit {
 export interface VisitView extends Omit<FlowVisit, "done_at"> {
   display_name: string;
   appointment_at: string | null;
+  // Today's Practice Better service ("Fire cupping"), snapshotted at
+  // check-in. Staff board only — never the waiting-room screen.
+  service_name: string | null;
+  // The patient has never checked in before and is new to the clinic
+  // (see firstVisitIds).
+  first_visit: boolean;
+}
+
+// A visit that is over (Room ready, or removed), as listed under
+// "Finished" on the board so a mistake can be put right.
+export interface FinishedVisitView {
+  id: string;
+  display_name: string;
+  service_name: string | null;
+  checked_in_at: string;
+  // Where they were when the visit ended: the room, and whether they had
+  // been called into it (or were only lined up for it).
+  room_id: string | null;
+  called_at: string | null;
+  done_at: string;
+}
+
+// How recently a patient's record must have been created for a first
+// check-in to count as a first VISIT.
+export const NEW_PATIENT_WINDOW_MS = 60 * 24 * 60 * 60 * 1000;
+
+interface FirstVisitInput {
+  id: string;
+  patient_id: string | null;
+  checked_in_at: string;
+  // When the patient's record arrived from Practice Better.
+  patient_created_at: string | null;
+}
+
+// Whose record is recent enough that this could be their first visit —
+// the only patients whose check-in history has to be looked up.
+export function firstVisitCandidates(
+  visits: FirstVisitInput[],
+  nowMs: number
+): string[] {
+  const ids = new Set<string>();
+  for (const v of visits) {
+    if (!v.patient_id || !v.patient_created_at) continue;
+    if (nowMs - Date.parse(v.patient_created_at) <= NEW_PATIENT_WINDOW_MS) {
+      ids.add(v.patient_id);
+    }
+  }
+  return [...ids];
+}
+
+// The visits to mark "First visit": the patient's record is new AND they
+// have never checked in before this visit. Both, on purpose. The check-in
+// log only goes back to when the kiosk was introduced, so "never checked
+// in" alone would greet patients of many years as newcomers; and a new
+// record alone says nothing once they have been in. A wrong "First
+// visit" is worse than none, so anything unknown counts as not first.
+//
+// `history`: every check-in of the candidate patients, these visits
+// included.
+export function firstVisitIds(
+  visits: FirstVisitInput[],
+  history: { patient_id: string; checked_in_at: string }[],
+  nowMs: number
+): Set<string> {
+  const candidates = new Set(firstVisitCandidates(visits, nowMs));
+  const first = new Set<string>();
+  for (const v of visits) {
+    if (!v.patient_id || !candidates.has(v.patient_id)) continue;
+    const at = Date.parse(v.checked_in_at);
+    const cameBefore = history.some(
+      (h) => h.patient_id === v.patient_id && Date.parse(h.checked_in_at) < at
+    );
+    if (!cameBefore) first.add(v.id);
+  }
+  return first;
 }
 
 export type VisitState = "waiting" | "next_up" | "called" | "treating";
@@ -356,6 +431,51 @@ export function roomDeleteBlocker(
     return `${name} is setting up — tap "Room ready" first`;
   }
   return null;
+}
+
+// Where "Restore" puts a finished visit back, and with which fields.
+//
+// Back into the room they were in — exactly as they were, same call time,
+// same "seen" — when that is still possible: they had been called into a
+// room, and that room now stands idle and empty with nobody lined up. It
+// is the undo for "Room ready" tapped on the wrong tile, where the
+// patient never left the bed: nobody is called again and no alert rings
+// that was not ringing before.
+//
+// In every other case — they were only waiting or lined up, the room is
+// gone, or it has been given to someone else — they go to the waiting
+// list and staff choose a room as usual. Never into a room that has
+// anyone in it or lined up for it: the people there are another group.
+//
+// `openVisits`: the visits on the board now (this one is not among them).
+export function restoreTarget(
+  visit: Pick<FlowVisit, "room_id" | "called_at">,
+  room: FlowRoom | null | undefined,
+  openVisits: InRoom[]
+): "room" | "waiting" {
+  if (!room || visit.room_id !== room.id || visit.called_at === null) {
+    return "waiting";
+  }
+  if (room.timer_started_at !== null || room.turnover_started_at !== null) {
+    return "waiting";
+  }
+  const taken =
+    roomOccupants(openVisits, room.id).length +
+    roomNextUp(openVisits, room.id).length;
+  return taken === 0 ? "room" : "waiting";
+}
+
+export function restoreUpdate(
+  visitId: string,
+  target: "room" | "waiting"
+): VisitUpdate {
+  return {
+    id: visitId,
+    fields:
+      target === "room"
+        ? { done_at: null }
+        : { done_at: null, ...unassignUpdate(visitId).fields },
+  };
 }
 
 export function unassignUpdate(visitId: string): VisitUpdate {

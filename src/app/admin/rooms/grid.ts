@@ -7,7 +7,11 @@ import { GRID_COLS } from "@/lib/room-status";
 // shows — including empty rows, which need an explicit track height or
 // CSS collapses them and rooms drift upward.
 export const CELL_MIN_WIDTH_PX = 190;
-export const CELL_HEIGHT_PX = 200;
+// Tall enough for a room with patients, their service, a line behind it
+// and finger-sized buttons, all at once (RoomTile.tsx).
+// Not a pixel more than that needs: two rows of rooms and the doctor
+// alert have to fit a 10-inch tablet held sideways.
+export const CELL_HEIGHT_PX = 238;
 
 export const gridStyle: CSSProperties = {
   gridTemplateColumns: `repeat(${GRID_COLS}, minmax(${CELL_MIN_WIDTH_PX}px, 1fr))`,

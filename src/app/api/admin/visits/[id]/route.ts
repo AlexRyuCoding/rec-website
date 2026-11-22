@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
 import { isAdminAuthorized } from "@/lib/admin-auth";
-import { commitAssign, commitFlow } from "@/lib/flow-server";
+import { commitAssign, commitFlow, commitRestore } from "@/lib/flow-server";
 import {
   applyVisitUpdates,
   assignUpdate,
@@ -13,7 +13,11 @@ import {
   VisitUpdate,
 } from "@/lib/patient-flow";
 import { MAX_ROOM_CAPACITY, RoomRow } from "@/lib/room-status";
-import { loadActiveVisits, VisitDbRow } from "@/lib/visits-server";
+import {
+  loadActiveVisits,
+  loadFinishedVisit,
+  VisitDbRow,
+} from "@/lib/visits-server";
 
 const bodySchema = z.discriminatedUnion("action", [
   z.object({
@@ -26,6 +30,7 @@ const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("unassign") }),
   z.object({ action: z.literal("remove") }),
   z.object({ action: z.literal("mark_waiting") }),
+  z.object({ action: z.literal("restore") }),
 ]);
 
 // Staff move a checked-in patient through the flow:
@@ -38,6 +43,9 @@ const bodySchema = z.discriminatedUnion("action", [
 // - remove:   finished / no-show / handled another way
 // - mark_waiting: undo a mistaken "Doctor in" — the patient is waiting
 //             for the doctor again and the board's alert comes back
+// - restore:  a FINISHED visit is open again (the board's "Finished"
+//             list): back into the room they were in if it still stands
+//             empty, otherwise to the waiting list — see restoreTarget
 // Whatever the action, if it empties the room the patient leaves, the
 // people lined up for that room are called.
 export async function POST(
@@ -65,11 +73,6 @@ export async function POST(
   } catch {
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
-  const visit = visits.find((v) => v.id === id);
-  if (!visit) {
-    return NextResponse.json({ error: "Visit not found" }, { status: 404 });
-  }
-
   const loadRoom = async (roomId: string): Promise<RoomRow | null> => {
     const { data } = await supabase
       .from("rooms")
@@ -78,6 +81,49 @@ export async function POST(
       .maybeSingle();
     return (data as RoomRow | null) ?? null;
   };
+
+  // Restore is the one action on a visit that is NOT on the board.
+  if (input.action === "restore") {
+    if (visits.some((v) => v.id === id)) {
+      return NextResponse.json(
+        { error: "That patient is already back on the board" },
+        { status: 409 }
+      );
+    }
+    let finished: VisitDbRow | null;
+    try {
+      finished = await loadFinishedVisit(supabase, id, nowMs);
+    } catch {
+      return NextResponse.json({ error: "Database error" }, { status: 500 });
+    }
+    if (!finished) {
+      return NextResponse.json({ error: "Visit not found" }, { status: 404 });
+    }
+    const restored = await commitRestore(supabase, {
+      visit: finished,
+      room: finished.room_id ? await loadRoom(finished.room_id) : null,
+      openVisits: visits,
+      nowMs,
+    });
+    if (restored.ok) {
+      return NextResponse.json({
+        visits: restored.visits,
+        rooms: restored.rooms,
+        restoredTo: restored.restoredTo,
+      });
+    }
+    return restored.reason === "gone"
+      ? NextResponse.json(
+          { error: "That patient is already back on the board" },
+          { status: 409 }
+        )
+      : NextResponse.json({ error: "Database error" }, { status: 500 });
+  }
+
+  const visit = visits.find((v) => v.id === id);
+  if (!visit) {
+    return NextResponse.json({ error: "Visit not found" }, { status: 404 });
+  }
 
   const updates: VisitUpdate[] = [];
   if (input.action === "assign") {
