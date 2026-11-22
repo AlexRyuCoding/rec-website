@@ -15,8 +15,8 @@ patients use it unassisted; it needs no staff sign-in.
 - PIN hashing: bcryptjs
 - All secrets in .env.local — never hardcoded
 - Frontend: single dark theme (no light/dark toggle) — except the staff
-  dashboard, which has a light / dark / match-this-computer switch (see
-  "Staff look"); GSAP + ScrollTrigger + Lenis for public-page motion;
+  dashboard and the rooms board, which have a light / dark / match-this-
+  device switch (see "Staff look"); GSAP + ScrollTrigger + Lenis for public-page motion;
   Instrument Serif + Inter Tight via next/font
 - Public forms (/api/request-form, /api/grievance-form): zod-validated,
   honeypot field `company`, per-IP rate limit (5/hour) in Supabase
@@ -427,7 +427,7 @@ off the timestamps a visit collects on the rooms board.
   search box and its results.
 - Errors on the dashboard use one red (text-ui-error / bg-ui-error-fill).
 
-## Staff look (dashboard)
+## Staff look (dashboard and rooms board)
 
 Design: docs/superpowers/specs/2026-11-21-dashboard-refresh-design.md
 (the rooms board gets the same look next:
@@ -483,6 +483,37 @@ ThemeSwitch, Backdrop, styles.ts); the theme rule: src/lib/staff-theme.ts
   Patient search results only fade — nothing there may slide or resize.
   Summary numbers never count up. prefers-reduced-motion: fades stay,
   sliding and resizing go.
+- The rooms board is in two parts with opposite rules
+  (docs/superpowers/specs/2026-11-22-rooms-board-refresh-design.md;
+  rooms/rooms-look.test.ts holds both):
+  - Its FRAME — top bar, waiting list, Expected / Finished / Sounds,
+    the layout editor — follows the theme like the dashboard.
+  - A room TILE never does. Its solid status colour is the signal read
+    from across the room, so the tile and everything on it (white text,
+    the keys, the doctor pill, the dark overlays) look the same in both
+    themes, and nothing in RoomTile.tsx, WaitingBanner.tsx or rooms/tile/
+    may use a ui-* colour. Tiles and their keys get the hard ledge from
+    rooms/tile/key-styles.ts, in a darker shade of their own colour.
+  - Signals in the frame are literal too and listed in the test: a
+    waiting name is an amber key from 10 minutes and a red one from 20
+    (waitLevel); the "sounds are silent" bar is amber.
+  - With no theme chosen on the device the board is DARK, not "match
+    this tablet" (rooms/layout.tsx, useStaffTheme("dark")): the wall
+    iPads are on automatic appearance and the board would change its
+    look at sunset by itself. A choice made on either page wins on both.
+  - Ledges are shadows and rings, never borders or margins: the restyle
+    changed no size (10 tiles, 77 buttons and the waiting names were
+    measured against the old board — identical — and the second row of
+    rooms sits exactly where it did). Keep it that way: a 1px border on
+    a waiting name pushed every room 2px down the tablet.
+  - The photo goes UNDER the board's content (`<Backdrop under />` in an
+    `isolate` root) instead of the content being lifted over it, so the
+    board's own layers — Sounds popover, the sticky doctor alert, the
+    editor's dialog, the silent bar — stack as they always did. Giving
+    the header or the content a z-index for the photo's sake put the
+    Sounds panel behind the board.
+  - No new motion on the board: tile colours cross-fade (as before),
+    keys press down 2px, the theme cross-fades. Nothing slides.
 - Two Tailwind utilities for the same property do not override each
   other by their order in a class list. That is why styles.ts has
   fieldBaseClass (no padding) beside fieldClass, and why a tab panel

@@ -62,7 +62,7 @@ function DraggableRoom({
           : undefined
       }
       className={`relative flex h-full w-full touch-none flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-ui-line-strong bg-ui-panel p-3 text-center hover:bg-ui-panel-2 ${
-        isDragging ? "z-10 opacity-80 ring-2 ring-sky-300" : ""
+        isDragging ? "z-10 opacity-80 ring-2 ring-ui-accent-text" : ""
       }`}
     >
       <span className="w-full truncate font-medium">{room.name}</span>
@@ -101,8 +101,8 @@ function DroppableCell({
       aria-label={`Empty cell row ${gridRow + 1} column ${gridCol + 1}`}
       className={`h-full w-full rounded-2xl border-2 border-dashed ${
         isOver
-          ? "border-sky-400 bg-sky-950/40"
-          : "border-neutral-800 hover:border-neutral-600"
+          ? "border-ui-accent-text bg-ui-panel-2"
+          : "border-ui-line hover:border-ui-line-strong"
       }`}
     />
   );
@@ -237,7 +237,9 @@ export default function LayoutEditor({
         >
           <Plus className="h-4 w-4" /> Create room
         </button>
-        <p className="text-xs text-ui-text-3">
+        {/* On a surface of its own: the page behind it is a photograph,
+            and nothing is read straight off that. */}
+        <p className="rounded-md bg-ui-panel px-2.5 py-1.5 text-xs text-ui-text-2 ring-1 ring-ui-line">
           Drag rooms into position. Click a room to edit it.
         </p>
       </div>

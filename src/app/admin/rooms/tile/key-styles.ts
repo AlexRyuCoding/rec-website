@@ -18,7 +18,7 @@ import type { RoomState } from "@/lib/room-status";
 // The ledge under a key and its press: down 2px onto the ledge. Not when
 // disabled, and without the movement for people who asked for less motion.
 export const tilePress =
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_2px_0_rgba(0,0,0,0.38)] transition-[transform,box-shadow,background-color] duration-100 [&:not(:disabled)]:active:translate-y-[2px] [&:not(:disabled)]:active:shadow-none motion-reduce:active:translate-y-0";
+  "shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_2px_0_rgba(0,0,0,0.38)] transition-[transform,box-shadow,background-color] duration-100 [&:not(:disabled)]:active:translate-y-[2px] [&:not(:disabled)]:active:shadow-none motion-reduce:[&:not(:disabled)]:active:translate-y-0";
 
 // An ordinary key on a tile.
 export const tileKey = `bg-white/20 hover:bg-white/30 ${tilePress}`;

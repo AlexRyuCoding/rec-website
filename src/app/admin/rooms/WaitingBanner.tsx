@@ -145,7 +145,7 @@ export default function WaitingBanner({
             <button
               disabled={busyRoomIds.has(alert.roomId)}
               onClick={() => onDoctorIn(alert.roomId)}
-              className="relative flex shrink-0 items-center gap-2 rounded-xl bg-neutral-950 px-6 py-4 text-xl font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_3px_0_rgba(0,0,0,0.6)] transition-[transform,box-shadow] duration-100 hover:bg-neutral-800 [&:not(:disabled)]:active:translate-y-[3px] [&:not(:disabled)]:active:shadow-none motion-reduce:active:translate-y-0 disabled:opacity-50"
+              className="relative flex shrink-0 items-center gap-2 rounded-xl bg-neutral-950 px-6 py-4 text-xl font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_3px_0_rgba(0,0,0,0.6)] transition-[transform,box-shadow] duration-100 hover:bg-neutral-800 [&:not(:disabled)]:active:translate-y-[3px] [&:not(:disabled)]:active:shadow-none motion-reduce:[&:not(:disabled)]:active:translate-y-0 disabled:opacity-50"
             >
               <DoorOpen aria-hidden className="h-6 w-6" /> Doctor in
             </button>
