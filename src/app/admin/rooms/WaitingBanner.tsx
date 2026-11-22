@@ -101,7 +101,12 @@ export default function WaitingBanner({
           <div
             key={alert.roomId}
             data-alert={alert.roomId}
-            className={`relative flex flex-wrap items-center gap-x-5 gap-y-3 overflow-hidden rounded-2xl px-5 py-4 shadow-2xl ${
+            // Its own dark edge (the ring's offset), then the halo: the
+            // alert's pale fill is next to nothing against the light
+            // theme's pale photo, and the white halo shows only on dark.
+            // The edge is the same in both themes — like a room tile, the
+            // alert does not follow the theme.
+            className={`relative flex flex-wrap items-center gap-x-5 gap-y-3 overflow-hidden rounded-2xl px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_4px_0_rgba(0,0,0,0.45)] ring-offset-2 ring-offset-[#0b0f12] ${
               alert.long ? "ring-[6px] ring-rose-500" : "ring-4 ring-white/40"
             } ${
               alert.doctorName
@@ -145,7 +150,7 @@ export default function WaitingBanner({
             <button
               disabled={busyRoomIds.has(alert.roomId)}
               onClick={() => onDoctorIn(alert.roomId)}
-              className="relative flex shrink-0 items-center gap-2 rounded-xl bg-neutral-950 px-6 py-4 text-xl font-bold text-white shadow-lg hover:bg-neutral-800 active:scale-95 disabled:opacity-50"
+              className="relative flex shrink-0 items-center gap-2 rounded-xl bg-neutral-950 px-6 py-4 text-xl font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_3px_0_rgba(0,0,0,0.6)] transition-[transform,box-shadow] duration-100 hover:bg-neutral-800 [&:not(:disabled)]:active:translate-y-[3px] [&:not(:disabled)]:active:shadow-none [&:not(:disabled)]:active:before:absolute [&:not(:disabled)]:active:before:inset-x-0 [&:not(:disabled)]:active:before:-top-[3px] [&:not(:disabled)]:active:before:h-[3px] [&:not(:disabled)]:active:before:content-[''] motion-reduce:[&:not(:disabled)]:active:translate-y-0 disabled:opacity-50"
             >
               <DoorOpen aria-hidden className="h-6 w-6" /> Doctor in
             </button>

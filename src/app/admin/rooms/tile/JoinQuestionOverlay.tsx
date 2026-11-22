@@ -2,6 +2,7 @@
 import { useEffect, useRef } from "react";
 import { JoinQuestion } from "@/lib/patient-flow";
 import { createTapGuard, SCREEN_CHANGE_GUARD_MS } from "@/lib/tap-guard";
+import { tileKey, tileKeySolid } from "./key-styles";
 
 // "Together with Alex R.?" — shown over the tile before a patient is put
 // in a room that has someone in it, or behind people already lined up.
@@ -56,7 +57,7 @@ export default function JoinQuestionOverlay({
       <button
         disabled={busy}
         onClick={() => answer(true)}
-        className="min-h-11 w-full rounded-lg bg-white/90 px-2 text-sm font-semibold text-neutral-900 hover:bg-white disabled:opacity-40"
+        className={`min-h-11 w-full rounded-lg px-2 text-sm font-semibold text-neutral-900 disabled:opacity-40 ${tileKeySolid}`}
       >
         {question.kind === "ask_join_room"
           ? "Yes, send in"
@@ -66,7 +67,7 @@ export default function JoinQuestionOverlay({
         <button
           disabled={busy}
           onClick={() => answer(false)}
-          className="mt-0.5 min-h-11 w-full rounded-lg bg-white/15 px-2 text-sm font-semibold hover:bg-white/25 disabled:opacity-40"
+          className={`mt-0.5 min-h-11 w-full rounded-lg px-2 text-sm font-semibold disabled:opacity-40 ${tileKey}`}
         >
           No, next up
         </button>

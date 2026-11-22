@@ -356,9 +356,18 @@ describe("doctorColorClasses", () => {
     expect(new Set(classes).size).toBe(DOCTOR_COLORS.length);
   });
 
-  it("falls back to neutral styling for unknown or missing colors", () => {
-    expect(doctorColorClasses(null)).toBe("bg-white/10 text-white");
-    expect(doctorColorClasses("plaid")).toBe("bg-white/10 text-white");
+  // A doctor's pill is shown on tiles of every colour AND on the board's
+  // themed panels and photo (the roster, the Sounds panel, the doctor
+  // alert). The fallback used to be white text on a see-through band:
+  // unreadable on a light panel — and a doctor alert nobody can read.
+  it("falls back to a solid pill that reads on any ground, like the palette's", () => {
+    const solidPill = /^bg-[a-z]+-300 text-[a-z]+-950$/;
+    expect(doctorColorClasses(null)).toMatch(solidPill);
+    expect(doctorColorClasses("plaid")).toMatch(solidPill);
+    for (const color of DOCTOR_COLORS) {
+      expect(doctorColorClasses(color)).toMatch(solidPill);
+      expect(doctorColorClasses(color)).not.toBe(doctorColorClasses(null));
+    }
   });
 });
 

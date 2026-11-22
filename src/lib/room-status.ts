@@ -33,8 +33,14 @@ const DOCTOR_COLOR_CLASSES: Record<DoctorColor, string> = {
   pink: "bg-pink-300 text-pink-950",
 };
 
+// A doctor with no colour of their own (or one this board does not know
+// yet): a solid grey pill in the palette's own shape. Not white on a
+// see-through band — the pill also sits on light panels and on the photo
+// behind the board, where that cannot be read.
+const DOCTOR_COLOR_FALLBACK = "bg-neutral-300 text-neutral-950";
+
 export function doctorColorClasses(color: string | null | undefined): string {
-  return DOCTOR_COLOR_CLASSES[color as DoctorColor] ?? "bg-white/10 text-white";
+  return DOCTOR_COLOR_CLASSES[color as DoctorColor] ?? DOCTOR_COLOR_FALLBACK;
 }
 
 export function pickDoctorColor(usedColors: (string | null)[]): DoctorColor {

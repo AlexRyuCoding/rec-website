@@ -10,6 +10,7 @@ import { RoomRow } from "@/lib/room-status";
 import { CLINIC_TZ } from "@/lib/clinic-time";
 import { goToStaffLogin } from "@/lib/staff-login-redirect";
 import { visitNote } from "./tile/visit-note";
+import { buttonSkinClass } from "../ui/styles";
 
 const formatTime = (iso: string) =>
   new Date(iso).toLocaleTimeString("en-US", {
@@ -76,13 +77,13 @@ export default function FinishedPanel({
   };
 
   return (
-    <div className="mt-2.5 border-t border-white/10 pt-2.5">
+    <div className="mt-2.5 border-t border-ui-line pt-2.5">
       {finished === null ? (
-        <p className="py-2 text-sm text-white/50">
+        <p className="py-2 text-sm text-ui-text-3">
           {failed ? "Couldn't load the finished visits." : "Loading…"}
         </p>
       ) : finished.length === 0 ? (
-        <p className="py-2 text-sm text-white/50">
+        <p className="py-2 text-sm text-ui-text-3">
           Nobody has finished yet today.
         </p>
       ) : (
@@ -97,18 +98,18 @@ export default function FinishedPanel({
             return (
               <li
                 key={visit.id}
-                className="flex items-center gap-3 rounded-xl bg-white/5 px-3 py-1.5"
+                className="flex items-center gap-3 rounded-xl bg-ui-panel-2 px-3 py-1.5"
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">
                     {visit.display_name}
                     {note && (
-                      <span className="ml-2 font-normal text-white/60">
+                      <span className="ml-2 font-normal text-ui-text-2">
                         {note}
                       </span>
                     )}
                   </p>
-                  <p className="truncate text-xs text-white/50">
+                  <p className="truncate text-xs text-ui-text-3">
                     {room && visit.called_at ? `${room.name} · ` : ""}
                     finished {formatTime(visit.done_at)}
                   </p>
@@ -119,7 +120,7 @@ export default function FinishedPanel({
                   aria-label={`Restore ${visit.display_name} to ${
                     toRoom && room ? room.name : "the waiting list"
                   }`}
-                  className="flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg bg-white/90 px-3 text-sm font-semibold text-neutral-900 hover:bg-white disabled:opacity-40"
+                  className={`flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm ${buttonSkinClass("primary")}`}
                 >
                   <Undo2 className="h-4 w-4" />
                   {restoringId === visit.id
@@ -134,7 +135,7 @@ export default function FinishedPanel({
         </ul>
       )}
       {finished !== null && failed && (
-        <p className="pt-1 text-xs text-amber-300">
+        <p className="pt-1 text-xs text-ui-caution">
           Couldn&apos;t refresh this list.
         </p>
       )}

@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { VisitView } from "@/lib/patient-flow";
 import { visitNote } from "./visit-note";
+import { tileKey, tilePress } from "./key-styles";
 
 // How long an armed button waits for its second tap.
 export const ARMED_MS = 4000;
@@ -53,14 +54,14 @@ export default function PatientMenu({
       {canMarkWaiting && (
         <button
           onClick={() => onAction("mark_waiting")}
-          className={`${item} bg-purple-700 hover:bg-purple-600`}
+          className={`${item} bg-purple-700 hover:bg-purple-600 ${tilePress}`}
         >
           Doctor hasn&apos;t come yet
         </button>
       )}
       <button
         onClick={() => onAction("unassign")}
-        className={`${item} bg-white/10 hover:bg-white/20`}
+        className={`${item} ${tileKey}`}
       >
         Back to waiting list
       </button>
