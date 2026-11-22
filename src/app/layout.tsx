@@ -26,7 +26,12 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    // suppressHydrationWarning: the themed staff pages put
+    // data-staff-theme on <html> before React starts (so the page never
+    // flashes the wrong theme); without this React warns in development
+    // about an attribute it did not render. It covers this one element's
+    // attributes only.
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${instrumentSerif.variable} ${interTight.variable} antialiased`}
       >
