@@ -163,6 +163,13 @@ html[data-staff-theme="dark"] .staff-backdrop-dark,
 .ui-thumb-still {
   transition: none;
 }
+/* The tab row's thumb: the same raised tile, with the photo's accent
+   colour as a line inside its bottom edge. */
+.ui-tab-thumb {
+  box-shadow:
+    inset 0 -3px 0 var(--ui-tab-accent),
+    var(--ui-lift-1);
+}
 
 @keyframes ui-rise {
   from {
