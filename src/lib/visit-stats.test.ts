@@ -6,11 +6,17 @@ import {
   csvCell,
   isOpenStatus,
   median,
+  nextStatusChangeMs,
   statusLabel,
   summarizeVisits,
   visitTimes,
   VisitTimestamps,
 } from "./visit-stats";
+import {
+  OVERTIME_GRACE_SECONDS,
+  ROOM_STATUS_LABEL,
+  RoomTimer,
+} from "./room-status";
 
 const T0 = Date.parse("2026-11-23T18:00:00.000Z");
 const MIN = 60_000;
@@ -72,9 +78,16 @@ describe("checkinStatus", () => {
 
   it("knows which statuses are on the board", () => {
     expect(
-      ["waiting", "next_up", "called", "with_doctor"].every((s) =>
-        isOpenStatus(s as never)
-      )
+      [
+        "waiting",
+        "next_up",
+        "called",
+        "with_doctor",
+        "in_use",
+        "complete",
+        "overtime",
+        "turnover",
+      ].every((s) => isOpenStatus(s as never))
     ).toBe(true);
     expect(
       ["finished", "removed", "not_closed"].some((s) =>
@@ -88,6 +101,158 @@ describe("checkinStatus", () => {
     expect(statusLabel("called", null)).toBe("Called");
     expect(statusLabel("waiting", "Room 3")).toBe("Waiting");
     expect(statusLabel("finished", "Room 3")).toBe("Finished");
+  });
+
+  // The owner's decision: once the room's timer is involved, the
+  // dashboard says what the room's tile says.
+  it("uses the board's own words for a room on its timer", () => {
+    expect(statusLabel("in_use", "Room 3")).toBe("In Use · Room 3");
+    expect(statusLabel("complete", "Room 3")).toBe("Remove Needles · Room 3");
+    expect(statusLabel("overtime", "Room 3")).toBe("Overtime · Room 3");
+    expect(statusLabel("turnover", "Room 3")).toBe("Setting Up · Room 3");
+    for (const s of ["in_use", "complete", "overtime", "turnover"] as const) {
+      expect(statusLabel(s, null)).toBe(ROOM_STATUS_LABEL[s]);
+    }
+  });
+});
+
+// "With doctor" used to cover everything from "Doctor in" to "Room
+// ready" — including the half hour the doctor is NOT in the room. A
+// patient the doctor has seen now follows their room's timer.
+describe("checkinStatus with the room's timer", () => {
+  const now = T0 + 30 * MIN;
+  const seen = visit({ called: 5, seen: 9 });
+  const timer = (over: Partial<RoomTimer> = {}): RoomTimer => ({
+    timer_started_at: null,
+    timer_duration_seconds: null,
+    timer_paused_at: null,
+    turnover_started_at: null,
+    ...over,
+  });
+  // A 20-minute timer started `min` minutes after check-in.
+  const startedAt = (min: number, over: Partial<RoomTimer> = {}) =>
+    timer({
+      timer_started_at: minutesAfter(min),
+      timer_duration_seconds: 20 * 60,
+      ...over,
+    });
+
+  it("is With doctor until the timer is started", () => {
+    expect(checkinStatus(seen, now, timer())).toBe("with_doctor");
+  });
+
+  it("is With doctor when nothing is known about the room", () => {
+    expect(checkinStatus(seen, now)).toBe("with_doctor");
+    expect(checkinStatus(seen, now, null)).toBe("with_doctor");
+  });
+
+  it("is In Use while the timer runs", () => {
+    expect(checkinStatus(seen, now, startedAt(15))).toBe("in_use");
+  });
+
+  it("is Remove Needles when the time is up, then Overtime", () => {
+    // started at 10, 20 minutes long: up at 30
+    expect(checkinStatus(seen, now, startedAt(10))).toBe("complete");
+    expect(checkinStatus(seen, now + 4 * MIN, startedAt(10))).toBe("complete");
+    expect(checkinStatus(seen, now + 5 * MIN, startedAt(10))).toBe("overtime");
+  });
+
+  it("stays In Use while the timer is paused, however long", () => {
+    const paused = startedAt(15, { timer_paused_at: minutesAfter(20) });
+    expect(checkinStatus(seen, now + 60 * MIN, paused)).toBe("in_use");
+  });
+
+  it("is Setting Up after the needles are out", () => {
+    expect(
+      checkinStatus(seen, now, timer({ turnover_started_at: minutesAfter(29) }))
+    ).toBe("turnover");
+  });
+
+  it("is With doctor again when the timer was reset", () => {
+    expect(checkinStatus(seen, now, timer())).toBe("with_doctor");
+  });
+
+  // Lined up for a room where someone else is on the timer, or called
+  // and not seen: the timer is not theirs.
+  it("leaves a patient the doctor has not seen alone", () => {
+    expect(checkinStatus(visit({ room: true }), now, startedAt(15))).toBe(
+      "next_up"
+    );
+    expect(checkinStatus(visit({ called: 5 }), now, startedAt(15))).toBe(
+      "called"
+    );
+    expect(checkinStatus(visit(), now, startedAt(15))).toBe("waiting");
+  });
+
+  it("leaves an ended or forgotten visit alone", () => {
+    expect(
+      checkinStatus(visit({ called: 5, seen: 9, done: 25 }), now, startedAt(15))
+    ).toBe("finished");
+    expect(checkinStatus(seen, now + 13 * 60 * MIN, startedAt(15))).toBe(
+      "not_closed"
+    );
+  });
+});
+
+// The list re-reads the clock once a minute; a timer that ends in
+// between must still turn the pill at the moment it ends.
+describe("nextStatusChangeMs", () => {
+  const now = T0 + 30 * MIN;
+  const seen = visit({ called: 5, seen: 9 });
+  const row = (
+    v: VisitTimestamps,
+    startedMin: number | null,
+    over: Partial<RoomTimer> = {}
+  ) => ({
+    ...v,
+    room_timer: {
+      timer_started_at: startedMin === null ? null : minutesAfter(startedMin),
+      timer_duration_seconds: startedMin === null ? null : 20 * 60,
+      timer_paused_at: null,
+      turnover_started_at: null,
+      ...over,
+    },
+  });
+
+  it("is the moment a running timer ends", () => {
+    expect(nextStatusChangeMs([row(seen, 15)], now)).toBe(T0 + 35 * MIN);
+  });
+
+  it("is the start of overtime once the time is up", () => {
+    expect(nextStatusChangeMs([row(seen, 8)], now)).toBe(
+      T0 + 28 * MIN + OVERTIME_GRACE_SECONDS * 1000
+    );
+  });
+
+  it("is the soonest of several rooms", () => {
+    expect(nextStatusChangeMs([row(seen, 25), row(seen, 12)], now)).toBe(
+      T0 + 32 * MIN
+    );
+  });
+
+  it("is nothing when no timer can change a status by itself", () => {
+    expect(nextStatusChangeMs([], now)).toBeNull();
+    expect(nextStatusChangeMs([row(seen, null)], now)).toBeNull();
+    // already in overtime
+    expect(nextStatusChangeMs([row(seen, 0)], now)).toBeNull();
+    // paused
+    expect(
+      nextStatusChangeMs(
+        [row(seen, 15, { timer_paused_at: minutesAfter(20) })],
+        now
+      )
+    ).toBeNull();
+    // not this patient's timer
+    expect(nextStatusChangeMs([row(visit({ called: 5 }), 15)], now)).toBeNull();
+    // ended visit
+    expect(
+      nextStatusChangeMs(
+        [row(visit({ called: 5, seen: 9, done: 25 }), 15)],
+        now
+      )
+    ).toBeNull();
+    // no room known
+    expect(nextStatusChangeMs([{ ...seen, room_timer: null }], now)).toBeNull();
   });
 });
 
@@ -216,6 +381,7 @@ describe("csv", () => {
       appointment_at: minutesAfter(10),
       service_name: "Cupping",
       room_name: "Room 3",
+      room_timer: null,
       ...visit({ called: 6, seen: 10, done: 45 }),
     };
     const csv = checkinsCsv(
@@ -231,5 +397,27 @@ describe("csv", () => {
     expect(line).toBe(
       '"T0","José Muñoz","T10","Cupping","Alex Ryu","Room 3","Finished","T6","T10","T45","6","4","45"'
     );
+  });
+
+  it("gives a patient on the timer the room's status", () => {
+    const record: CheckinRecord = {
+      id: "c2",
+      first_name: "Ann",
+      last_name: "Lee",
+      appointment_at: null,
+      service_name: null,
+      room_name: "Room 3",
+      room_timer: {
+        timer_started_at: minutesAfter(20),
+        timer_duration_seconds: 20 * 60,
+        timer_paused_at: null,
+        turnover_started_at: null,
+      },
+      ...visit({ called: 6, seen: 10 }),
+    };
+    const line = checkinsCsv([record], T0 + 30 * MIN, () => "").split(
+      "\r\n"
+    )[1];
+    expect(line.split(",")[6]).toBe('"In Use"');
   });
 });

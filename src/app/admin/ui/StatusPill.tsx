@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
-import { Check, TriangleAlert, X } from "lucide-react";
+import { BellRing, Check, Timer, TriangleAlert, X } from "lucide-react";
 import type { CheckinStatus } from "@/lib/visit-stats";
 
-// How a visit's status looks. Each of the seven has its own colour AND a
-// shape that says which family it is in, so no status is told apart by
-// colour alone:
+// How a visit's status looks. Each status has its own colour AND a shape
+// that says which family it is in, so no status is told apart by colour
+// alone:
 // - still on the rooms board → a filled pill with a dot;
+// - on the room's timer → a filled pill with a clock, and a bell once
+//   the time is up (someone has to go and take the needles out);
 // - finished or removed → grey, with a mark;
 // - never closed (nobody tapped "Room ready") → an outline with a warning.
 export interface PillLook {
@@ -14,10 +16,14 @@ export interface PillLook {
     | "next"
     | "called"
     | "doctor"
+    | "in-use"
+    | "complete"
+    | "overtime"
+    | "turnover"
     | "finished"
     | "removed"
     | "open";
-  mark: "dot" | "check" | "x" | "alert";
+  mark: "dot" | "timer" | "bell" | "check" | "x" | "alert";
 }
 
 const LOOK: Record<CheckinStatus, PillLook> = {
@@ -25,6 +31,10 @@ const LOOK: Record<CheckinStatus, PillLook> = {
   next_up: { tone: "next", mark: "dot" },
   called: { tone: "called", mark: "dot" },
   with_doctor: { tone: "doctor", mark: "dot" },
+  in_use: { tone: "in-use", mark: "timer" },
+  complete: { tone: "complete", mark: "bell" },
+  overtime: { tone: "overtime", mark: "bell" },
+  turnover: { tone: "turnover", mark: "dot" },
   finished: { tone: "finished", mark: "check" },
   removed: { tone: "removed", mark: "x" },
   not_closed: { tone: "open", mark: "alert" },
@@ -39,6 +49,10 @@ const TONE: Record<PillLook["tone"], string> = {
   next: "border-transparent bg-ui-st-next-bg text-ui-st-next",
   called: "border-transparent bg-ui-st-called-bg text-ui-st-called",
   doctor: "border-transparent bg-ui-st-doctor-bg text-ui-st-doctor",
+  "in-use": "border-transparent bg-ui-st-in-use-bg text-ui-st-in-use",
+  complete: "border-transparent bg-ui-st-complete-bg text-ui-st-complete",
+  overtime: "border-transparent bg-ui-st-overtime-bg text-ui-st-overtime",
+  turnover: "border-transparent bg-ui-st-turnover-bg text-ui-st-turnover",
   finished: "border-ui-line bg-ui-panel-2 text-ui-text-2",
   removed: "border-dashed border-ui-line-strong text-ui-text-3",
   open: "border-ui-st-open text-ui-st-open",
@@ -49,6 +63,8 @@ function Mark({ mark }: { mark: PillLook["mark"] }) {
   if (mark === "check") return <Check aria-hidden {...icon} />;
   if (mark === "x") return <X aria-hidden {...icon} />;
   if (mark === "alert") return <TriangleAlert aria-hidden {...icon} />;
+  if (mark === "timer") return <Timer aria-hidden {...icon} />;
+  if (mark === "bell") return <BellRing aria-hidden {...icon} />;
   return (
     <span aria-hidden className="size-2 shrink-0 rounded-full bg-current" />
   );

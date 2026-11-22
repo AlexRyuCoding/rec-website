@@ -7,6 +7,10 @@ const ALL: CheckinStatus[] = [
   "next_up",
   "called",
   "with_doctor",
+  "in_use",
+  "complete",
+  "overtime",
+  "turnover",
   "finished",
   "removed",
   "not_closed",
@@ -16,18 +20,24 @@ describe("pillLook", () => {
   // The complaint this answers: four statuses were the same teal text.
   it("gives every status its own look", () => {
     const tones = ALL.map((s) => pillLook(s).tone);
-    expect(new Set(tones).size).toBe(7);
+    expect(new Set(tones).size).toBe(ALL.length);
   });
 
-  // Shape as well as colour: a visit still on the board carries a dot, a
-  // visit that ended carries a mark.
-  it("marks the visits still on the board with a dot, and only those", () => {
-    expect(ALL.filter((s) => pillLook(s).mark === "dot")).toEqual([
-      "waiting",
-      "next_up",
-      "called",
-      "with_doctor",
-    ]);
+  // Shape as well as colour. A visit that ended carries a mark; one still
+  // on the board carries a dot — or, once its room is on the timer, a
+  // clock, and a bell when the timer has run out.
+  it("marks the visits still on the board, by where they are", () => {
+    const marks = Object.fromEntries(ALL.map((s) => [s, pillLook(s).mark]));
+    expect(marks).toMatchObject({
+      waiting: "dot",
+      next_up: "dot",
+      called: "dot",
+      with_doctor: "dot",
+      in_use: "timer",
+      complete: "bell",
+      overtime: "bell",
+      turnover: "dot",
+    });
   });
 
   it("gives each ended visit a different mark", () => {

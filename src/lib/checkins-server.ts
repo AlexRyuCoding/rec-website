@@ -36,7 +36,7 @@ export async function loadCheckinPage(
   const { data, error, count } = await supabase
     .from("checkins")
     .select(
-      "id, patient_id, checked_in_at, appointment_at, service_name, practitioner_name, room_id, called_at, seen_at, done_at, patients(first_name, last_name), rooms(name)",
+      "id, patient_id, checked_in_at, appointment_at, service_name, practitioner_name, room_id, called_at, seen_at, done_at, patients(first_name, last_name), rooms(name, timer_started_at, timer_duration_seconds, timer_paused_at, turnover_started_at)",
       { count: "exact" }
     )
     .gte("checked_in_at", from)
@@ -56,6 +56,14 @@ export async function loadCheckinPage(
       practitioner_name: c.practitioner_name,
       room_id: c.room_id,
       room_name: room?.name ?? null,
+      room_timer: room
+        ? {
+            timer_started_at: room.timer_started_at ?? null,
+            timer_duration_seconds: room.timer_duration_seconds ?? null,
+            timer_paused_at: room.timer_paused_at ?? null,
+            turnover_started_at: room.turnover_started_at ?? null,
+          }
+        : null,
       called_at: c.called_at,
       seen_at: c.seen_at,
       done_at: c.done_at,

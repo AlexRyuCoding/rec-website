@@ -7,6 +7,7 @@ import {
   doctorColorClasses,
   DoctorRow,
   formatTimerDisplay,
+  ROOM_STATUS_LABEL,
   RoomRow,
   RoomState,
   TimerAction,
@@ -42,19 +43,16 @@ const ASSIGN_LABELS: Record<AssignOutcome, string> = {
 
 import { TILE_LEDGE, tileKey, tileKeySolid } from "./tile/key-styles";
 
-const STATUS_STYLES: Record<
-  RoomState["status"],
-  { card: string; label: string }
-> = {
-  available: { card: "bg-emerald-700", label: "Available" },
-  patient_waiting: { card: "bg-purple-700", label: "Patient waiting" },
+const STATUS_STYLES: Record<RoomState["status"], { card: string }> = {
+  available: { card: "bg-emerald-700" },
+  patient_waiting: { card: "bg-purple-700" },
   // Deliberately calm and dark next to the loud purple of "Patient
   // waiting": the doctor is there, nothing needs attention.
-  with_doctor: { card: "bg-indigo-950", label: "With doctor" },
-  turnover: { card: "bg-slate-600", label: "Setting Up" },
-  in_use: { card: "bg-sky-800", label: "In Use" },
-  complete: { card: "bg-amber-600", label: "Remove Needles" },
-  overtime: { card: "bg-rose-700", label: "Overtime" },
+  with_doctor: { card: "bg-indigo-950" },
+  turnover: { card: "bg-slate-600" },
+  in_use: { card: "bg-sky-800" },
+  complete: { card: "bg-amber-600" },
+  overtime: { card: "bg-rose-700" },
 };
 
 // A button in the tile's action row.
@@ -209,7 +207,7 @@ export default function RoomTile({
             `${longWait ? "Long wait" : "Waiting"} ${formatTimerDisplay(
               Math.max(0, Math.floor((nowMs - waitingSinceMs) / 1000))
             )}`
-          : style.label;
+          : ROOM_STATUS_LABEL[state.status];
   // A patient told to come in after the timer was already running (a late
   // partner in a shared room) is marked while they are on their way.
   const arriving = (v: VisitView) =>

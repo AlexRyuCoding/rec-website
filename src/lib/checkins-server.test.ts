@@ -34,7 +34,13 @@ describe("loadCheckinPage", () => {
         checkin(30, {
           service_name: "Cupping",
           room_id: "r3",
-          rooms: { name: "Room 3" },
+          rooms: {
+            name: "Room 3",
+            timer_started_at: at(45),
+            timer_duration_seconds: 1200,
+            timer_paused_at: null,
+            turnover_started_at: null,
+          },
           called_at: at(36),
           seen_at: at(40),
         }),
@@ -54,6 +60,13 @@ describe("loadCheckinPage", () => {
       practitioner_name: "Alex Ryu",
       room_id: "r3",
       room_name: "Room 3",
+      // The room's timer: what turns "With doctor" into "In Use".
+      room_timer: {
+        timer_started_at: at(45),
+        timer_duration_seconds: 1200,
+        timer_paused_at: null,
+        turnover_started_at: null,
+      },
       called_at: at(36),
       seen_at: at(40),
       done_at: null,
@@ -109,6 +122,7 @@ describe("loadCheckinPage", () => {
       first_name: "",
       last_name: "",
       room_name: null,
+      room_timer: null,
     });
   });
 
