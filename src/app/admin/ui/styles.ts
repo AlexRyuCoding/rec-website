@@ -15,7 +15,12 @@ const FOCUS =
 // disabled, and not for people who asked for less motion. (The
 // reduced-motion class repeats the :not(:disabled) part on purpose: with
 // less of the selector it loses to the press it is meant to cancel.)
-const BUTTON_BASE = `inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border font-medium transition-[transform,box-shadow,background-color,border-color,color] duration-100 [&:not(:disabled)]:active:translate-y-[2px] [&:not(:disabled)]:active:shadow-none motion-reduce:[&:not(:disabled)]:active:translate-y-0 disabled:opacity-50 ${FOCUS}`;
+//
+// The skin of a button — edge, press, focus, disabled — apart from its
+// layout, for buttons that keep a layout and size of their own (the rooms
+// board's finger-sized ones).
+const BUTTON_SKIN = `border transition-[transform,box-shadow,background-color,border-color,color] duration-100 [&:not(:disabled)]:active:translate-y-[2px] [&:not(:disabled)]:active:shadow-none motion-reduce:[&:not(:disabled)]:active:translate-y-0 disabled:opacity-50 ${FOCUS}`;
+const BUTTON_BASE = `inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium ${BUTTON_SKIN}`;
 
 const BUTTON_VARIANT: Record<ButtonVariant, string> = {
   default:
@@ -34,6 +39,12 @@ const BUTTON_SIZE: Record<ButtonSize, string> = {
   md: "px-3.5 py-2",
   lg: "px-5 py-3 text-base",
 };
+
+// Colours, ledge and press only: the caller brings display, gap, padding,
+// corner and text size.
+export function buttonSkinClass(variant: ButtonVariant = "default"): string {
+  return `${BUTTON_SKIN} ${BUTTON_VARIANT[variant]}`;
+}
 
 export function buttonClass({
   variant = "default",

@@ -113,6 +113,13 @@ html[data-staff-theme] body {
   pointer-events: none;
   background: var(--ui-page);
 }
+/* For a page whose own layers must keep stacking as they always did (the
+   rooms board: a popover, a sticky alert, a dialog, a fixed bar). The
+   photo goes BEHIND the page's content instead of the content being
+   lifted above the photo — the page's root must be `isolate`. */
+.staff-backdrop-under {
+  z-index: -1;
+}
 .staff-backdrop > i {
   position: absolute;
   inset: 0;

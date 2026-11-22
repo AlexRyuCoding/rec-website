@@ -27,6 +27,10 @@ import {
 } from "@/lib/patient-flow";
 import { isLongWait } from "@/lib/alert-escalation";
 import { gridStyle } from "./grid";
+import Backdrop from "../ui/Backdrop";
+import { buttonClass, buttonSkinClass } from "../ui/styles";
+import ThemeSwitch from "../ui/ThemeSwitch";
+import { useStaffTheme } from "../ui/use-staff-theme";
 import { useRooms } from "./useRooms";
 import { useAlarm } from "./useAlarm";
 import RoomTile from "./RoomTile";
@@ -68,6 +72,9 @@ export default function RoomsPage() {
     addDoctor,
     deleteDoctor,
   } = useRooms();
+  // Dark unless a theme has been chosen on this device (see layout.tsx).
+  const { choice: themeChoice, setChoice: setThemeChoice } =
+    useStaffTheme("dark");
   const [editMode, setEditMode] = useState(false);
   const {
     soundEnabled,
@@ -253,218 +260,240 @@ export default function RoomsPage() {
   };
 
   return (
-    <main className="min-h-screen bg-neutral-950 p-4 text-white sm:p-6">
-      <header className="mx-auto mb-6 flex max-w-5xl items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/admin/dashboard"
-            className="rounded-lg bg-white/10 p-2 hover:bg-white/20"
-            aria-label="Back to dashboard"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-          <h1 className="text-xl font-semibold">Rooms</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          {connectionError && (
-            <span className="text-xs text-amber-400">Reconnecting…</span>
-          )}
-          <SoundsPanel
-            onPlay={testSound}
-            doctors={doctors}
-            doorbellDoctors={doorbellDoctors}
-            onDoorbellDoctors={setDoorbellDoctors}
-          />
-          <button
-            onClick={() => setEditMode((v) => !v)}
-            className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20"
-          >
-            {editMode ? (
-              <>
-                <X className="h-4 w-4" /> Done
-              </>
-            ) : (
-              <>
-                <Pencil className="h-4 w-4" /> Edit layout
-              </>
+    // The frame — top bar, waiting list, panels — follows the theme and
+    // sits on the theme's photo; the room tiles do not (tile/key-styles.ts).
+    //
+    // `isolate` + a photo that goes UNDER the content: no part of the page
+    // is given a z-index for the photo's sake, so the board's own layers
+    // (Sounds popover z-40, the sticky doctor alert z-30, the editor's
+    // dialog, the silent-sounds bar) stack exactly as they always have.
+    <main className="relative isolate min-h-screen pb-4 text-ui-text sm:pb-6">
+      <Backdrop under />
+      {/* No taller than the header it replaced (bar + the gap under it =
+          84px): two rows of rooms and a doctor alert have to stay as high
+          on a 10-inch tablet as they were. */}
+      <header className="mb-4 border-b border-ui-line bg-ui-panel px-4 shadow-lift-2 sm:px-6">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-x-3 gap-y-2 py-3">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/admin/dashboard"
+              className={`rounded-lg p-2 ${buttonSkinClass("quiet")}`}
+              aria-label="Back to dashboard"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+            <h1 className="text-xl font-semibold">Rooms</h1>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {connectionError && (
+              <span className="text-xs text-ui-caution">Reconnecting…</span>
             )}
-          </button>
+            <ThemeSwitch
+              device="tablet"
+              choice={themeChoice}
+              onChange={setThemeChoice}
+            />
+            <SoundsPanel
+              onPlay={testSound}
+              doctors={doctors}
+              doorbellDoctors={doorbellDoctors}
+              onDoorbellDoctors={setDoorbellDoctors}
+            />
+            <button
+              onClick={() => setEditMode((v) => !v)}
+              className={`${buttonClass()} text-sm`}
+            >
+              {editMode ? (
+                <>
+                  <X className="h-4 w-4" /> Done
+                </>
+              ) : (
+                <>
+                  <Pencil className="h-4 w-4" /> Edit layout
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
-      {!soundEnabled && (
-        <button
-          onClick={enableSound}
-          className="mx-auto mb-4 flex w-full max-w-5xl items-center gap-2 rounded-lg bg-sky-900/60 px-4 py-2 text-sm hover:bg-sky-900"
-        >
-          <Bell className="h-4 w-4" /> Tap to turn on alert sounds on this
-          device
-        </button>
-      )}
+      <div className="px-4 sm:px-6">
+        {!soundEnabled && (
+          <button
+            onClick={enableSound}
+            className={`mx-auto mb-4 flex w-full max-w-5xl items-center gap-2 rounded-lg px-4 py-2 text-sm ${buttonSkinClass()}`}
+          >
+            <Bell className="h-4 w-4" /> Tap to turn on alert sounds on this
+            device
+          </button>
+        )}
 
-      {/* Sounds are on for this device but the browser is holding them
+        {/* Sounds are on for this device but the browser is holding them
           back until the screen is touched (every page load starts that
           way). Fixed to the bottom edge, so the board does not jump under
           the very tap that clears it. */}
-      {silentNotice && (
-        <button
-          onClick={enableSound}
-          className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-center gap-3 bg-amber-300 px-4 py-3 text-base font-semibold text-amber-950 shadow-[0_-8px_24px_rgba(0,0,0,0.5)]"
-        >
-          <BellOff aria-hidden className="h-6 w-6 shrink-0 animate-pulse" />
-          Alert sounds are silent on this screen until it is touched — tap
-          anywhere
-        </button>
-      )}
+        {silentNotice && (
+          <button
+            onClick={enableSound}
+            className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-center gap-3 bg-amber-300 px-4 py-3 text-base font-semibold text-amber-950 shadow-[0_-3px_0_rgba(0,0,0,0.5)]"
+          >
+            <BellOff aria-hidden className="h-6 w-6 shrink-0 animate-pulse" />
+            Alert sounds are silent on this screen until it is touched — tap
+            anywhere
+          </button>
+        )}
 
-      {actionError && (
-        <p className="mx-auto mb-4 max-w-5xl rounded-lg bg-rose-900/60 px-4 py-2 text-sm">
-          {actionError}
-        </p>
-      )}
+        {actionError && (
+          <p className="mx-auto mb-4 max-w-5xl rounded-lg border border-ui-error bg-ui-panel px-4 py-2 text-sm text-ui-error">
+            {actionError}
+          </p>
+        )}
 
-      {loading ? (
-        <p className="mx-auto max-w-5xl text-white/60">Loading…</p>
-      ) : editMode ? (
-        <>
-          {/* The doctor alert cannot be dismissed, and opening the layout
+        {loading ? (
+          <p className="mx-auto max-w-5xl rounded-lg border border-ui-line bg-ui-panel px-4 py-2 text-ui-text-2">
+            Loading…
+          </p>
+        ) : editMode ? (
+          <>
+            {/* The doctor alert cannot be dismissed, and opening the layout
               editor on one tablet must not be a way around that. */}
-          <WaitingBanner
-            alerts={waitingAlerts}
-            nowMs={serverNowMs}
-            busyRoomIds={busyRoomIds}
-            onDoctorIn={doctorIn}
-          />
-          <LayoutEditor
-            rooms={rooms}
-            doctors={doctors}
-            onCreate={createRoom}
-            onUpdate={updateRoom}
-            onDelete={deleteRoom}
-            onAddDoctor={addDoctor}
-            onDeleteDoctor={deleteDoctor}
-          />
-        </>
-      ) : (
-        <DndContext
-          id="rooms-assign"
-          sensors={sensors}
-          collisionDetection={pointerWithin}
-          accessibility={{ announcements: SILENT_DRAG_ANNOUNCEMENTS }}
-          onDragStart={onDragStart}
-          onDragOver={onDragOver}
-          onDragEnd={onDragEnd}
-          onDragCancel={endDrag}
-        >
-          <WaitingBanner
-            alerts={waitingAlerts}
-            nowMs={serverNowMs}
-            busyRoomIds={busyRoomIds}
-            onDoctorIn={doctorIn}
-          />
-          <WaitingList
-            visits={waiting}
-            allVisits={visits}
-            rooms={rooms}
-            doctors={doctors}
-            nowMs={serverNowMs}
-            selectedId={selectedVisit?.id ?? null}
-            dragging={draggingVisit !== null}
-            onSelect={select}
-            onRemove={(visitId) => visitAction(visitId, "remove")}
-            onRestore={(visitId) => visitAction(visitId, "restore")}
-          />
-          {rooms.length === 0 ? (
-            <p className="mx-auto max-w-5xl text-white/60">
-              No rooms yet — tap &quot;Edit layout&quot;, then &quot;Create
-              room&quot;.
-            </p>
-          ) : (
-            <div className="mx-auto max-w-5xl overflow-x-auto pb-2">
-              <div className="grid gap-3" style={gridStyle}>
-                {rooms.map((room) => {
-                  const occupants = roomOccupants(visits, room.id);
-                  const asking =
-                    openQuestion?.roomId === room.id && selectedVisit
-                      ? {
-                          patientName: selectedVisit.display_name,
-                          companionNames: openQuestion.companionIds.map(
-                            (id) =>
-                              visits.find((v) => v.id === id)?.display_name ??
-                              ""
-                          ),
-                          kind: openQuestion.kind,
-                        }
-                      : null;
-                  return (
-                    <div
-                      key={room.id}
-                      style={{
-                        gridRowStart: room.grid_row + 1,
-                        gridColumnStart: room.grid_col + 1,
-                      }}
-                    >
-                      <RoomTile
-                        room={room}
-                        state={deriveRoomState(
-                          room,
-                          serverNowMs,
-                          occupants.length,
-                          roomWaitingForDoctor(visits, room.id).length
-                        )}
-                        busy={busyRoomIds.has(room.id)}
-                        adjustPending={pendingAdjustRoomIds.has(room.id)}
-                        nowMs={serverNowMs}
-                        doctors={doctors}
-                        occupants={occupants}
-                        longWait={
-                          waitingAlerts.find((a) => a.roomId === room.id)
-                            ?.long ?? false
-                        }
-                        nextUp={roomNextUp(visits, room.id)}
-                        assignMode={
-                          selectedVisit
-                            ? assignOutcome(room, otherVisits)
-                            : null
-                        }
-                        onAction={(action, deltaSeconds) =>
-                          timerAction(room.id, action, deltaSeconds)
-                        }
-                        onAssignDoctor={(doctorName) =>
-                          updateRoom(room.id, { doctorName })
-                        }
-                        question={asking}
-                        changed={changedRoomId === room.id}
-                        onAssignHere={() => {
-                          if (selectedVisit) assignTo(selectedVisit, room);
+            <WaitingBanner
+              alerts={waitingAlerts}
+              nowMs={serverNowMs}
+              busyRoomIds={busyRoomIds}
+              onDoctorIn={doctorIn}
+            />
+            <LayoutEditor
+              rooms={rooms}
+              doctors={doctors}
+              onCreate={createRoom}
+              onUpdate={updateRoom}
+              onDelete={deleteRoom}
+              onAddDoctor={addDoctor}
+              onDeleteDoctor={deleteDoctor}
+            />
+          </>
+        ) : (
+          <DndContext
+            id="rooms-assign"
+            sensors={sensors}
+            collisionDetection={pointerWithin}
+            accessibility={{ announcements: SILENT_DRAG_ANNOUNCEMENTS }}
+            onDragStart={onDragStart}
+            onDragOver={onDragOver}
+            onDragEnd={onDragEnd}
+            onDragCancel={endDrag}
+          >
+            <WaitingBanner
+              alerts={waitingAlerts}
+              nowMs={serverNowMs}
+              busyRoomIds={busyRoomIds}
+              onDoctorIn={doctorIn}
+            />
+            <WaitingList
+              visits={waiting}
+              allVisits={visits}
+              rooms={rooms}
+              doctors={doctors}
+              nowMs={serverNowMs}
+              selectedId={selectedVisit?.id ?? null}
+              dragging={draggingVisit !== null}
+              onSelect={select}
+              onRemove={(visitId) => visitAction(visitId, "remove")}
+              onRestore={(visitId) => visitAction(visitId, "restore")}
+            />
+            {rooms.length === 0 ? (
+              <p className="mx-auto max-w-5xl rounded-lg border border-ui-line bg-ui-panel px-4 py-2 text-ui-text-2">
+                No rooms yet — tap &quot;Edit layout&quot;, then &quot;Create
+                room&quot;.
+              </p>
+            ) : (
+              <div className="mx-auto max-w-5xl overflow-x-auto pb-2">
+                <div className="grid gap-3" style={gridStyle}>
+                  {rooms.map((room) => {
+                    const occupants = roomOccupants(visits, room.id);
+                    const asking =
+                      openQuestion?.roomId === room.id && selectedVisit
+                        ? {
+                            patientName: selectedVisit.display_name,
+                            companionNames: openQuestion.companionIds.map(
+                              (id) =>
+                                visits.find((v) => v.id === id)?.display_name ??
+                                ""
+                            ),
+                            kind: openQuestion.kind,
+                          }
+                        : null;
+                    return (
+                      <div
+                        key={room.id}
+                        style={{
+                          gridRowStart: room.grid_row + 1,
+                          gridColumnStart: room.grid_col + 1,
                         }}
-                        onAnswer={answerQuestion}
-                        onCancelQuestion={() => select(null)}
-                        onVisitAction={(visitId, action) =>
-                          visitAction(visitId, action)
-                        }
-                        onDoctorIn={() => doctorIn(room.id)}
-                      />
-                    </div>
-                  );
-                })}
+                      >
+                        <RoomTile
+                          room={room}
+                          state={deriveRoomState(
+                            room,
+                            serverNowMs,
+                            occupants.length,
+                            roomWaitingForDoctor(visits, room.id).length
+                          )}
+                          busy={busyRoomIds.has(room.id)}
+                          adjustPending={pendingAdjustRoomIds.has(room.id)}
+                          nowMs={serverNowMs}
+                          doctors={doctors}
+                          occupants={occupants}
+                          longWait={
+                            waitingAlerts.find((a) => a.roomId === room.id)
+                              ?.long ?? false
+                          }
+                          nextUp={roomNextUp(visits, room.id)}
+                          assignMode={
+                            selectedVisit
+                              ? assignOutcome(room, otherVisits)
+                              : null
+                          }
+                          onAction={(action, deltaSeconds) =>
+                            timerAction(room.id, action, deltaSeconds)
+                          }
+                          onAssignDoctor={(doctorName) =>
+                            updateRoom(room.id, { doctorName })
+                          }
+                          question={asking}
+                          changed={changedRoomId === room.id}
+                          onAssignHere={() => {
+                            if (selectedVisit) assignTo(selectedVisit, room);
+                          }}
+                          onAnswer={answerQuestion}
+                          onCancelQuestion={() => select(null)}
+                          onVisitAction={(visitId, action) =>
+                            visitAction(visitId, action)
+                          }
+                          onDoctorIn={() => doctorIn(room.id)}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
-          {/* No "fly back" animation: after a drop the chip is already in
-              its room, and a ghost sailing home would read as a refusal. */}
-          <DragOverlay dropAnimation={null}>
-            {draggingVisit && (
-              <WaitingChipGhost
-                visit={draggingVisit}
-                doctors={doctors}
-                nowMs={serverNowMs}
-                target={dragTarget}
-              />
             )}
-          </DragOverlay>
-        </DndContext>
-      )}
+            {/* No "fly back" animation: after a drop the chip is already in
+              its room, and a ghost sailing home would read as a refusal. */}
+            <DragOverlay dropAnimation={null}>
+              {draggingVisit && (
+                <WaitingChipGhost
+                  visit={draggingVisit}
+                  doctors={doctors}
+                  nowMs={serverNowMs}
+                  target={dragTarget}
+                />
+              )}
+            </DragOverlay>
+          </DndContext>
+        )}
+      </div>
     </main>
   );
 }
