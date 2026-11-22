@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
-import { getAdminEmail, isAdminAuthorized } from "@/lib/admin-auth";
-import { recordStaffAction } from "@/lib/audit-server";
+import { getAdminEmail } from "@/lib/admin-auth";
+import { recordStaffAction, recordStaffActionOnce } from "@/lib/audit-server";
+import { checkinRangeDetail } from "@/lib/audit-log";
 import { createCheckin } from "@/lib/checkin-server";
 import { loadCheckinPage, loadCheckinTimings } from "@/lib/checkins-server";
 import { summarizeVisits } from "@/lib/visit-stats";
@@ -14,9 +15,14 @@ const noStore = { "Cache-Control": "no-store" };
 // first page — the wait-time numbers for the WHOLE range. `offset` asks
 // for a later page ("Load more", and a CSV export of everything).
 //
-// The reply holds patients' full names, so no cache may keep it.
+// The reply holds patients' full names, so no cache may keep it, and it
+// is written to the staff audit log with the patients it listed:
+// - a view, at most once per 15 minutes for the same person and dates
+//   (the list refreshes itself every minute)
+// - an export (&export=1, sent by "Export CSV"), every page of it
 export async function GET(req: Request) {
-  if (!(await isAdminAuthorized())) {
+  const staffEmail = await getAdminEmail();
+  if (!staffEmail) {
     return NextResponse.json(
       { error: "Unauthorized" },
       { status: 401, headers: noStore }
@@ -27,6 +33,7 @@ export async function GET(req: Request) {
   const from = searchParams.get("from");
   const to = searchParams.get("to");
   const offset = Number(searchParams.get("offset") ?? "0");
+  const exporting = searchParams.get("export") === "1";
   if (
     !from ||
     !to ||
@@ -49,6 +56,21 @@ export async function GET(req: Request) {
     return NextResponse.json(
       { error: "Database error" },
       { status: 500, headers: noStore }
+    );
+  }
+
+  const entry = {
+    staffEmail,
+    patientIds: page.patientIds,
+    detail: checkinRangeDetail(from, to, offset),
+  };
+  if (exporting) {
+    await recordStaffAction(supabase, { ...entry, action: "checkins_export" });
+  } else {
+    await recordStaffActionOnce(
+      supabase,
+      { ...entry, action: "checkins_view" },
+      Date.now()
     );
   }
 

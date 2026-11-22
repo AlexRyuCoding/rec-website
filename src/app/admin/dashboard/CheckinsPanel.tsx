@@ -127,9 +127,17 @@ export default function CheckinsPanel({ active }: { active: boolean }) {
       : presetRange(preset, new Date());
   }, [preset, customFrom, customTo]);
 
-  const fetchPage = async (range: DateRange, offset: number) => {
+  // forExport: the request is for a CSV file — the server writes that to
+  // the staff audit log as an export rather than a view.
+  const fetchPage = async (
+    range: DateRange,
+    offset: number,
+    forExport = false
+  ) => {
     const res = await fetch(
-      `/api/admin/checkins?from=${range.from.toISOString()}&to=${range.to.toISOString()}&offset=${offset}`,
+      `/api/admin/checkins?from=${range.from.toISOString()}&to=${range.to.toISOString()}&offset=${offset}${
+        forExport ? "&export=1" : ""
+      }`,
       { cache: "no-store" }
     );
     if (res.status === 401) {
@@ -270,16 +278,16 @@ export default function CheckinsPanel({ active }: { active: boolean }) {
     if (!range || exporting) return;
     setExporting(true);
     try {
-      let all = rows;
-      if (truncated) {
-        all = [];
-        for (let page = 0; page < EXPORT_MAX_PAGES; page++) {
-          const data = await fetchPage(range, all.length);
-          if (!data) return;
-          const seen = new Set(all.map((r) => r.id));
-          all = [...all, ...data.checkins.filter((r) => !seen.has(r.id))];
-          if (!data.truncated || data.checkins.length === 0) break;
-        }
+      // Always asked of the server afresh, even when the list on screen
+      // is complete: the file is what leaves the building, so it is the
+      // server that hands it over (and records that it did).
+      let all: CheckinRecord[] = [];
+      for (let page = 0; page < EXPORT_MAX_PAGES; page++) {
+        const data = await fetchPage(range, all.length, true);
+        if (!data) return;
+        const seen = new Set(all.map((r) => r.id));
+        all = [...all, ...data.checkins.filter((r) => !seen.has(r.id))];
+        if (!data.truncated || data.checkins.length === 0) break;
       }
       const blob = new Blob(
         [checkinsCsv(all, Date.now(), (iso) => new Date(iso).toLocaleString())],

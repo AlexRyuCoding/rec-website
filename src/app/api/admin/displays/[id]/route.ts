@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
-import { isAdminAuthorized } from "@/lib/admin-auth";
+import { getAdminEmail } from "@/lib/admin-auth";
+import { recordStaffAction } from "@/lib/audit-server";
 import { DEVICES } from "@/lib/display-auth";
 
 // Revoke a paired waiting-room screen or check-in kiosk. Its cookie stops
@@ -11,7 +12,8 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!(await isAdminAuthorized())) {
+  const staffEmail = await getAdminEmail();
+  if (!staffEmail) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -30,22 +32,33 @@ export async function DELETE(
     .update({ revoked_at: revokedAt })
     .eq("id", id)
     .is("revoked_at", null)
-    .select("id")
+    .select("id, label")
     .maybeSingle();
   if (error) {
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
-  if (screen) return NextResponse.json({ success: true });
+  const revoked = (what: string, label: string | null) =>
+    recordStaffAction(supabase, {
+      staffEmail,
+      action: "device_revoke",
+      patientIds: [],
+      detail: `${what}: ${label ?? "unnamed"}`,
+    });
+  if (screen) {
+    await revoked("Waiting room screen", screen.label);
+    return NextResponse.json({ success: true });
+  }
 
   const { data: kiosk } = await supabase
     .from(DEVICES.kiosk.table)
     .update({ revoked_at: revokedAt })
     .eq("id", id)
     .is("revoked_at", null)
-    .select("id")
+    .select("id, label")
     .maybeSingle();
   if (!kiosk) {
     return NextResponse.json({ error: "Screen not found" }, { status: 404 });
   }
+  await revoked("Check-in kiosk", kiosk.label);
   return NextResponse.json({ success: true });
 }

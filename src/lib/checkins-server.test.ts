@@ -85,6 +85,21 @@ describe("loadCheckinPage", () => {
     expect(ids.size).toBe(CHECKIN_PAGE_SIZE + 40);
   });
 
+  it("reports whose check-ins the page lists, each patient once", async () => {
+    const db = fakeSupabase({
+      checkins: [
+        checkin(10, { patient_id: "p1" }),
+        checkin(20, { patient_id: "p2" }),
+        checkin(30, { patient_id: "p1" }),
+        checkin(40, { patient_id: null }),
+      ],
+    });
+    const page = await loadCheckinPage(db.client, FROM, TO, 0);
+    expect([...page.patientIds].sort()).toEqual(["p1", "p2"]);
+    // ids are for the audit log; they are not part of a row sent out
+    expect(page.checkins[0]).not.toHaveProperty("patient_id");
+  });
+
   it("keeps a check-in whose patient or room row is gone", async () => {
     const db = fakeSupabase({
       checkins: [checkin(5, { patients: null, room_id: "gone", rooms: null })],

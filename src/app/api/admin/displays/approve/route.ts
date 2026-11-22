@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
 import { getAdminEmail } from "@/lib/admin-auth";
+import { recordStaffAction } from "@/lib/audit-server";
 import {
   DEVICES,
   isApprovable,
@@ -75,6 +76,13 @@ export async function POST(req: Request) {
   if (error || !data) {
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
+
+  await recordStaffAction(supabase, {
+    staffEmail: email,
+    action: "device_pair",
+    patientIds: [],
+    detail: `${DEFAULT_LABELS[parsed.data.kind]}: ${data.label}`,
+  });
 
   return NextResponse.json({
     display: {

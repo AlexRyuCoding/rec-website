@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
-import { isAdminAuthorized } from "@/lib/admin-auth";
+import { getAdminEmail } from "@/lib/admin-auth";
+import { recordStaffAction } from "@/lib/audit-server";
 import { commitAssign, commitFlow, commitRestore } from "@/lib/flow-server";
 import {
   applyVisitUpdates,
@@ -52,7 +53,8 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!(await isAdminAuthorized())) {
+  const staffEmail = await getAdminEmail();
+  if (!staffEmail) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -99,13 +101,23 @@ export async function POST(
     if (!finished) {
       return NextResponse.json({ error: "Visit not found" }, { status: 404 });
     }
+    const room = finished.room_id ? await loadRoom(finished.room_id) : null;
     const restored = await commitRestore(supabase, {
       visit: finished,
-      room: finished.room_id ? await loadRoom(finished.room_id) : null,
+      room,
       openVisits: visits,
       nowMs,
     });
     if (restored.ok) {
+      await recordStaffAction(supabase, {
+        staffEmail,
+        action: "visit_restore",
+        patientIds: finished.patient_id ? [finished.patient_id] : [],
+        detail:
+          restored.restoredTo === "room" && room
+            ? `to ${room.name}`
+            : "to the waiting list",
+      });
       return NextResponse.json({
         visits: restored.visits,
         rooms: restored.rooms,
@@ -184,9 +196,11 @@ export async function POST(
     input.action === "unassign" || input.action === "remove"
       ? visit.room_id
       : null;
+  let leftRoomName: string | null = null;
   if (leftRoomId) {
     const leftRoom = await loadRoom(leftRoomId);
     if (leftRoom) {
+      leftRoomName = leftRoom.name;
       const after = applyVisitUpdates(visits, updates).filter(
         (v) => v.done_at === null
       );
@@ -200,6 +214,17 @@ export async function POST(
       visitsBefore: visits,
       nowMs,
     });
+    // Taking a patient off the board ends their visit: who did it, and
+    // from where, is kept. (Sending patients to rooms is not — that is
+    // the board's ordinary work, dozens of times a day.)
+    if (input.action === "remove") {
+      await recordStaffAction(supabase, {
+        staffEmail,
+        action: "visit_remove",
+        patientIds: visit.patient_id ? [visit.patient_id] : [],
+        detail: leftRoomName ? `from ${leftRoomName}` : "from the waiting list",
+      });
+    }
     return NextResponse.json(result);
   } catch {
     return NextResponse.json({ error: "Database error" }, { status: 500 });
