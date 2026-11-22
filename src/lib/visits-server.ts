@@ -9,6 +9,7 @@ import {
   VisitUpdate,
   VisitView,
 } from "./patient-flow";
+import type { RoomRow } from "./room-status";
 
 // Database access for the patient flow. The rules live in patient-flow.ts;
 // this file only reads open visits and writes the updates those rules
@@ -161,23 +162,85 @@ export async function loadFinishedVisits(
   });
 }
 
-// Returns false if any write failed. Never throws: a flow hiccup must not
-// take a timer action or a check-in down with it.
-export async function writeVisitUpdates(
+// A rooms-board action as the database is asked to apply it: changes to
+// visits and, for a timer action, to the room it belongs to.
+export interface FlowChange {
+  updates: VisitUpdate[];
+  room?: { id: string; fields: Partial<RoomRow> };
+}
+
+// PostgREST when it does not know the function / Postgres when it is
+// not there.
+const functionMissing = (code: string | undefined) =>
+  code === "PGRST202" || code === "42883";
+
+// Writes a whole action at once: every row changes or none does (the
+// apply_flow_change database function, migration 0021 — one
+// transaction). Returns the room after the change when one was given.
+// Never throws.
+//
+// "Room ready" on a couple with someone lined up is three visits and a
+// room. Sent as separate writes, a dropped connection in between left
+// the board half-changed: one of the couple finished and the other not.
+//
+// The one fallback: if the function does not exist yet, the rows are
+// written one by one as before. That is for the minutes between a deploy
+// and its migration — a rooms board that cannot send anyone to a room is
+// worse than one that is not atomic yet. Any OTHER failure is a failure.
+export async function applyFlowChange(
   supabase: SupabaseClient,
-  updates: VisitUpdate[]
-): Promise<boolean> {
-  let ok = true;
-  for (const update of updates) {
-    try {
+  change: FlowChange
+): Promise<{ ok: true; room: RoomRow | null } | { ok: false }> {
+  if (change.updates.length === 0 && !change.room) {
+    return { ok: true, room: null };
+  }
+  try {
+    const { data, error } = await supabase.rpc("apply_flow_change", {
+      visit_updates: change.updates,
+      target_room: change.room?.id ?? null,
+      room_fields: change.room?.fields ?? null,
+    });
+    if (!error) return { ok: true, room: (data as RoomRow | null) ?? null };
+    if (!functionMissing(error.code)) return { ok: false };
+  } catch {
+    return { ok: false };
+  }
+
+  console.warn("apply_flow_change is missing (migration 0021): row-by-row");
+  try {
+    let room: RoomRow | null = null;
+    if (change.room) {
+      const { data, error } = await supabase
+        .from("rooms")
+        .update({
+          ...change.room.fields,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", change.room.id)
+        .select("*")
+        .single();
+      if (error) return { ok: false };
+      room = data as RoomRow;
+    }
+    let ok = true;
+    for (const update of change.updates) {
       const { error } = await supabase
         .from("checkins")
         .update(update.fields)
         .eq("id", update.id);
       if (error) ok = false;
-    } catch {
-      ok = false;
     }
+    return ok ? { ok: true, room } : { ok: false };
+  } catch {
+    return { ok: false };
   }
-  return ok;
+}
+
+// Visit changes only. Returns false if they could not be written — and
+// then none of them was.
+export async function writeVisitUpdates(
+  supabase: SupabaseClient,
+  updates: VisitUpdate[]
+): Promise<boolean> {
+  return (await applyFlowChange(supabase, { updates })).ok;
 }

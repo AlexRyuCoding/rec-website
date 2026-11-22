@@ -1,12 +1,8 @@
 import { NextResponse } from "next/server";
 import { CLINIC_TZ, fetchTodaySession } from "@/lib/practice-better";
-import { isKioskAuthorized } from "@/lib/kiosk-auth-server";
+import { kioskRoute } from "@/lib/kiosk-route";
 
-export async function GET(req: Request) {
-  if (!(await isKioskAuthorized())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const GET = kioskRoute(async (req) => {
   const { searchParams } = new URL(req.url);
   const pb_client_id = searchParams.get("pb_client_id");
 
@@ -47,4 +43,4 @@ export async function GET(req: Request) {
     console.error("Appointments fetch error:", err);
     return NextResponse.json({ appointment: null });
   }
-}
+});

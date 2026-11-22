@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
 import { broadcastRoomsUpdated } from "@/lib/rooms-realtime";
-import { commitFlow } from "@/lib/flow-server";
-import { timerFlowUpdates, VisitView } from "@/lib/patient-flow";
-import { loadActiveVisits } from "@/lib/visits-server";
+import { commitRoomFlow } from "@/lib/flow-server";
+import { timerFlowUpdates, VisitUpdate } from "@/lib/patient-flow";
+import { loadActiveVisits, VisitDbRow } from "@/lib/visits-server";
 import {
   timerActionUpdate,
   ADJUST_STEP_SECONDS,
@@ -56,9 +56,18 @@ const bodySchema = z.object({
 // start = the doctor is in; ready = the room is empty, so its patients
 // are finished and whoever is lined up gets called; reset = the timer was
 // a mistake (the patients stay); again = another session for the people
-// already in the room — nobody is finished and nobody is called. That
-// part is best effort: a timer action never fails because the patient
-// bookkeeping did.
+// already in the room — nobody is finished and nobody is called. The
+// room and its patients are written together (commitRoomFlow): such an
+// action happens whole or not at all.
+
+// The timer actions that can move patients.
+const FLOW_ACTIONS: ReadonlySet<string> = new Set([
+  "start",
+  "again",
+  "ready",
+  "reset",
+]);
+
 export const POST = staffRoute<{ id: string }>(
   async (req, _staff, { params }) => {
     const { id } = await params;
@@ -95,48 +104,65 @@ export const POST = staffRoute<{ id: string }>(
       return NextResponse.json({ error: result.error }, { status: 409 });
     }
 
-    const writeRoom = (fields: Partial<RoomRow>) =>
-      supabase
-        .from("rooms")
-        .update({ ...fields, updated_at: new Date().toISOString() })
-        .eq("id", id)
-        .select("*")
-        .single();
+    // Start, Another session, Room ready and Reset can move the room's
+    // patients as well. What they do to them is worked out first, and
+    // then the room and its patients are written as ONE change: a room
+    // must never be "ready" with its patients still in it, or a couple
+    // half finished. If who is in the room cannot be read, the action is
+    // refused rather than applied to the timer alone.
+    //
+    // The other actions — pause, resume, +/-, typing a time, and ✓, which
+    // is what silences the alarm — touch only the timer and do not wait
+    // on anything about patients.
+    const roomBefore = room as RoomRow;
+    let visitsBefore: VisitDbRow[] = [];
+    let updates: VisitUpdate[] = [];
+    if (FLOW_ACTIONS.has(parsed.data.action)) {
+      try {
+        visitsBefore = await loadActiveVisits(supabase, nowMs);
+      } catch {
+        return NextResponse.json({ error: "Database error" }, { status: 500 });
+      }
+      updates = timerFlowUpdates(
+        parsed.data.action,
+        { ...roomBefore, ...result.fields },
+        visitsBefore,
+        nowMs,
+        // Start sent while the room was setting up (an older board)
+        { wasTurningOver: Boolean(roomBefore.turnover_started_at) }
+      );
+    }
 
-    const { data, error } = await writeRoom(result.fields);
+    if (updates.length > 0) {
+      let flow;
+      try {
+        flow = await commitRoomFlow(supabase, {
+          room: { id, fields: result.fields },
+          updates,
+          visitsBefore,
+          nowMs,
+        });
+      } catch {
+        // Written, but the fresh list could not be read back: the boards
+        // have been told to refetch and will show it.
+        return NextResponse.json({ error: "Database error" }, { status: 500 });
+      }
+      if (!flow) {
+        return NextResponse.json({ error: "Database error" }, { status: 500 });
+      }
+      return NextResponse.json({ room: flow.room, visits: flow.visits });
+    }
 
+    const { data, error } = await supabase
+      .from("rooms")
+      .update({ ...result.fields, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .select("*")
+      .single();
     if (error) {
       return NextResponse.json({ error: "Database error" }, { status: 500 });
     }
-
     await broadcastRoomsUpdated({ room: data });
-
-    let latestRoom = data as RoomRow;
-    let visits: VisitView[] | undefined;
-    try {
-      const before = await loadActiveVisits(supabase, nowMs);
-      const updates = timerFlowUpdates(
-        parsed.data.action,
-        latestRoom,
-        before,
-        nowMs,
-        // Start sent while the room was setting up (an older board)
-        { wasTurningOver: Boolean((room as RoomRow).turnover_started_at) }
-      );
-      if (updates.length > 0) {
-        const flow = await commitFlow(supabase, {
-          updates,
-          visitsBefore: before,
-          nowMs,
-        });
-        visits = flow.visits;
-        // Calling the next patient may have switched this room's doctor.
-        latestRoom = flow.rooms.find((r) => r.id === id) ?? latestRoom;
-      }
-    } catch {
-      // The timer change stands; boards reconcile visits on their next poll.
-    }
-
-    return NextResponse.json({ room: latestRoom, visits });
+    return NextResponse.json({ room: data as RoomRow });
   }
 );

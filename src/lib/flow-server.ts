@@ -12,6 +12,7 @@ import {
 import type { RoomRow } from "./room-status";
 import { broadcastFlowUpdated, broadcastRoomsUpdated } from "./rooms-realtime";
 import {
+  applyFlowChange,
   loadActiveVisits,
   toVisitViews,
   VisitDbRow,
@@ -35,10 +36,10 @@ export interface FlowResult {
 // updates, switch the doctor pill of any room a patient was just called
 // to, tell every open board to refetch, and hand back the fresh state.
 //
-// Throws if a write was refused. Some of the updates may have gone
-// through by then, so the boards are still told to refetch first: what
-// they show must be what the database holds, and the board that asked
-// gets an error instead of a silent "nothing happened".
+// Throws if the write was refused — and then none of the updates was
+// made (they are written as one, see applyFlowChange). The boards are
+// still told to refetch first, and the board that asked gets an error
+// instead of a silent "nothing happened".
 export async function commitFlow(
   supabase: SupabaseClient,
   args: FlowArgs
@@ -49,6 +50,29 @@ export async function commitFlow(
     throw new Error("visit write failed");
   }
   return finishFlow(supabase, args);
+}
+
+// A timer action that also moves patients — Start (the doctor is in),
+// Room ready (the room's patients are finished, whoever is lined up is
+// called), Reset — written as one: the room's timer and its patients
+// change together or not at all. Returns the room as written, or null if
+// nothing was.
+export async function commitRoomFlow(
+  supabase: SupabaseClient,
+  args: FlowArgs & { room: { id: string; fields: Partial<RoomRow> } }
+): Promise<({ room: RoomRow } & FlowResult) | null> {
+  const applied = await applyFlowChange(supabase, {
+    updates: args.updates,
+    room: args.room,
+  });
+  if (!applied.ok || !applied.room) return null;
+  await broadcastRoomsUpdated({ room: applied.room });
+  const flow = await finishFlow(supabase, args);
+  return {
+    // Calling the next patient may have switched this room's doctor.
+    room: flow.rooms.find((r) => r.id === args.room.id) ?? applied.room,
+    ...flow,
+  };
 }
 
 // Everything after the writes: doctor pills, the refetch hint, and the

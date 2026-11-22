@@ -184,8 +184,12 @@ patients use it unassisted; it needs no staff sign-in.
   the decision itself is adminPageGate (src/lib/admin-gate.ts, pure,
   tested). /admin/login and the kiosk page shell are open.
 - The patient API routes (lookup, setup-pin, appointments/today, checkins)
-  require a paired kiosk OR a staff session via isKioskAuthorized()
-  (src/lib/kiosk-auth-server.ts) — 401 without. The webhook route is
+  require a paired kiosk OR a staff session. Each is written as
+  `export const POST = kioskRoute(async (req) => …)`
+  (src/lib/kiosk-route.ts — the kiosk's counterpart of staffRoute, over
+  isKioskAuthorized in kiosk-auth-server.ts): 401 no-store otherwise.
+  kiosk-route.test.ts lists the kiosk's routes and fails if one is not
+  wrapped; a new kiosk route goes in that list. The webhook route is
   public but HMAC-signature verified.
 - Failed PIN lookups are rate limited durably in Supabase
   (src/lib/pin-rate-limit.ts + pin_attempt_failures table): 20 failures per
@@ -481,7 +485,7 @@ src/lib/audit-server.ts. The staff email comes from getAdminEmail().
 - RLS on, no policies; patient_ids is deliberately not a foreign key
   (the record outlives the patient — the page then shows "1 patient").
 
-## Patient room flow (migration 0011 — must be applied)
+## Patient room flow (migrations 0011 and 0021 — must be applied)
 
 Spec: docs/superpowers/specs/2026-11-19-patient-room-flow-design.md.
 Rules live in src/lib/patient-flow.ts (pure, tested); routes apply them
@@ -526,6 +530,27 @@ through src/lib/flow-server.ts.
   room; if both see each other, both are undone. If the second read
   fails, the assign is undone too. The same step calls a patient who was
   lined up for a room that emptied in the meantime.
+- A board action is written whole or not at all (migration 0021,
+  apply_flow_change; applyFlowChange in src/lib/visits-server.ts). "Room
+  ready" on a couple with someone lined up is three visits and a room:
+  they change in ONE database transaction, so a dropped connection can
+  no longer leave one of a couple finished and the other not, or a room
+  "ready" with its patients still in it. The app still decides what
+  changes (patient-flow.ts, room-status.ts); the function only writes
+  it, and only the five flow columns of a visit and the timer columns of
+  a room. It is SECURITY INVOKER like search_patients — never definer.
+- Timer route: Start, Another session, Room ready and Reset can move
+  patients, so who is in the room is read first and the room + its
+  patients go as one change (commitRoomFlow); if they cannot be read the
+  action is refused, not applied to the timer alone. Pause, resume, +/-,
+  typing a time and ✓ touch only the timer and read nothing about
+  patients — ✓ is what silences the alarm and must not depend on
+  anything else (timer-route.test.ts holds both halves).
+- The one sanctioned migration fallback: if apply_flow_change does not
+  exist (the minutes between a deploy and running 0021), the rows are
+  written one by one as before, with a warning in the server log. Any
+  other failure is a failure. Remove this fallback once 0021 is applied
+  everywhere.
 - A flow write the database refuses is an error on the board that asked
   (commitFlow throws), never a silent "nothing happened"; the other
   boards are told to refetch first.

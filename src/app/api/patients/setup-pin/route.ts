@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
 import { pinUsedByAnother, saveNewPin } from "@/lib/pin-server";
-import { isKioskAuthorized } from "@/lib/kiosk-auth-server";
+import { kioskRoute } from "@/lib/kiosk-route";
 import { phoneCandidates } from "@/lib/kiosk-entry";
 
 function normalizePhone(raw: string): string {
@@ -46,11 +46,7 @@ function resolveMatches(matches: ContactMatch[]) {
   });
 }
 
-export async function POST(req: Request) {
-  if (!(await isKioskAuthorized())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const POST = kioskRoute(async (req) => {
   const { contact } = await req.json();
 
   if (!contact || contact.trim().length < 3) {
@@ -90,13 +86,9 @@ export async function POST(req: Request) {
 
     return resolveMatches(patients ?? []);
   }
-}
+});
 
-export async function PATCH(req: Request) {
-  if (!(await isKioskAuthorized())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const PATCH = kioskRoute(async (req) => {
   const { patient_id, pin } = await req.json();
 
   if (!patient_id || !pin || !/^\d{4}$/.test(pin)) {
@@ -157,4 +149,4 @@ export async function PATCH(req: Request) {
     last_name: patient.last_name,
     pb_client_id: patient.pb_client_id,
   });
-}
+});
