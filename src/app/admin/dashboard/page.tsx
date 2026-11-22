@@ -266,13 +266,15 @@ export default function AdminDashboard() {
       </main>
 
       {/* Small and quiet on purpose; on a surface of its own because the
-          page behind it is a photograph. */}
+          page behind it is a photograph. Tucked into the very corner:
+          on a window no wider than the page's column it sits over the
+          panels' edge and padding, never over what is written in them. */}
       <Link
         href="/admin/patient-signin"
         aria-label="Patient sign-in kiosk"
-        className="fixed bottom-4 right-4 z-10 flex size-8 items-center justify-center rounded-full border border-ui-line bg-ui-panel text-ui-text-3 transition-colors duration-300 hover:text-ui-text"
+        className="fixed bottom-1.5 right-1.5 z-10 flex size-6 items-center justify-center rounded-full border border-ui-line bg-ui-panel text-ui-text-3 transition-colors duration-300 hover:text-ui-text"
       >
-        <KeyRound aria-hidden className="size-4" />
+        <KeyRound aria-hidden className="size-3.5" />
       </Link>
     </div>
   );

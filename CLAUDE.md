@@ -14,8 +14,10 @@ patients use it unassisted; it needs no staff sign-in.
 - EHR: Practice Better API (REST, OAuth2)
 - PIN hashing: bcryptjs
 - All secrets in .env.local — never hardcoded
-- Frontend: single dark theme (no light/dark toggle); GSAP + ScrollTrigger +
-  Lenis for public-page motion; Instrument Serif + Inter Tight via next/font
+- Frontend: single dark theme (no light/dark toggle) — except the staff
+  dashboard, which has a light / dark / match-this-computer switch (see
+  "Staff look"); GSAP + ScrollTrigger + Lenis for public-page motion;
+  Instrument Serif + Inter Tight via next/font
 - Public forms (/api/request-form, /api/grievance-form): zod-validated,
   honeypot field `company`, per-IP rate limit (5/hour) in Supabase
   (form_submission_events table, migration 0006 — must be applied)
@@ -419,7 +421,62 @@ off the timestamps a visit collects on the rooms board.
   half-typed search survives a tab switch); Setup's panels load the first
   time Setup is opened. Sync moved to Setup: it used to sit between the
   search box and its results.
-- Errors on the dashboard use one red (text-error / bg-error).
+- Errors on the dashboard use one red (text-ui-error / bg-ui-error-fill).
+
+## Staff look (dashboard)
+
+Design: docs/superpowers/specs/2026-11-21-dashboard-refresh-design.md
+(the rooms board gets the same look next:
+2026-11-22-rooms-board-refresh-design.md). Colours, ledges and
+animations: src/app/admin/staff-theme.css; pieces: src/app/admin/ui/
+(Button, Segmented, Panel, Tag, Banner, StatusPill, AutoHeight,
+ThemeSwitch, Backdrop, styles.ts); the theme rule: src/lib/staff-theme.ts
+(pure, tested).
+
+- Rectangles are pressed, pills are read. What can be pressed is raised
+  on a hard ledge (buttons, the thumb of a switch, the open tab), what is
+  typed or chosen in is sunken (fields, a switch's track), what holds
+  work is a raised panel, and what is only read is flat (status pills,
+  tags, rows). A status is always a pill and never a button.
+- No blurred shadow, anywhere (owner's decision: "sharp edges, not the
+  soft fall-off"). Depth is a solid ledge — a box-shadow with zero blur —
+  and faces are solid colours, no gradients.
+- Every colour is a `ui-*` Tailwind name backed by a `--ui-*` variable,
+  defined once per theme. Text is at least 4.5:1 on the surface it sits
+  on. staff-theme.test.ts fails on: a variable missing from one theme, a
+  pair below 4.5:1, a shadow with a blur, or an old palette class
+  (brand-, cream, text-white…) in the dashboard or the shared pieces.
+- Each of the seven check-in statuses has its own colour AND shape
+  (pillLook, tested): still on the board = filled pill with a dot;
+  finished / removed = grey with a mark; not closed = outline with a
+  warning. Never tell statuses apart by colour alone.
+- Theme: one choice per browser (localStorage `rac-staff-theme`:
+  system | light | dark; default system). While a themed page is mounted
+  `<html>` carries `data-staff-theme` — everything hangs off it — and it
+  is taken off when the page is left (use-staff-theme.ts), so the kiosk,
+  the TV and the public site cannot be themed. The dashboard's layout
+  inlines a script that sets it before first paint (no flash); the
+  script and the hook must agree (staff-theme.test.ts runs them against
+  each other). Storage being blocked must never break the switch.
+- A photograph sits behind the page, one per theme (public/staff-bg-*.jpg,
+  about 300 KB each, a fixed layer — not background-attachment: fixed,
+  which iPad Safari ignores). Nothing is read straight off it: every
+  text and control sits on an opaque surface — which is why toolbars are
+  panels and messages are banners. The tab's accent line takes its
+  colour from the photo (forest green / copper); buttons stay teal.
+- Motion is short (80–280 ms) and follows the change, never delays it.
+  A switch's thumb and the tab tile slide (use-thumb.ts — only after a
+  press on that control; every other time they are put in place); a
+  tab's content rises in; a new date range fades its numbers up (a
+  refresh of the same range animates nothing); the theme cross-fades.
+  Patient search results only fade — nothing there may slide or resize.
+  Summary numbers never count up. prefers-reduced-motion: fades stay,
+  sliding and resizing go.
+- Two Tailwind utilities for the same property do not override each
+  other by their order in a class list. That is why styles.ts has
+  fieldBaseClass (no padding) beside fieldClass, and why a tab panel
+  must not get a display class (`flex` would beat its `hidden`
+  attribute and show every tab at once).
 
 ## Staff check-in
 
