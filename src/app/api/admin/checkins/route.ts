@@ -4,55 +4,78 @@ import { createServiceClient } from "@/lib/supabase";
 import { getAdminEmail, isAdminAuthorized } from "@/lib/admin-auth";
 import { recordStaffAction } from "@/lib/audit-server";
 import { createCheckin } from "@/lib/checkin-server";
+import { loadCheckinPage, loadCheckinTimings } from "@/lib/checkins-server";
+import { summarizeVisits } from "@/lib/visit-stats";
 
-const MAX_ROWS = 500;
+const noStore = { "Cache-Control": "no-store" };
 
+// The dashboard's check-ins view: one page of check-ins in a from/to
+// range (newest first, with where each visit stands), and — with the
+// first page — the wait-time numbers for the WHOLE range. `offset` asks
+// for a later page ("Load more", and a CSV export of everything).
+//
+// The reply holds patients' full names, so no cache may keep it.
 export async function GET(req: Request) {
   if (!(await isAdminAuthorized())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401, headers: noStore }
+    );
   }
 
   const { searchParams } = new URL(req.url);
   const from = searchParams.get("from");
   const to = searchParams.get("to");
-  if (!from || !to || isNaN(Date.parse(from)) || isNaN(Date.parse(to))) {
+  const offset = Number(searchParams.get("offset") ?? "0");
+  if (
+    !from ||
+    !to ||
+    isNaN(Date.parse(from)) ||
+    isNaN(Date.parse(to)) ||
+    !Number.isInteger(offset) ||
+    offset < 0
+  ) {
     return NextResponse.json(
       { error: "from and to (ISO timestamps) required" },
-      { status: 400 }
+      { status: 400, headers: noStore }
     );
   }
 
   const supabase = createServiceClient();
-  const { data, error, count } = await supabase
-    .from("checkins")
-    .select(
-      "id, checked_in_at, appointment_at, service_name, patients(first_name, last_name)",
-      { count: "exact" }
-    )
-    .gte("checked_in_at", from)
-    .lt("checked_in_at", to)
-    .order("checked_in_at", { ascending: false })
-    .limit(MAX_ROWS);
-
-  if (error) {
-    return NextResponse.json({ error: "Database error" }, { status: 500 });
+  let page;
+  try {
+    page = await loadCheckinPage(supabase, from, to, offset);
+  } catch {
+    return NextResponse.json(
+      { error: "Database error" },
+      { status: 500, headers: noStore }
+    );
   }
 
-  return NextResponse.json({
-    checkins: (data ?? []).map((c) => {
-      const p = Array.isArray(c.patients) ? c.patients[0] : c.patients;
-      return {
-        id: c.id,
-        checked_in_at: c.checked_in_at,
-        appointment_at: c.appointment_at,
-        service_name: c.service_name,
-        first_name: p?.first_name ?? "",
-        last_name: p?.last_name ?? "",
+  // The numbers are an extra: if they cannot be worked out the list is
+  // still shown, just without them.
+  let stats = null;
+  if (offset === 0) {
+    try {
+      const timings = await loadCheckinTimings(supabase, from, to);
+      stats = {
+        ...summarizeVisits(timings.rows),
+        complete: timings.complete,
       };
-    }),
-    total: count ?? 0,
-    truncated: (count ?? 0) > MAX_ROWS,
-  });
+    } catch {
+      stats = null;
+    }
+  }
+
+  return NextResponse.json(
+    {
+      checkins: page.checkins,
+      total: page.total,
+      truncated: page.more,
+      stats,
+    },
+    { headers: noStore }
+  );
 }
 
 const checkInSchema = z.object({ patient_id: z.string().uuid() });

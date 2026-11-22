@@ -586,7 +586,7 @@ export default function MusicPanel() {
                               <button
                                 onClick={() => removeStation(s)}
                                 disabled={busy}
-                                className="px-3 py-1 rounded-full bg-brand-danger text-white disabled:opacity-40"
+                                className="px-3 py-1 rounded-full bg-error text-white disabled:opacity-40"
                               >
                                 Confirm remove
                               </button>
@@ -673,7 +673,7 @@ export default function MusicPanel() {
                       </a>
                     </>
                   ) : (
-                    <p className="text-sm text-brand-danger">
+                    <p className="text-sm text-error">
                       Spotify isn&apos;t set up on the server yet: add
                       SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in Vercel,
                       then reload this page.
@@ -715,7 +715,7 @@ export default function MusicPanel() {
               <p
                 role="status"
                 className={`text-sm ${
-                  message.ok ? "text-brand-primary" : "text-brand-danger"
+                  message.ok ? "text-brand-primary" : "text-error"
                 }`}
               >
                 {message.text}

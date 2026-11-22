@@ -262,7 +262,7 @@ export default function ScreensPanel() {
         <p
           role="status"
           className={`mt-3 text-sm ${
-            message.ok ? "text-brand-primary" : "text-brand-danger"
+            message.ok ? "text-brand-primary" : "text-error"
           }`}
         >
           {message.text}
@@ -308,7 +308,7 @@ export default function ScreensPanel() {
                     <button
                       onClick={() => revoke(d.id)}
                       disabled={busy}
-                      className="px-3 py-1 rounded-full bg-brand-danger text-white disabled:opacity-40"
+                      className="px-3 py-1 rounded-full bg-error text-white disabled:opacity-40"
                     >
                       Confirm revoke
                     </button>

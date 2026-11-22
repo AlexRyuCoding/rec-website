@@ -45,13 +45,18 @@ patients use it unassisted; it needs no staff sign-in.
   holds no patient data (like /waiting-room): it has to open on a tablet
   with no credentials, to show a pairing code. Its API routes answer only
   a paired kiosk or a staff session
-- /admin/dashboard — staff dashboard: check-ins viewer (Today/Yesterday/
-  week/month/custom + Refresh + CSV export; shows appointment time and
-  service per check-in) and patient search with Check in + Reset PIN;
-  the header shows who is signed in and has Sign out. ?tab=patients opens
-  the search directly (the rooms board's "Check in a patient" link)
+- /admin/dashboard — staff dashboard, three tabs: Check-ins (today or
+  any range: where each visit stands and how long patients waited — see
+  "Dashboard check-ins"), Patients (search with Check in + Reset PIN) and
+  Setup (paired screens and kiosks, waiting-room music, Practice Better
+  sync). The header shows who is signed in and has Sign out. ?tab=patients
+  opens the search directly (the rooms board's "Check in a patient"
+  link); ?tab=setup, or the way back from Spotify, opens Setup
 - /api/auth/[...nextauth] — NextAuth (Google sign-in, session, callbacks)
-- /api/admin/checkins — GET check-ins in a from/to range, joined with names;
+- /api/admin/checkins — GET check-ins in a from/to range, newest first,
+  500 a page (&offset= for more), each with names, practitioner, room and
+  the visit's timestamps; the first page also carries the wait-time
+  numbers for the WHOLE range (`stats`). no-store.
   POST {patient_id} = staff check a patient in themselves (see "Staff
   check-in" below)
 - /api/admin/patients — POST {q} staff patient search (returns has_pin,
@@ -306,6 +311,47 @@ patient. After three reloads in a row (within 2 minutes) it stops and
 asks for the front desk; a page that breaks every time must not flicker
 forever. After a reload the board's sounds are blocked until touched —
 the silent-board bar says so.
+
+## Dashboard check-ins
+
+Dashboard → Check-ins (src/app/admin/dashboard/CheckinsPanel.tsx). Rules
+are pure and tested: src/lib/visit-stats.ts (status, times, summary, CSV)
+and src/lib/checkin-range.ts (date ranges); the reads are
+src/lib/checkins-server.ts. No new table or column: everything is read
+off the timestamps a visit collects on the rooms board.
+
+- Status per check-in (checkinStatus): Waiting · n min / Next up / Called
+  / With doctor (with the room) while it is on the board; Finished = the
+  doctor saw them and the room was marked ready; Removed = ended without
+  being seen (a no-show, a mistake); Not closed = never finished and
+  older than the board's 12 h window.
+- Times: wait for a room = check-in → called; wait for the doctor =
+  called → seen; whole visit = check-in → done (only visits that were
+  seen). The summary shows the MEDIAN ("typical") with the count and the
+  longest — not the average: one forgotten "Room ready" would otherwise
+  turn a 45-minute visit into a 15-hour one and drag the number with it.
+- The numbers describe the whole range, not the page on screen: the API
+  reads the range's timestamps (no names) separately, up to 20,000
+  check-ins, and says so if the range was larger. If that read fails the
+  list is still shown, without numbers.
+- Ranges are calendar days of the computer the dashboard is open on,
+  stepped as days, never as 24 hours (clock-change days are 23 or 25
+  hours long). "Custom" opens on the last 30 days and cannot go past
+  today; dates typed the wrong way round are swapped.
+- A range that reaches today keeps itself current: at once on the rooms
+  board's "flow-updated" hint, and once a minute. A refresh never blanks
+  the list ("Loading…" is only for a new range), does not run while
+  another dashboard tab is showing, and does not run once "Load more" has
+  been used (it would throw the older pages away under the reader).
+- Export CSV exports EVERY check-in of the range (it pages through the
+  API), with status, room, each timestamp and the three times. Cells
+  that a spreadsheet would run as a formula (=, +, -, @ first) get an
+  apostrophe in front; the file starts with a BOM so Excel reads accents.
+- Check-ins and Patients stay mounted when the other tab shows (a
+  half-typed search survives a tab switch); Setup's panels load the first
+  time Setup is opened. Sync moved to Setup: it used to sit between the
+  search box and its results.
+- Errors on the dashboard use one red (text-error / bg-error).
 
 ## Staff check-in
 
