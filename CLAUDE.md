@@ -298,6 +298,10 @@ src/lib/patient-search-server.ts calls it.
   everything else, the "Searching…" hint is inside the box (shown only
   after 300 ms), the Search button never changes width, and the reset
   confirmation names the patient ("Reset PIN for Ann Licater").
+- "Reset PIN" is replaced, where it stood, by the button that does the
+  resetting; that button ignores presses for 350 ms after it appears
+  (createTapGuard, the kiosk's rule). Do not remove it: without it the
+  second half of a double-click on "Reset PIN" clears the PIN.
 - The kiosk's phone/email lookup stays EXACT — do not point it at this
   function: a fuzzy match there would show a patient someone else's name.
 
@@ -444,8 +448,15 @@ ThemeSwitch, Backdrop, styles.ts); the theme rule: src/lib/staff-theme.ts
 - Every colour is a `ui-*` Tailwind name backed by a `--ui-*` variable,
   defined once per theme. Text is at least 4.5:1 on the surface it sits
   on. staff-theme.test.ts fails on: a variable missing from one theme, a
-  pair below 4.5:1, a shadow with a blur, or an old palette class
-  (brand-, cream, text-white…) in the dashboard or the shared pieces.
+  pair below 4.5:1, a shadow with a blur, and — in the dashboard or the
+  shared pieces — any class that is a Tailwind palette colour
+  (text-white, bg-black, text-red-500…), one of the site's old names
+  (brand-, cream…), a literal colour (text-[#…]), a named colour thinned
+  with an opacity (bg-ui-panel/50) or a shadow that is not one of the
+  five ledges. The detector is src/app/admin/look-guard.ts (tested on
+  its own: a guard that lets things through is worse than none). The
+  exceptions are listed in the test with their reasons — today two:
+  YouTube's red and Spotify's green on the music source switch.
 - Each of the seven check-in statuses has its own colour AND shape
   (pillLook, tested): still on the board = filled pill with a dot;
   finished / removed = grey with a mark; not closed = outline with a

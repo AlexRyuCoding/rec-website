@@ -610,7 +610,11 @@ export default function CheckinsPanel({ active }: { active: boolean }) {
                           </td>
                           <td className={tdClass}>
                             <StatusPill status={status}>
+                              {/* The spaces are for whoever copies the
+                                  cell, searches the page or has it read
+                                  out: the gap on screen is the pill's own. */}
                               {statusLabel(status, r.room_name)}
+                              {status === "waiting" && " "}
                               {status === "waiting" && (
                                 <span className="font-medium tabular-nums">
                                   ·{" "}
@@ -624,6 +628,7 @@ export default function CheckinsPanel({ active }: { active: boolean }) {
                                   min
                                 </span>
                               )}
+                              {status === "finished" && r.done_at && " "}
                               {status === "finished" && r.done_at && (
                                 <span className="font-medium tabular-nums">
                                   {timeOnly(r.done_at)}

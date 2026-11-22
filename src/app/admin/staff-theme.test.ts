@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
+import { blurredLayers, lookProblems } from "./look-guard";
 
 // Guards for the staff look (docs/superpowers/specs/2026-11-21-dashboard-
 // refresh-design.md). They read the source as text: the look is a set of
@@ -35,29 +36,6 @@ function contrast(a: string, b: string): number {
   };
   const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
   return (hi + 0.05) / (lo + 0.05);
-}
-
-// The layers of a box-shadow value whose blur radius is not zero.
-function blurredLayers(value: string): string[] {
-  const layers: string[] = [];
-  let depth = 0;
-  let current = "";
-  for (const ch of value) {
-    if (ch === "(") depth++;
-    if (ch === ")") depth--;
-    if (ch === "," && depth === 0) {
-      layers.push(current);
-      current = "";
-    } else current += ch;
-  }
-  layers.push(current);
-  return layers.filter((layer) => {
-    const lengths = layer
-      .replace(/rgba?\([^)]*\)|#[0-9a-f]{3,8}\b|var\([^)]*\)/gi, " ")
-      .split(/\s+/)
-      .filter((t) => /^-?\d*\.?\d+(px)?$/.test(t));
-    return lengths.length >= 3 && parseFloat(lengths[2]) !== 0;
-  });
 }
 
 function sourceFiles(dir: string): string[] {
@@ -123,16 +101,6 @@ describe("the staff theme's colours", () => {
 });
 
 describe("hard edges only", () => {
-  it("the blur detector tells a soft shadow from a ledge", () => {
-    expect(blurredLayers("0 1px 2px rgba(0, 0, 0, 0.5)")).toHaveLength(1);
-    expect(
-      blurredLayers("inset 0 1px 0 #ffffff, 0 2px 0 rgba(0, 0, 0, 0.7)")
-    ).toHaveLength(0);
-    expect(blurredLayers("0 3px 0 0 #000, 0 8px 20px -8px #000")).toHaveLength(
-      1
-    );
-  });
-
   it("no shadow in the theme has a blur", () => {
     const values = [
       ...css.matchAll(
@@ -144,26 +112,37 @@ describe("hard edges only", () => {
       expect(blurredLayers(value), value).toEqual([]);
     }
   });
+
+  it("the theme has no other way of going soft", () => {
+    expect(css).not.toMatch(/text-shadow|drop-shadow|blur\(/);
+  });
 });
 
 describe("one set of named colours", () => {
-  // Every colour of the dashboard and of the shared pieces is a ui-* name
-  // (or a --ui-* variable): that is what lets one switch re-colour the
-  // whole page, and what keeps a soft shadow or a one-theme colour from
-  // creeping back in.
-  it("dashboard and shared pieces use only the named colours", () => {
-    const stray =
-      /\b(brand-|cream|gold\b|canvas|bg-surface|text-error|bg-error|text-white|bg-white|neutral-|shadow-(sm|md|lg|xl|2xl)\b|blur)/;
+  // Every colour of the dashboard and of the shared pieces is a ui-* name:
+  // that is what lets one switch re-colour the whole page, and what keeps
+  // a one-theme colour (text-white on a light panel) or a soft shadow from
+  // creeping back in. The detector and what it catches: look-guard.ts.
+  //
+  // The exceptions, each a decision:
+  const ALLOWED = [
+    // YouTube's red and Spotify's green on the music source switch —
+    // theirs, so the same in both themes; decoration beside a label.
+    "text-[#FF0000]",
+    "text-[#1ED760]",
+  ];
+
+  it("dashboard and shared pieces use only the named colours and ledges", () => {
     const files = [
       ...sourceFiles(join(ADMIN, "dashboard")),
       ...sourceFiles(join(ADMIN, "ui")),
     ].filter((file) => !file.endsWith(".test.ts"));
     expect(files.length).toBeGreaterThan(15);
     for (const file of files) {
-      const lines = readFileSync(file, "utf8")
-        .split("\n")
-        .filter((line) => stray.test(line));
-      expect(lines, file).toEqual([]);
+      expect(
+        lookProblems(readFileSync(file, "utf8"), { allow: ALLOWED }),
+        file
+      ).toEqual([]);
     }
   });
 });

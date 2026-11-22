@@ -15,6 +15,7 @@ import {
 import Tag from "../ui/Tag";
 import { createSearchRunner, type SearchRunner } from "@/lib/latest-search";
 import { goToStaffLogin } from "@/lib/staff-login-redirect";
+import { createTapGuard, SCREEN_CHANGE_GUARD_MS } from "@/lib/tap-guard";
 
 interface PatientRow {
   id: string;
@@ -67,6 +68,11 @@ export default function PatientsPanel({
   const [resetDoneId, setResetDoneId] = useState<string | null>(null);
   const [resetFailedId, setResetFailedId] = useState<string | null>(null);
   const [checkins, setCheckins] = useState<Record<string, CheckinStatus>>({});
+  // "Reset PIN" is replaced, where it stood, by the button that does the
+  // resetting. For a moment after that swap the new button ignores
+  // presses, so the second half of a double-click cannot confirm a
+  // question nobody has read (the kiosk's rule, and its timing).
+  const confirmGuard = useRef(createTapGuard());
 
   // Searches as the staff member types (and at once on Enter / Search).
   // The runner sends one request after typing pauses and only ever hands
@@ -304,7 +310,10 @@ export default function PatientsPanel({
                               <Button
                                 variant="danger"
                                 size="sm"
-                                onClick={() => resetPin(p.id)}
+                                onClick={() => {
+                                  if (confirmGuard.current.blocked()) return;
+                                  resetPin(p.id);
+                                }}
                               >
                                 Reset PIN for {p.first_name} {p.last_name}
                               </Button>
@@ -324,7 +333,12 @@ export default function PatientsPanel({
                               )}
                               <Button
                                 size="sm"
-                                onClick={() => setConfirmingId(p.id)}
+                                onClick={() => {
+                                  confirmGuard.current.block(
+                                    SCREEN_CHANGE_GUARD_MS
+                                  );
+                                  setConfirmingId(p.id);
+                                }}
                               >
                                 Reset PIN
                               </Button>

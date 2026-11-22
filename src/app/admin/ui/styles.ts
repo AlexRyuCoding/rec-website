@@ -12,8 +12,10 @@ const FOCUS =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-accent-text";
 
 // Pressing moves a button down onto its ledge (2px) — not when it is
-// disabled, and not for people who asked for less motion.
-const BUTTON_BASE = `inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border font-medium transition-[transform,box-shadow,background-color,border-color,color] duration-100 [&:not(:disabled)]:active:translate-y-[2px] [&:not(:disabled)]:active:shadow-none motion-reduce:active:translate-y-0 disabled:opacity-50 ${FOCUS}`;
+// disabled, and not for people who asked for less motion. (The
+// reduced-motion class repeats the :not(:disabled) part on purpose: with
+// less of the selector it loses to the press it is meant to cancel.)
+const BUTTON_BASE = `inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border font-medium transition-[transform,box-shadow,background-color,border-color,color] duration-100 [&:not(:disabled)]:active:translate-y-[2px] [&:not(:disabled)]:active:shadow-none motion-reduce:[&:not(:disabled)]:active:translate-y-0 disabled:opacity-50 ${FOCUS}`;
 
 const BUTTON_VARIANT: Record<ButtonVariant, string> = {
   default:

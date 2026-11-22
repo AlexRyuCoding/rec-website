@@ -229,7 +229,9 @@ export default function ScreensPanel() {
             autoCapitalize="characters"
             autoComplete="off"
             spellCheck={false}
-            className={`${fieldClass} w-44 text-xl font-semibold tracking-[0.25em]`}
+            // The example code is kept faint: at full strength, in this size,
+            // it reads as a code already typed in.
+            className={`${fieldClass} w-44 text-xl font-semibold tracking-[0.25em] placeholder:opacity-40`}
           />
         </label>
         <label className="flex flex-col gap-1 text-sm text-ui-text-2">
