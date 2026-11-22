@@ -40,8 +40,11 @@ export function buttonClass({
   return `${BUTTON_BASE} ${BUTTON_VARIANT[variant]} ${BUTTON_SIZE[size]}`;
 }
 
-// Sunken: somewhere to type.
-export const fieldClass = `min-w-0 max-w-full rounded-lg border border-ui-line-strong bg-ui-well px-3 py-2 text-ui-text shadow-sunk placeholder:text-ui-text-3 ${FOCUS}`;
+// Sunken: somewhere to type. The base has no padding or corner size of
+// its own (two utilities for the same property do not override each other
+// by their order in the class list); fieldClass is the ordinary field.
+export const fieldBaseClass = `min-w-0 max-w-full border border-ui-line-strong bg-ui-well text-ui-text shadow-sunk placeholder:text-ui-text-3 ${FOCUS}`;
+export const fieldClass = `${fieldBaseClass} rounded-lg px-3 py-2`;
 
 // Raised like a button: it opens when pressed.
 export const selectClass = `min-w-0 max-w-full rounded-lg border border-ui-line-strong bg-ui-btn px-3 py-2 text-ui-text shadow-lift-1 ${FOCUS}`;
@@ -57,4 +60,4 @@ export const thClass =
 export const trClass =
   "[&:last-child>td]:border-b-0 [&:hover>td]:bg-ui-panel-2";
 export const tdClass =
-  "border-b border-ui-line px-3.5 py-[11px] align-middle transition-colors duration-100 first:pl-[18px] last:pr-[18px]";
+  "border-b border-ui-line px-3.5 py-[11px] transition-colors duration-100 first:pl-[18px] last:pr-[18px]";

@@ -1,6 +1,18 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { Search } from "lucide-react";
+import Button from "../ui/Button";
+import Panel from "../ui/Panel";
+import {
+  fieldBaseClass,
+  linkClass,
+  tableClass,
+  tdClass,
+  thClass,
+  trClass,
+} from "../ui/styles";
+import Tag from "../ui/Tag";
 import { createSearchRunner, type SearchRunner } from "@/lib/latest-search";
 import { goToStaffLogin } from "@/lib/staff-login-redirect";
 
@@ -170,10 +182,16 @@ export default function PatientsPanel({
     }
   };
 
+  const inlineLink = "underline underline-offset-[3px]";
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex gap-2">
-        <div className="relative flex-1">
+      <Panel className="flex gap-2.5 p-2.5">
+        <div className="relative min-w-0 flex-1">
+          <Search
+            aria-hidden
+            className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-ui-text-3"
+          />
           <input
             ref={searchInputRef}
             type="text"
@@ -187,158 +205,183 @@ export default function PatientsPanel({
             }
             placeholder="Search by name, email, or phone"
             autoComplete="off"
-            className="w-full pl-4 pr-28 py-2 border border-brand-foreground rounded-lg bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-primary"
+            className={`${fieldBaseClass} w-full rounded-[10px] py-3 pl-[42px] pr-28 text-[17px]`}
           />
           {/* Inside the box, so it never moves anything; shown only
               when a search takes longer than a moment. */}
           <span
             aria-hidden="true"
-            className={`pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-cream/50 transition-opacity duration-200 ${
+            className={`pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-ui-text-3 transition-opacity duration-200 ${
               searching ? "opacity-100 delay-300" : "opacity-0"
             }`}
           >
             Searching…
           </span>
         </div>
-        <button
+        {/* Never changes width: the label is the same in every state. */}
+        <Button
+          variant="primary"
+          size="lg"
           onClick={() => searchRunner.current?.submit(query)}
           disabled={query.trim().length < SEARCH_MIN_LENGTH}
-          className="px-6 py-2 rounded-lg bg-brand-primary text-white hover:bg-brand-secondary disabled:opacity-50 transition-colors"
         >
           Search
-        </button>
-      </div>
+        </Button>
+      </Panel>
 
       {/* Below everything else, in the place of the results: the
           list changes with every letter typed, and nothing sits
-          under it to be pushed around. */}
-      <p aria-live="polite" className="text-cream/50 empty:hidden">
+          under it to be pushed around. On a surface of its own — the
+          page behind it is a photograph. */}
+      <p
+        aria-live="polite"
+        className="rounded-lg border border-ui-line bg-ui-panel px-3.5 py-2 text-ui-text-2 empty:hidden"
+      >
         {searchError}
       </p>
       {patients.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-brand-foreground">
-                <th className="py-2 pr-4">Patient</th>
-                <th className="py-2 pr-4">Email</th>
-                <th className="py-2 pr-4">Phone</th>
-                <th className="py-2 pr-4">PIN</th>
-                <th className="py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {patients.map((p) => (
-                <tr key={p.id} className="border-b border-brand-muted">
-                  <td className="py-2 pr-4">
-                    {p.first_name} {p.last_name}
-                  </td>
-                  <td className="py-2 pr-4">{p.email ?? "—"}</td>
-                  <td className="py-2 pr-4 whitespace-nowrap">
-                    {p.phone ?? "—"}
-                  </td>
-                  <td className="py-2 pr-4">{p.has_pin ? "Set" : "None"}</td>
-                  <td className="py-2 text-right">
-                    <span className="flex flex-wrap items-center justify-end gap-2">
-                      {confirmingId !== p.id && (
-                        <button
-                          onClick={() =>
-                            onShowLog({
-                              id: p.id,
-                              name: `${p.first_name} ${p.last_name}`.trim(),
-                            })
-                          }
-                          aria-label={`Log for ${p.first_name} ${p.last_name}`}
-                          className="px-2 py-1 text-sm text-cream/60 underline hover:text-cream"
-                        >
-                          Log
-                        </button>
-                      )}
-                      {/* Hidden while the reset question is open:
-                          that row holds one decision at a time. */}
-                      {confirmingId !== p.id &&
-                        (checkins[p.id] === "created" ? (
-                          <span className="text-brand-primary">
-                            Checked in ·{" "}
-                            <Link href="/admin/rooms" className="underline">
-                              Rooms board
-                            </Link>
-                          </span>
-                        ) : checkins[p.id] === "duplicate" ? (
-                          <span className="text-cream/60">
-                            Already on the{" "}
-                            <Link href="/admin/rooms" className="underline">
-                              rooms board
-                            </Link>
-                          </span>
-                        ) : (
-                          <>
-                            {checkins[p.id] === "error" && (
-                              <span role="alert" className="text-error">
-                                Couldn&apos;t check in — try again
-                              </span>
-                            )}
-                            <button
-                              onClick={() => checkIn(p.id)}
-                              disabled={checkins[p.id] === "busy"}
-                              aria-label={`Check in ${p.first_name} ${p.last_name}`}
-                              className="px-3 py-1 rounded-full bg-brand-primary text-white hover:bg-brand-secondary disabled:opacity-50 transition-colors"
-                            >
-                              {checkins[p.id] === "busy"
-                                ? "Checking in…"
-                                : "Check in"}
-                            </button>
-                          </>
-                        ))}
-                      {resetDoneId === p.id ? (
-                        <span className="text-brand-primary">
-                          Cleared — patient can set a new PIN at the kiosk
-                        </span>
-                      ) : p.has_pin ? (
-                        confirmingId === p.id ? (
-                          <span className="flex gap-2 justify-end">
-                            <button
-                              onClick={() => resetPin(p.id)}
-                              className="px-3 py-1 rounded-full bg-error text-white hover:bg-error/80 transition-colors"
-                            >
-                              Reset PIN for {p.first_name} {p.last_name}
-                            </button>
-                            <button
-                              onClick={() => setConfirmingId(null)}
-                              className="px-3 py-1 rounded-full border border-brand-foreground hover:bg-brand-muted transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          </span>
-                        ) : (
-                          <>
-                            {resetFailedId === p.id && (
-                              <span role="alert" className="text-error">
-                                PIN not reset — try again
-                              </span>
-                            )}
-                            <button
-                              onClick={() => setConfirmingId(p.id)}
-                              className="px-3 py-1 rounded-full border border-brand-foreground hover:bg-brand-muted transition-colors"
-                            >
-                              Reset PIN
-                            </button>
-                          </>
-                        )
-                      ) : null}
-                    </span>
-                  </td>
+        <Panel className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className={tableClass}>
+              <thead>
+                <tr>
+                  <th className={thClass}>Patient</th>
+                  <th className={thClass}>Email</th>
+                  <th className={thClass}>Phone</th>
+                  <th className={thClass}>PIN</th>
+                  <th className={thClass}></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {patients.map((p) => (
+                  // Rows fade in and never slide: the list changes under
+                  // the staff member's hands. A patient who stays in the
+                  // list keeps their row (same key), so it does not blink.
+                  <tr key={p.id} className={`${trClass} ui-fade-in`}>
+                    <td className={`${tdClass} font-semibold`}>
+                      {p.first_name} {p.last_name}
+                    </td>
+                    <td className={`${tdClass} break-words text-ui-text-2`}>
+                      {p.email ?? "—"}
+                    </td>
+                    <td
+                      className={`${tdClass} whitespace-nowrap tabular-nums text-ui-text-2`}
+                    >
+                      {p.phone ?? "—"}
+                    </td>
+                    <td className={tdClass}>
+                      {p.has_pin ? (
+                        <Tag>Set</Tag>
+                      ) : (
+                        <span className="text-[13px] text-ui-text-3">None</span>
+                      )}
+                    </td>
+                    <td className={`${tdClass} text-right`}>
+                      {/* Always in the same order, lightest first: Log,
+                          Reset PIN, Check in. */}
+                      <span className="flex flex-wrap items-center justify-end gap-2">
+                        {confirmingId !== p.id && (
+                          <button
+                            onClick={() =>
+                              onShowLog({
+                                id: p.id,
+                                name: `${p.first_name} ${p.last_name}`.trim(),
+                              })
+                            }
+                            aria-label={`Log for ${p.first_name} ${p.last_name}`}
+                            className={linkClass}
+                          >
+                            Log
+                          </button>
+                        )}
+                        {resetDoneId === p.id ? (
+                          <span className="ui-fade-in text-ui-accent-text">
+                            Cleared — patient can set a new PIN at the kiosk
+                          </span>
+                        ) : p.has_pin ? (
+                          confirmingId === p.id ? (
+                            <span className="ui-fade-in flex flex-wrap justify-end gap-2">
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                onClick={() => resetPin(p.id)}
+                              >
+                                Reset PIN for {p.first_name} {p.last_name}
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => setConfirmingId(null)}
+                              >
+                                Cancel
+                              </Button>
+                            </span>
+                          ) : (
+                            <>
+                              {resetFailedId === p.id && (
+                                <span role="alert" className="text-ui-error">
+                                  PIN not reset — try again
+                                </span>
+                              )}
+                              <Button
+                                size="sm"
+                                onClick={() => setConfirmingId(p.id)}
+                              >
+                                Reset PIN
+                              </Button>
+                            </>
+                          )
+                        ) : null}
+                        {/* Hidden while the reset question is open:
+                            that row holds one decision at a time. */}
+                        {confirmingId !== p.id &&
+                          (checkins[p.id] === "created" ? (
+                            <span className="ui-fade-in text-ui-accent-text">
+                              Checked in ·{" "}
+                              <Link href="/admin/rooms" className={inlineLink}>
+                                Rooms board
+                              </Link>
+                            </span>
+                          ) : checkins[p.id] === "duplicate" ? (
+                            <span className="ui-fade-in text-ui-text-2">
+                              Already on the{" "}
+                              <Link href="/admin/rooms" className={inlineLink}>
+                                rooms board
+                              </Link>
+                            </span>
+                          ) : (
+                            <>
+                              {checkins[p.id] === "error" && (
+                                <span role="alert" className="text-ui-error">
+                                  Couldn&apos;t check in — try again
+                                </span>
+                              )}
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                onClick={() => checkIn(p.id)}
+                                disabled={checkins[p.id] === "busy"}
+                                aria-label={`Check in ${p.first_name} ${p.last_name}`}
+                              >
+                                {checkins[p.id] === "busy"
+                                  ? "Checking in…"
+                                  : "Check in"}
+                              </Button>
+                            </>
+                          ))}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {moreMatches && (
-            <p className="pt-3 text-sm text-cream/50">
+            <p className="border-t border-ui-line px-[18px] py-2.5 text-[13px] text-ui-text-3">
               Showing the {patients.length} closest matches. Type more of the
               name to narrow the list.
             </p>
           )}
-        </div>
+        </Panel>
       )}
     </div>
   );

@@ -404,7 +404,7 @@ export default function CheckinsPanel({ active }: { active: boolean }) {
               value={customFrom}
               max={maxDate}
               onChange={(e) => setCustomFrom(e.target.value)}
-              className={`${fieldClass} py-1.5`}
+              className={fieldClass}
             />
             <span className="text-ui-text-2">to</span>
             <input
@@ -413,7 +413,7 @@ export default function CheckinsPanel({ active }: { active: boolean }) {
               value={customTo}
               max={maxDate}
               onChange={(e) => setCustomTo(e.target.value)}
-              className={`${fieldClass} py-1.5`}
+              className={fieldClass}
             />
           </span>
         </div>
