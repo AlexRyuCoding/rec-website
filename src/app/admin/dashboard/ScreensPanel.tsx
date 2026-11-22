@@ -2,6 +2,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { MonitorPlay, TabletSmartphone, Tv } from "lucide-react";
 import { goToStaffLogin } from "@/lib/staff-login-redirect";
+import Button from "../ui/Button";
+import Panel from "../ui/Panel";
+import Segmented from "../ui/Segmented";
+import { buttonClass, fieldClass } from "../ui/styles";
+import Tag from "../ui/Tag";
 
 type DeviceKind = "tv" | "kiosk";
 
@@ -150,30 +155,28 @@ export default function ScreensPanel() {
     }
   };
 
-  const pill =
-    "px-4 py-2 rounded-full border border-brand-foreground hover:bg-brand-muted transition-colors disabled:opacity-40";
   const chosen = KINDS.find((k) => k.id === kind) ?? KINDS[0];
 
   return (
-    <section className="mt-10 border border-brand-foreground rounded-lg p-6">
+    <Panel as="section" className="p-5">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-        <h2 className="flex items-center gap-2 text-xl font-semibold">
-          <MonitorPlay className="size-5" />
+        <h2 className="flex items-center gap-2 text-lg font-semibold">
+          <MonitorPlay aria-hidden className="size-5 text-ui-accent-text" />
           Screens
         </h2>
         {/* A plain link (full page load), not next/link: the waiting-room
             page has its own content-security policy for the music
             players, and an in-app navigation would keep this page's. */}
-        <a href="/waiting-room" className={pill}>
+        <a href="/waiting-room" className={buttonClass({ size: "sm" })}>
           Open waiting-room screen
         </a>
       </div>
-      <p className="mb-2 text-sm opacity-70">
+      <p className="mb-2 text-sm text-ui-text-2">
         The waiting-room screen tells patients which room to go to. On the TV,
         open <strong>ryuacupuncture.com/waiting-room</strong> and enter the code
         it shows here.
       </p>
-      <p className="mb-5 text-sm opacity-70">
+      <p className="mb-5 text-sm text-ui-text-2">
         The check-in kiosk is the tablet patients sign in on. On the tablet,
         open <strong>ryuacupuncture.com/admin/patient-signin</strong>, tap{" "}
         <strong>Show pairing code</strong> and enter the code here. A paired
@@ -182,35 +185,32 @@ export default function ScreensPanel() {
       </p>
 
       <div className="flex flex-wrap items-end gap-3">
-        <fieldset className="flex flex-col gap-1 text-sm">
+        <fieldset className="flex flex-col gap-1 text-sm text-ui-text-2">
           <legend className="mb-1">What is it?</legend>
-          <div className="flex gap-2">
-            {KINDS.map((k) => (
-              <button
-                key={k.id}
-                type="button"
-                aria-pressed={kind === k.id}
-                onClick={() => {
-                  setKind(k.id);
-                  setMessage(null);
-                }}
-                className={`flex items-center gap-2 rounded-full border px-4 py-2 transition-colors ${
-                  kind === k.id
-                    ? "border-brand-primary bg-brand-primary text-white"
-                    : "border-brand-foreground hover:bg-brand-muted"
-                }`}
-              >
-                {k.id === "tv" ? (
-                  <Tv className="size-4" />
-                ) : (
-                  <TabletSmartphone className="size-4" />
-                )}
-                {k.label}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label="What is it?"
+            value={kind}
+            onChange={(next) => {
+              setKind(next);
+              setMessage(null);
+            }}
+            options={KINDS.map((k) => ({
+              value: k.id,
+              label: (
+                <>
+                  {k.id === "tv" ? (
+                    <Tv aria-hidden className="size-4" />
+                  ) : (
+                    <TabletSmartphone aria-hidden className="size-4" />
+                  )}
+                  {k.label}
+                </>
+              ),
+            }))}
+            className="text-[15px]"
+          />
         </fieldset>
-        <label className="flex flex-col gap-1 text-sm">
+        <label className="flex flex-col gap-1 text-sm text-ui-text-2">
           Code on the device
           <input
             value={code}
@@ -229,10 +229,10 @@ export default function ScreensPanel() {
             autoCapitalize="characters"
             autoComplete="off"
             spellCheck={false}
-            className="w-44 rounded-lg border border-brand-foreground bg-transparent px-3 py-2 text-xl font-semibold tracking-[0.25em] placeholder:opacity-25"
+            className={`${fieldClass} w-44 text-xl font-semibold tracking-[0.25em]`}
           />
         </label>
-        <label className="flex flex-col gap-1 text-sm">
+        <label className="flex flex-col gap-1 text-sm text-ui-text-2">
           Name (optional)
           <input
             value={label}
@@ -242,22 +242,22 @@ export default function ScreensPanel() {
               if (e.key === "Enter") pair();
             }}
             placeholder={chosen.defaultName}
-            className="w-56 rounded-lg border border-brand-foreground bg-transparent px-3 py-2 placeholder:opacity-40"
+            className={`${fieldClass} w-56 text-[15px]`}
           />
         </label>
-        <button
+        <Button
+          variant="primary"
           onClick={pair}
           disabled={busy || code.length !== CODE_LENGTH}
-          className="px-5 py-2 rounded-full bg-brand-primary text-white hover:bg-brand-secondary transition-colors disabled:opacity-40"
         >
           {kind === "tv" ? "Pair screen" : "Pair kiosk"}
-        </button>
+        </Button>
       </div>
       {message && (
         <p
           role="status"
           className={`mt-3 text-sm ${
-            message.ok ? "text-brand-primary" : "text-error"
+            message.ok ? "text-ui-accent-text" : "text-ui-error"
           }`}
         >
           {message.text}
@@ -266,9 +266,9 @@ export default function ScreensPanel() {
 
       <div className="mt-6">
         {!loaded ? null : displays.length === 0 ? (
-          <p className="text-sm opacity-60">Nothing paired yet.</p>
+          <p className="text-sm text-ui-text-3">Nothing paired yet.</p>
         ) : (
-          <ul className="divide-y divide-brand-foreground/20">
+          <ul className="divide-y divide-ui-line border-t border-ui-line">
             {displays.map((d) => (
               <li
                 key={d.id}
@@ -285,11 +285,9 @@ export default function ScreensPanel() {
                       (d.kind === "kiosk"
                         ? "Check-in kiosk"
                         : "Waiting room screen")}
-                    <span className="rounded-full border border-brand-foreground/40 px-2 text-xs font-normal opacity-70">
-                      {d.kind === "kiosk" ? "Kiosk" : "TV"}
-                    </span>
+                    <Tag>{d.kind === "kiosk" ? "Kiosk" : "TV"}</Tag>
                   </p>
-                  <p className="text-sm opacity-60">
+                  <p className="text-sm text-ui-text-3">
                     {formatLastSeen(d.lastSeenAt)}
                     {d.approvedAt &&
                       ` · paired ${new Date(d.approvedAt).toLocaleDateString(
@@ -303,13 +301,13 @@ export default function ScreensPanel() {
                     <button
                       onClick={() => revoke(d.id)}
                       disabled={busy}
-                      className="px-3 py-1 rounded-full bg-error text-white disabled:opacity-40"
+                      className={buttonClass({ variant: "danger", size: "sm" })}
                     >
                       Confirm revoke
                     </button>
                     <button
                       onClick={() => setConfirmingId(null)}
-                      className="px-3 py-1 rounded-full border border-brand-foreground hover:bg-brand-muted transition-colors"
+                      className={buttonClass({ size: "sm" })}
                     >
                       Cancel
                     </button>
@@ -318,7 +316,7 @@ export default function ScreensPanel() {
                   <button
                     onClick={() => setConfirmingId(d.id)}
                     disabled={busy}
-                    className="px-3 py-1 rounded-full border border-brand-foreground hover:bg-brand-muted transition-colors disabled:opacity-40"
+                    className={buttonClass({ size: "sm" })}
                   >
                     Revoke
                   </button>
@@ -328,6 +326,6 @@ export default function ScreensPanel() {
           </ul>
         )}
       </div>
-    </section>
+    </Panel>
   );
 }

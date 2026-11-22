@@ -60,10 +60,10 @@ function blurredLayers(value: string): string[] {
   });
 }
 
-function tsxFiles(dir: string): string[] {
+function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
-    if (entry.isDirectory()) return tsxFiles(path);
+    if (entry.isDirectory()) return sourceFiles(path);
     return entry.name.endsWith(".tsx") || entry.name.endsWith(".ts")
       ? [path]
       : [];
@@ -147,7 +147,23 @@ describe("hard edges only", () => {
 });
 
 describe("one set of named colours", () => {
-  it.todo("dashboard and shared pieces use only the named colours");
-  // Switched on once every panel has been moved over (plan Task 8).
-  void tsxFiles;
+  // Every colour of the dashboard and of the shared pieces is a ui-* name
+  // (or a --ui-* variable): that is what lets one switch re-colour the
+  // whole page, and what keeps a soft shadow or a one-theme colour from
+  // creeping back in.
+  it("dashboard and shared pieces use only the named colours", () => {
+    const stray =
+      /\b(brand-|cream|gold\b|canvas|bg-surface|text-error|bg-error|text-white|bg-white|neutral-|shadow-(sm|md|lg|xl|2xl)\b|blur)/;
+    const files = [
+      ...sourceFiles(join(ADMIN, "dashboard")),
+      ...sourceFiles(join(ADMIN, "ui")),
+    ].filter((file) => !file.endsWith(".test.ts"));
+    expect(files.length).toBeGreaterThan(15);
+    for (const file of files) {
+      const lines = readFileSync(file, "utf8")
+        .split("\n")
+        .filter((line) => stray.test(line));
+      expect(lines, file).toEqual([]);
+    }
+  });
 });

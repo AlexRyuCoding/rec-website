@@ -232,10 +232,20 @@ export default function AdminDashboard() {
           className={panel}
         >
           {setupOpened && (
-            <div className="flex flex-col gap-4">
-              <ScreensPanel />
-              <MusicPanel />
-              <SyncPanel />
+            // Wide: Screens above Sync on the left, Music (the tall
+            // one) down the right. Narrow: one column — Screens, Music,
+            // Sync. The second row takes the spare height, so Sync sits
+            // right under Screens however tall Music is.
+            <div className="grid items-start gap-4 min-[1100px]:grid-cols-2 min-[1100px]:grid-rows-[auto_1fr]">
+              <div className="min-w-0">
+                <ScreensPanel />
+              </div>
+              <div className="min-w-0 min-[1100px]:col-start-2 min-[1100px]:row-span-2 min-[1100px]:row-start-1">
+                <MusicPanel />
+              </div>
+              <div className="min-w-0">
+                <SyncPanel />
+              </div>
             </div>
           )}
         </div>

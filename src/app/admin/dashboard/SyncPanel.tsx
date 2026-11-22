@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { RefreshCcw } from "lucide-react";
 import { goToStaffLogin } from "@/lib/staff-login-redirect";
+import Button from "../ui/Button";
+import Panel from "../ui/Panel";
 
 // Dashboard → Setup: pull patient records from Practice Better by hand.
 // Normally nobody needs to — new and changed patients arrive through the
@@ -83,35 +85,27 @@ export default function SyncPanel() {
   };
 
   return (
-    <section className="mt-10 border border-brand-foreground rounded-lg p-6">
-      <h2 className="mb-2 flex items-center gap-2 text-xl font-semibold">
-        <RefreshCcw className="size-5" />
+    <Panel as="section" className="p-5">
+      <h2 className="mb-2 flex items-center gap-2 text-lg font-semibold">
+        <RefreshCcw aria-hidden className="size-5 text-ui-accent-text" />
         Practice Better sync
       </h2>
-      <p className="mb-5 text-sm opacity-70">
+      <p className="mb-5 text-sm text-ui-text-2">
         Patients are copied from Practice Better automatically. Use this if a
         patient added there cannot be found here.
       </p>
       <div className="flex flex-wrap items-center gap-3">
-        <button
-          onClick={() => syncPatients(true)}
-          disabled={syncing}
-          className="px-4 py-2 rounded-full border border-brand-foreground hover:bg-brand-muted disabled:opacity-50 transition-colors"
-        >
+        <Button onClick={() => syncPatients(true)} disabled={syncing}>
           Quick sync (newest 100)
-        </button>
-        <button
-          onClick={() => syncPatients()}
-          disabled={syncing}
-          className="px-4 py-2 rounded-full border border-brand-foreground hover:bg-brand-muted disabled:opacity-50 transition-colors"
-        >
+        </Button>
+        <Button onClick={() => syncPatients()} disabled={syncing}>
           {syncing ? "Syncing…" : "Full sync from Practice Better"}
-        </button>
-        <span className="text-sm text-cream/50">
+        </Button>
+        <span className="basis-full text-sm text-ui-text-3">
           {syncMsg ||
             "New and updated patients normally arrive automatically. Quick sync catches recently added patients; full sync re-pulls every record."}
         </span>
       </div>
-    </section>
+    </Panel>
   );
 }
