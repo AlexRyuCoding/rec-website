@@ -119,7 +119,7 @@ the page, 4.76:1).
 | line-strong | input and button edge | `#3d4a51` | `#c3cdca` |
 | text | main text | `#e4e7e6` | `#1b2529` |
 | text-2 | secondary text | `#aab5b7` | `#4c5a5f` |
-| text-3 | labels, hints | `#8a989b` | `#5a686e` |
+| text-3 | labels, hints | `#93a1a4` (lightened from `#8a989b`: must read on a button face) | `#5a686e` |
 | accent-fill | primary button, selected-tab line | `#1f8376` | `#1c7a6e` |
 | accent-fill-hover | darker than the fill in both themes | `#1a7368` | `#17695f` |
 | accent-text | teal text and icons | `#56c7b6` | `#17695f` |
