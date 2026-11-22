@@ -323,7 +323,7 @@ tested).
   same PIN at the same moment (saveNewPin answers "taken").
 - Without NEXTAUTH_SECRET there are no fingerprints and every PIN holder
   is compared, as before fingerprints existed. A database error during a
-  lookup is an error ("Database error" at the kiosk), not a silent switch
+  lookup is an error (the kiosk says "Something went wrong. Please try again…"), not a silent switch
   to the slow way; a new PIN's hash and fingerprint are written together
   or not at all.
 - Why an HMAC and not a plain hash: with only 10,000 possible PINs any
