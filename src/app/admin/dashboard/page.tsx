@@ -124,8 +124,10 @@ export default function AdminDashboard() {
   }, []);
 
   // The four panels stay in the page, hidden or shown; each brings its own
-  // surfaces (the page behind them is a photograph).
-  const panel = `flex flex-col gap-4 ${entered ? "ui-enter" : ""}`;
+  // surfaces (the page behind them is a photograph). No display class
+  // here (flex, grid…): it would override the `hidden` attribute and show
+  // every tab at once.
+  const panel = entered ? "ui-enter" : undefined;
 
   return (
     <div className="min-h-screen text-[15px] leading-normal text-ui-text">
@@ -230,11 +232,11 @@ export default function AdminDashboard() {
           className={panel}
         >
           {setupOpened && (
-            <>
+            <div className="flex flex-col gap-4">
               <ScreensPanel />
               <MusicPanel />
               <SyncPanel />
-            </>
+            </div>
           )}
         </div>
         <div
