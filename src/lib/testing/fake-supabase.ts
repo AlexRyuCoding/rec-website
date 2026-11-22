@@ -28,7 +28,7 @@ interface Reply {
 
 export interface FakeQuery {
   table: string;
-  kind: "select" | "insert" | "update" | "delete";
+  kind: "select" | "insert" | "update" | "delete" | "upsert";
   columns: string[];
 }
 
@@ -59,6 +59,7 @@ export function fakeSupabase(
     let payload: Row | Row[] | null = null;
     let returning = false;
     let countOnly = false;
+    let conflictKey = "id";
     let withCount = false;
     let one: "single" | "maybeSingle" | null = null;
     let limit: number | null = null;
@@ -111,6 +112,12 @@ export function fakeSupabase(
         }
         hit.forEach((r) => Object.assign(r, payload as Row));
         result = hit;
+      } else if (kind === "upsert") {
+        const row = payload as Row;
+        const existing = rows.find((r) => r[conflictKey] === row[conflictKey]);
+        if (existing) Object.assign(existing, row);
+        else rows.push({ ...row });
+        result = [existing ?? row];
       } else if (kind === "delete") {
         result = matches();
         result.forEach((r) => rows.splice(rows.indexOf(r), 1));
@@ -175,6 +182,14 @@ export function fakeSupabase(
       },
       delete() {
         kind = "delete";
+        return builder;
+      },
+      // insert, or replace the row with the same key
+      upsert(value: Row, options?: { onConflict?: string }) {
+        kind = "upsert";
+        payload = value;
+        conflictKey = options?.onConflict ?? "id";
+        Object.keys(value).forEach((c) => columns.add(c));
         return builder;
       },
       eq: (c: string, v: unknown) => where(c, (x) => x === v),
