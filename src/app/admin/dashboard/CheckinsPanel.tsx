@@ -9,7 +9,7 @@ import {
   rangeIncludesNow,
   RangePreset,
 } from "@/lib/checkin-range";
-import { FLOW_EVENT, ROOMS_CHANNEL } from "@/lib/rooms-realtime";
+import { FLOW_EVENT, ROOMS_CHANNEL, ROOMS_EVENT } from "@/lib/rooms-realtime";
 import { goToStaffLogin } from "@/lib/staff-login-redirect";
 import { createBrowserClient } from "@/lib/supabase-browser";
 import Banner from "../ui/Banner";
@@ -28,7 +28,9 @@ import {
   CheckinRecord,
   checkinsCsv,
   checkinStatus,
+  isInRoomStatus,
   Measure,
+  nextStatusChangeMs,
   PractitionerSummary,
   statusLabel,
   VisitSummary,
@@ -287,15 +289,21 @@ export default function CheckinsPanel({ active }: { active: boolean }) {
     // The board's "something changed" hint (empty, no patient data). An
     // extra: if the connection cannot be opened the minute poll remains.
     let hintTimer: ReturnType<typeof setTimeout> | undefined;
+    const hint = () => {
+      clearTimeout(hintTimer);
+      hintTimer = setTimeout(refresh, HINT_DEBOUNCE_MS);
+    };
     const supabase = createBrowserClient();
     let channel: ReturnType<typeof supabase.channel> | null = null;
     try {
       channel = supabase
         .channel(ROOMS_CHANNEL)
-        .on("broadcast", { event: FLOW_EVENT }, () => {
-          clearTimeout(hintTimer);
-          hintTimer = setTimeout(refresh, HINT_DEBOUNCE_MS);
-        })
+        .on("broadcast", { event: FLOW_EVENT }, hint)
+        // A timer paused, changed or cleared ("needles out") moves no
+        // patient, so it sends no flow hint — but it changes what a
+        // patient in that room is shown as. Used as a hint only: what
+        // the message carries is not read.
+        .on("broadcast", { event: ROOMS_EVENT }, hint)
         .subscribe();
     } catch {
       channel = null;
@@ -318,6 +326,19 @@ export default function CheckinsPanel({ active }: { active: boolean }) {
     const t = setInterval(() => setNowMs(Date.now()), 60_000);
     return () => clearInterval(t);
   }, []);
+
+  // A room's timer does not end on the minute: read the clock again at
+  // the moment the next one runs out (or goes into overtime), so the
+  // pill turns when the board's tile does.
+  useEffect(() => {
+    const at = nextStatusChangeMs(rows, nowMs);
+    if (at === null) return;
+    const t = setTimeout(
+      () => setNowMs(Date.now()),
+      Math.max(0, at - Date.now()) + 50
+    );
+    return () => clearTimeout(t);
+  }, [rows, nowMs]);
 
   // Everything in the range, not only what is on screen.
   const exportCsv = async () => {
@@ -356,7 +377,7 @@ export default function CheckinsPanel({ active }: { active: boolean }) {
 
   const oneDay = preset === "today" || preset === "yesterday";
   const when = oneDay ? timeOnly : dateAndTime;
-  const statuses = rows.map((r) => checkinStatus(r, nowMs));
+  const statuses = rows.map((r) => checkinStatus(r, nowMs, r.room_timer));
   const count = (test: (s: (typeof statuses)[number]) => boolean) =>
     statuses.filter(test).length;
 
@@ -459,7 +480,7 @@ export default function CheckinsPanel({ active }: { active: boolean }) {
                 <CountTile
                   label="In a room"
                   dot="doctor"
-                  value={count((s) => s === "called" || s === "with_doctor")}
+                  value={count(isInRoomStatus)}
                 />
                 <CountTile
                   label="Finished"

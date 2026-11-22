@@ -81,7 +81,16 @@ describe("the staff theme's colours", () => {
           `on-accent on ${bg}`
         ).toBeGreaterThanOrEqual(4.5);
       }
-      for (const st of ["waiting", "next", "called", "doctor"]) {
+      for (const st of [
+        "waiting",
+        "next",
+        "called",
+        "doctor",
+        "in-use",
+        "complete",
+        "overtime",
+        "turnover",
+      ]) {
         expect(
           contrast(v[`--ui-st-${st}`], v[`--ui-st-${st}-bg`]),
           `status ${st}`

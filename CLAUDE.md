@@ -399,6 +399,20 @@ off the timestamps a visit collects on the rooms board.
   doctor saw them and the room was marked ready; Removed = ended without
   being seen (a no-show, a mistake); Not closed = never finished and
   older than the board's 12 h window.
+- Once the doctor has been in, the patient follows the ROOM's timer and
+  is shown under the words on the room's tile (owner's decision: "match
+  the board"): In Use (timer running, or paused) / Remove Needles (time
+  up) / Overtime / Setting Up (needles out, not yet "Room ready"). "With
+  doctor" is only the gap before the timer is started. The words come
+  from ROOM_STATUS_LABEL (room-status.ts), which the tile uses too — do
+  not write them a second time. A visit carries no timer: the list reads
+  the room's timer columns with each check-in (`room_timer`). Only a
+  patient the doctor has SEEN follows it — someone lined up for that
+  room, or called and still waiting, is not on that timer.
+- The pill turns when the timer does, not on the next refresh: the list
+  re-reads the clock at the moment the next timer ends or goes into
+  overtime (nextStatusChangeMs). It uses the computer's own clock, so it
+  can be a few seconds off the board.
 - Times: wait for a room = check-in → called; wait for the doctor =
   called → seen; whole visit = check-in → done (only visits that were
   seen). The summary shows the MEDIAN ("typical") with the count and the
@@ -413,7 +427,10 @@ off the timestamps a visit collects on the rooms board.
   hours long). "Custom" opens on the last 30 days and cannot go past
   today; dates typed the wrong way round are swapped.
 - A range that reaches today keeps itself current: at once on the rooms
-  board's "flow-updated" hint, and once a minute. A refresh never blanks
+  board's "flow-updated" hint — and its "rooms-updated" one, because a
+  pause or "needles out" moves no patient but changes a status (used as
+  a hint only; what that message carries is not read) — and once a
+  minute. A refresh never blanks
   the list ("Loading…" is only for a new range), does not run while
   another dashboard tab is showing, and does not run once "Load more" has
   been used (it would throw the older pages away under the reader).
@@ -457,9 +474,10 @@ ThemeSwitch, Backdrop, styles.ts); the theme rule: src/lib/staff-theme.ts
   its own: a guard that lets things through is worse than none). The
   exceptions are listed in the test with their reasons — today two:
   YouTube's red and Spotify's green on the music source switch.
-- Each of the seven check-in statuses has its own colour AND shape
-  (pillLook, tested): still on the board = filled pill with a dot;
-  finished / removed = grey with a mark; not closed = outline with a
+- Each of the eleven check-in statuses has its own colour AND shape
+  (pillLook, tested): still on the board = filled pill with a dot; on
+  the room's timer = filled pill with a clock, a bell once the time is
+  up; finished / removed = grey with a mark; not closed = outline with a
   warning. Never tell statuses apart by colour alone.
 - Theme: one choice per browser (localStorage `rac-staff-theme`:
   system | light | dark; default system). While a themed page is mounted

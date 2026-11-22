@@ -7,6 +7,12 @@
 //   doctor is in) → done_at (Room ready, or removed)
 
 import { VISIT_ACTIVE_WINDOW_MS } from "./patient-flow";
+import {
+  deriveRoomState,
+  OVERTIME_GRACE_SECONDS,
+  ROOM_STATUS_LABEL,
+  RoomTimer,
+} from "./room-status";
 
 // The timestamps of one check-in.
 export interface VisitTimestamps {
@@ -26,6 +32,9 @@ export interface CheckinRecord extends VisitTimestamps {
   practitioner_name: string | null;
   // The room they are (or were) in; null if none, or it was deleted.
   room_name: string | null;
+  // That room's timer as it stands now — what the doctor does after
+  // walking in is done on the room, not on the visit. Null with no room.
+  room_timer: RoomTimer | null;
 }
 
 export type CheckinStatus =
@@ -33,6 +42,14 @@ export type CheckinStatus =
   | "next_up"
   | "called"
   | "with_doctor"
+  // The doctor has been in and the room is on its timer. These four are
+  // the room's own statuses, under the names its tile shows
+  // (room-status.ts): timer running / time up / well past time / needles
+  // out and the room not yet marked ready.
+  | "in_use"
+  | "complete"
+  | "overtime"
+  | "turnover"
   // The doctor saw them and the room was marked ready.
   | "finished"
   // Taken off the board without having been seen (a no-show, a mistake).
@@ -41,9 +58,15 @@ export type CheckinStatus =
   // ready", or they never got a room. (The board drops these by itself.)
   | "not_closed";
 
+// roomTimer: the timer of the room the visit is in, when the caller
+// knows it. Only a patient the doctor has seen follows it — someone
+// lined up for the room, or called and still waiting, is not on that
+// timer. Without it the answer stops at "with_doctor", as it did before
+// the dashboard read timers.
 export function checkinStatus(
   v: VisitTimestamps,
-  nowMs: number
+  nowMs: number,
+  roomTimer?: RoomTimer | null
 ): CheckinStatus {
   if (v.done_at !== null) return v.seen_at !== null ? "finished" : "removed";
   if (nowMs - Date.parse(v.checked_in_at) > VISIT_ACTIVE_WINDOW_MS) {
@@ -51,17 +74,54 @@ export function checkinStatus(
   }
   if (!v.room_id) return "waiting";
   if (v.called_at === null) return "next_up";
-  return v.seen_at === null ? "called" : "with_doctor";
+  if (v.seen_at === null) return "called";
+  if (!roomTimer) return "with_doctor";
+  // One occupant, already seen: the room's status with nobody waiting.
+  const room = deriveRoomState(roomTimer, nowMs, 1, 0).status;
+  return room === "in_use" ||
+    room === "complete" ||
+    room === "overtime" ||
+    room === "turnover"
+    ? room
+    : "with_doctor";
 }
 
 // On the board right now.
 export function isOpenStatus(status: CheckinStatus): boolean {
   return (
-    status === "waiting" ||
-    status === "next_up" ||
-    status === "called" ||
-    status === "with_doctor"
+    status !== "finished" && status !== "removed" && status !== "not_closed"
   );
+}
+
+// In a room, called or further.
+export function isInRoomStatus(status: CheckinStatus): boolean {
+  return isOpenStatus(status) && status !== "waiting" && status !== "next_up";
+}
+
+// The next moment a status in the list changes with nobody touching
+// anything: a running timer reaching zero, or time-up turning into
+// overtime. Null if there is none. The list reads the clock once a
+// minute; this is what lets it turn a pill when the timer actually ends.
+export function nextStatusChangeMs(
+  rows: (VisitTimestamps & { room_timer: RoomTimer | null })[],
+  nowMs: number
+): number | null {
+  let next: number | null = null;
+  for (const row of rows) {
+    const timer = row.room_timer;
+    const status = checkinStatus(row, nowMs, timer);
+    if (status !== "in_use" && status !== "complete") continue;
+    if (!timer?.timer_started_at || timer.timer_duration_seconds === null) {
+      continue;
+    }
+    if (timer.timer_paused_at) continue;
+    const endsMs =
+      Date.parse(timer.timer_started_at) + timer.timer_duration_seconds * 1000;
+    const at =
+      status === "in_use" ? endsMs : endsMs + OVERTIME_GRACE_SECONDS * 1000;
+    if (at > nowMs && (next === null || at < next)) next = at;
+  }
+  return next;
 }
 
 export function statusLabel(
@@ -78,6 +138,11 @@ export function statusLabel(
       return inRoom("Called");
     case "with_doctor":
       return inRoom("With doctor");
+    case "in_use":
+    case "complete":
+    case "overtime":
+    case "turnover":
+      return inRoom(ROOM_STATUS_LABEL[status]);
     case "finished":
       return "Finished";
     case "removed":
@@ -233,7 +298,7 @@ export function checkinsCsv(
       r.service_name,
       r.practitioner_name,
       r.room_name,
-      statusLabel(checkinStatus(r, nowMs), null),
+      statusLabel(checkinStatus(r, nowMs, r.room_timer), null),
       when(r.called_at),
       when(r.seen_at),
       when(r.done_at),

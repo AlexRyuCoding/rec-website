@@ -81,6 +81,28 @@ export type RoomStatus =
   | "complete"
   | "overtime";
 
+// What a room's tile says for each status. The dashboard's check-in
+// list uses the same words for a patient whose room is on its timer
+// (visit-stats.ts) — one list, so the two cannot drift apart.
+export const ROOM_STATUS_LABEL: Record<RoomStatus, string> = {
+  available: "Available",
+  patient_waiting: "Patient waiting",
+  with_doctor: "With doctor",
+  turnover: "Setting Up",
+  in_use: "In Use",
+  complete: "Remove Needles",
+  overtime: "Overtime",
+};
+
+// The part of a room that decides its status besides who is in it.
+export type RoomTimer = Pick<
+  RoomRow,
+  | "timer_started_at"
+  | "timer_duration_seconds"
+  | "timer_paused_at"
+  | "turnover_started_at"
+>;
+
 export interface RoomState {
   status: RoomStatus;
   paused: boolean;
@@ -88,7 +110,7 @@ export interface RoomState {
   remainingSeconds: number | null;
 }
 
-function elapsedSeconds(room: RoomRow, nowMs: number): number {
+function elapsedSeconds(room: RoomTimer, nowMs: number): number {
   const startedMs = Date.parse(room.timer_started_at!);
   const effectiveNow = room.timer_paused_at
     ? Date.parse(room.timer_paused_at)
@@ -96,7 +118,7 @@ function elapsedSeconds(room: RoomRow, nowMs: number): number {
   return Math.floor((effectiveNow - startedMs) / 1000);
 }
 
-function timerIdle(room: RoomRow): boolean {
+function timerIdle(room: RoomTimer): boolean {
   return room.timer_started_at === null || room.timer_duration_seconds === null;
 }
 
@@ -109,7 +131,7 @@ function timerIdle(room: RoomRow): boolean {
 // waitingCount defaults to "all of them" so a caller that only knows the
 // room is occupied errs on the side of raising the alert.
 export function deriveRoomState(
-  room: RoomRow,
+  room: RoomTimer,
   nowMs: number,
   occupantCount = 0,
   waitingCount = occupantCount
