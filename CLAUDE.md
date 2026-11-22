@@ -16,7 +16,8 @@ patients use it unassisted; it needs no staff sign-in.
 - All secrets in .env.local — never hardcoded
 - Frontend: single dark theme (no light/dark toggle) — except the staff
   dashboard and the rooms board, which have a light / dark / match-this-
-  device switch (see "Staff look"); GSAP + ScrollTrigger + Lenis for public-page motion;
+  device switch, and the staff login page, which shows that choice (see
+  "Staff look"); GSAP + ScrollTrigger + Lenis for public-page motion;
   Instrument Serif + Inter Tight via next/font
 - Public forms (/api/request-form, /api/grievance-form): zod-validated,
   honeypot field `company`, per-IP rate limit (5/hour) in Supabase
@@ -487,6 +488,14 @@ ThemeSwitch, Backdrop, styles.ts); the theme rule: src/lib/staff-theme.ts
   inlines a script that sets it before first paint (no flash); the
   script and the hook must agree (staff-theme.test.ts runs them against
   each other). Storage being blocked must never break the switch.
+- The staff login page (login/page.tsx + LoginCard.tsx) has the look
+  but no switch of its own: it shows the choice made on this browser.
+  With nothing chosen it does what the page being signed in to does
+  (loginThemeFallback, tested): on the way to the dashboard it follows
+  the computer; on the way to the rooms board, the kiosk or nowhere in
+  particular it is dark — so signing in never flips the look, and a wall
+  tablet's login screen does not turn light by day. Its pre-paint script
+  is in the page, not a layout: only a page is given `?next=`.
 - A photograph sits behind the page, one per theme (public/staff-bg-*.jpg,
   about 300 KB each, a fixed layer — not background-attachment: fixed,
   which iPad Safari ignores). Nothing is read straight off it: every
@@ -938,7 +947,8 @@ src/app/waiting-room/music/ (useRadio, useYouTube, useSpotify, MusicBar).
 ### Admin Login Screen (/admin/login)
 
 - One "Sign in with Google" button (no password field)
-- Clean, minimal — staff-facing only
+- Clean, minimal — staff-facing only; in the staff look (a panel on the
+  theme's photo — see "Staff look")
 
 ### Kiosk Screen (main UI) — two modes:
 

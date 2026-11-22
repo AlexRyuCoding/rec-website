@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  loginThemeFallback,
   parseThemeChoice,
   resolveTheme,
   themeBootScript,
@@ -95,4 +96,35 @@ describe("themeBootScript", () => {
   });
   it("contains no '<' (safe to inline in a script tag)", () =>
     expect(themeBootScript()).not.toContain("<"));
+});
+
+// The login page is the door to both themed pages, and they disagree
+// about what "nothing chosen on this device" means: the dashboard
+// follows the computer, the rooms board stays dark (wall tablets on
+// automatic appearance). The login page takes the rule of the page the
+// staff member is on the way to, so signing in never flips the look.
+describe("loginThemeFallback", () => {
+  it("follows the computer on the way to the dashboard", () => {
+    expect(loginThemeFallback("/admin/dashboard")).toBe("system");
+    expect(loginThemeFallback("/admin/dashboard?tab=setup")).toBe("system");
+  });
+
+  it("is dark on the way to the rooms board", () =>
+    expect(loginThemeFallback("/admin/rooms")).toBe("dark"));
+
+  // The kiosk has one look, and it is dark.
+  it("is dark on the way to the kiosk, and when nothing was asked for", () => {
+    expect(loginThemeFallback("/admin/patient-signin")).toBe("dark");
+    expect(loginThemeFallback(null)).toBe("dark");
+    expect(loginThemeFallback(undefined)).toBe("dark");
+    expect(loginThemeFallback("")).toBe("dark");
+  });
+
+  it("is dark for anything that only looks like the dashboard", () => {
+    expect(loginThemeFallback("/admin/dashboards")).toBe("dark");
+    expect(loginThemeFallback("https://evil.example/admin/dashboard")).toBe(
+      "dark"
+    );
+    expect(loginThemeFallback("//evil.example/admin/dashboard")).toBe("dark");
+  });
 });
