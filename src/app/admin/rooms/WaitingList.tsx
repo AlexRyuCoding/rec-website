@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { History, UserPlus, Users, X } from "lucide-react";
+import { CalendarClock, History, UserPlus, Users, X } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
 import { gsap, useGSAP } from "@/lib/gsap";
 import {
@@ -11,6 +11,7 @@ import {
 } from "@/lib/patient-flow";
 import { doctorColorClasses, DoctorRow, RoomRow } from "@/lib/room-status";
 import { waitLevel } from "@/lib/alert-escalation";
+import ExpectedPanel from "./ExpectedPanel";
 import FinishedPanel from "./FinishedPanel";
 import { CLINIC_TZ } from "@/lib/clinic-time";
 
@@ -278,7 +279,14 @@ export default function WaitingList({
 }) {
   // Removing is two taps on the ×: the first arms it, the second confirms.
   const [armedRemoveId, setArmedRemoveId] = useState<string | null>(null);
-  const [finishedOpen, setFinishedOpen] = useState(false);
+  // One list open at a time under the chips.
+  const [panel, setPanel] = useState<"expected" | "finished" | null>(null);
+  const panelButton = (open: boolean) =>
+    `flex min-h-10 items-center gap-1.5 rounded-lg px-3 text-xs font-medium ${
+      open
+        ? "bg-white text-neutral-900"
+        : "bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+    }`;
   const listRef = useRef<HTMLDivElement>(null);
   const seenIdsRef = useRef<Set<string> | null>(null);
 
@@ -358,16 +366,24 @@ export default function WaitingList({
             is on the dashboard: it shows full names and contact details,
             which do not belong on a board patients walk past. */}
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          {/* Who has an appointment today and is not here yet. */}
+          <button
+            aria-expanded={panel === "expected"}
+            onClick={() =>
+              setPanel((p) => (p === "expected" ? null : "expected"))
+            }
+            className={panelButton(panel === "expected")}
+          >
+            <CalendarClock className="h-4 w-4" /> Expected
+          </button>
           {/* The way back for a patient who was finished or removed by
               mistake. */}
           <button
-            aria-expanded={finishedOpen}
-            onClick={() => setFinishedOpen((v) => !v)}
-            className={`flex min-h-10 items-center gap-1.5 rounded-lg px-3 text-xs font-medium ${
-              finishedOpen
-                ? "bg-white text-neutral-900"
-                : "bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
-            }`}
+            aria-expanded={panel === "finished"}
+            onClick={() =>
+              setPanel((p) => (p === "finished" ? null : "finished"))
+            }
+            className={panelButton(panel === "finished")}
           >
             <History className="h-4 w-4" /> Finished
           </button>
@@ -379,7 +395,10 @@ export default function WaitingList({
           </Link>
         </div>
       </div>
-      {finishedOpen && (
+      {panel === "expected" && (
+        <ExpectedPanel visits={allVisits} doctors={doctors} nowMs={nowMs} />
+      )}
+      {panel === "finished" && (
         <FinishedPanel rooms={rooms} visits={allVisits} onRestore={onRestore} />
       )}
       {selectedId && !dragging && (

@@ -86,6 +86,9 @@ patients use it unassisted; it needs no staff sign-in.
   actions (start/pause/resume/adjust/set/reset/clear/ready/again)
 - /api/admin/visits/finished — GET today's finished visits ("First L."),
   newest first, for the board's Finished list
+- /api/admin/expected — GET who is still expected today (Practice Better
+  appointments whose patients have not checked in, "First L."), for the
+  board's Expected list; ?refresh=1 asks Practice Better again
 - /api/admin/visits/[id] — POST {action: assign(roomId, togetherWith?) |
   unassign | remove | mark_waiting | restore} moves a checked-in patient through
   the flow (togetherWith = the visit ids staff said the patient is
@@ -305,6 +308,42 @@ tested).
 - Why an HMAC and not a plain hash: with only 10,000 possible PINs any
   unkeyed hash is reversed by trying them all; the key lives only on the
   server.
+
+## Expected arrivals (migration 0020 — must be applied to use it)
+
+Rooms board → waiting list → "Expected": today's Practice Better
+appointments whose patients have not checked in, earliest first, with
+"in 25 min" / "12 min late" (amber from 10 minutes late, red from 30) and
+a "Check in" button — the ordinary staff check-in, so it is audited.
+Rules: src/lib/expected.ts (pure, tested); cache and joins:
+src/lib/expected-server.ts; panel: rooms/ExpectedPanel.tsx.
+
+- The day's schedule is fetched ONCE and shared (day_schedule_cache, one
+  row per clinic day): a board asking within 5 minutes reads the row.
+  "Refresh" asks Practice Better again, at most every 30 seconds. This is
+  what keeps the list to a few hundred of PB's 10,000 daily requests
+  however many tablets are open. Without the table the route answers
+  "not available" and asks Practice Better NOTHING — never "fix" that by
+  fetching per request.
+- The cached schedule holds no names: {pbClientId, at, practitioner,
+  service}. Patients are found in our own table by pb_client_id; who has
+  checked in is read fresh on every request, so a patient leaves the list
+  the moment they check in.
+- An appointment whose patient is not in our table yet cannot be listed
+  or checked in; the panel says how many there are and points to
+  Dashboard → Setup → Quick sync.
+- If Practice Better cannot be reached and today's copy is held, the old
+  copy is shown, marked "may be out of date". Yesterday's row is never
+  used for today (and is deleted when today's is written).
+- Practice Better's reply is read defensively (parsePbSessions): a
+  session with a missing or odd field is dropped, not fatal. Cancelled
+  sessions and sessions with no single client record (group classes) are
+  left out.
+- One row per patient (their first appointment of the day). A patient who
+  checked in at any time today is not expected, even for a second
+  appointment.
+- Not logged in the audit log as a view — like the waiting list, it is
+  the board's ordinary work; the check-in itself is logged.
 
 ## When a staff page breaks
 
@@ -682,6 +721,13 @@ src/app/waiting-room/music/ (useRadio, useYouTube, useSpotify, MusicBar).
 - Get today's sessions for a client:
   GET /consultant/sessions?records={pb_client_id}&date_eq={today}
 - Get a single client record: GET /consultant/records/{id}
+- Get the whole day's sessions, all clients: GET /consultant/sessions with
+  date_gte / date_lte and NO `records` (optional per the spec), 100 a
+  page — fetchDaySessionItems. Only ever called through the shared cache
+  (see "Expected arrivals")
+- Limits (from PB's spec): 5 requests a second, bursts of 20, 10,000 a
+  day for everything the clinic does with the API. A kiosk check-in costs
+  about four
 - All Practice Better calls happen in Next.js API routes (server-side only)
 
 ## Scripts
