@@ -11,6 +11,7 @@ import {
 import { matchRosterDoctor, VisitView } from "@/lib/patient-flow";
 import { doctorColorClasses, DoctorRow } from "@/lib/room-status";
 import { goToStaffLogin } from "@/lib/staff-login-redirect";
+import { buttonSkinClass } from "../ui/styles";
 
 interface Reply {
   expected: ExpectedRow[];
@@ -34,10 +35,10 @@ const formatTime = (iso: string) =>
   });
 
 const STATUS_STYLE: Record<ArrivalStatus, string> = {
-  upcoming: "text-white/60",
-  due: "text-white",
-  late: "font-semibold text-amber-300",
-  very_late: "font-bold text-rose-300",
+  upcoming: "text-ui-text-2",
+  due: "text-ui-text",
+  late: "font-semibold text-ui-caution",
+  very_late: "font-bold text-ui-error",
 };
 
 // Who is still expected today: Practice Better's appointments for the
@@ -137,15 +138,15 @@ export default function ExpectedPanel({
   };
 
   return (
-    <div className="mt-2.5 border-t border-white/10 pt-2.5">
-      <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/50">
+    <div className="mt-2.5 border-t border-ui-line pt-2.5">
+      <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ui-text-3">
         <span>
           {list
             ? `Appointments from Practice Better, as of ${formatTime(list.fetchedAt)}.`
             : "Today's appointments from Practice Better."}
         </span>
         {list?.stale && (
-          <span className="text-amber-300">
+          <span className="text-ui-caution">
             Practice Better can&apos;t be reached — this list may be out of
             date.
           </span>
@@ -153,7 +154,7 @@ export default function ExpectedPanel({
         <button
           onClick={() => load(true)}
           disabled={loading}
-          className="ml-auto flex min-h-8 items-center gap-1.5 rounded-lg bg-white/10 px-2.5 text-white/80 hover:bg-white/20 disabled:opacity-40"
+          className={`ml-auto flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 ${buttonSkinClass()}`}
         >
           <RefreshCw
             className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
@@ -163,15 +164,15 @@ export default function ExpectedPanel({
       </div>
 
       {error && (
-        <p role="alert" className="py-1 text-sm text-amber-300">
+        <p role="alert" className="py-1 text-sm text-ui-caution">
           {error}
         </p>
       )}
 
       {list === null ? (
-        !error && <p className="py-2 text-sm text-white/50">Loading…</p>
+        !error && <p className="py-2 text-sm text-ui-text-3">Loading…</p>
       ) : list.expected.length === 0 ? (
-        <p className="py-2 text-sm text-white/50">
+        <p className="py-2 text-sm text-ui-text-3">
           Everyone with an appointment today has checked in.
         </p>
       ) : (
@@ -188,7 +189,7 @@ export default function ExpectedPanel({
                 key={row.patientId}
                 data-expected={row.patientId}
                 data-arrival={status}
-                className="flex items-center gap-3 rounded-xl bg-white/5 px-3 py-1.5"
+                className="flex items-center gap-3 rounded-xl bg-ui-panel-2 px-3 py-1.5"
               >
                 <span className="w-[4.5rem] shrink-0 text-sm font-semibold tabular-nums">
                   {formatTime(row.at)}
@@ -200,7 +201,7 @@ export default function ExpectedPanel({
                       {arrivalLabel(row.at, nowMs)}
                     </span>
                   </p>
-                  <p className="flex items-center gap-1.5 truncate text-xs text-white/50">
+                  <p className="flex items-center gap-1.5 truncate text-xs text-ui-text-3">
                     {row.practitioner && (
                       <span className="flex items-center gap-1">
                         {rosterName && (
@@ -222,7 +223,7 @@ export default function ExpectedPanel({
                   </p>
                 </div>
                 {state === "error" && (
-                  <span role="alert" className="text-xs text-rose-300">
+                  <span role="alert" className="text-xs text-ui-error">
                     Not checked in — try again
                   </span>
                 )}
@@ -230,7 +231,7 @@ export default function ExpectedPanel({
                   disabled={state === "busy"}
                   onClick={() => checkIn(row.patientId)}
                   aria-label={`Check in ${row.displayName}`}
-                  className="flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg bg-white/90 px-3 text-sm font-semibold text-neutral-900 hover:bg-white disabled:opacity-40"
+                  className={`flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm ${buttonSkinClass("primary")}`}
                 >
                   <UserCheck className="h-4 w-4" />
                   {state === "busy" ? "Checking in…" : "Check in"}
@@ -242,14 +243,14 @@ export default function ExpectedPanel({
       )}
 
       {list && list.unmatched > 0 && (
-        <p className="pt-2 text-xs text-white/50">
+        <p className="pt-2 text-xs text-ui-text-3">
           {list.unmatched} more appointment{list.unmatched === 1 ? "" : "s"}{" "}
           today {list.unmatched === 1 ? "is" : "are"} for a patient not in the
           patient list yet. Dashboard → Setup → Quick sync brings them in.
         </p>
       )}
       {list && !list.complete && (
-        <p className="pt-1 text-xs text-amber-300">
+        <p className="pt-1 text-xs text-ui-caution">
           Today has more appointments than could be read; this list may be
           missing some.
         </p>
