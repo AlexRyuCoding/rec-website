@@ -256,3 +256,21 @@ export function playSound(
 
   return delay + soundDuration(sound);
 }
+
+// Whether alert sounds can be heard on this device right now.
+// - "off": staff have not turned them on here; the board offers a button.
+// - "blocked": turned on, but the browser is not letting sound out. After
+//   every page load audio stays locked until the screen is touched once,
+//   and a tablet can suspend it later. A board in this state looks ready
+//   and rings nothing, so it has to say so.
+// - "on": sounds will play.
+// contextState is the AudioContext's state, or null while there is none.
+export type AlertSoundStatus = "off" | "blocked" | "on";
+
+export function alertSoundStatus(
+  enabled: boolean,
+  contextState: string | null
+): AlertSoundStatus {
+  if (!enabled) return "off";
+  return contextState === "running" ? "on" : "blocked";
+}

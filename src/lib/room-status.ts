@@ -302,6 +302,27 @@ export function timerActionUpdate(
   }
 }
 
+// What the tile's "type a time" box means when staff are done with it:
+// the seconds to set, or null to change nothing.
+//
+// Leaving the box (a tap elsewhere) must never change a timer by itself.
+// The box opens showing the time rounded to whole minutes, so committing
+// it untouched would turn a running 12:34 into 13:00; and an emptied box
+// is not "one minute". Only Enter on a number, or leaving after typing a
+// different number, sets anything.
+export function typedMinutesToSeconds(
+  text: string,
+  openedWith: string,
+  how: "enter" | "leave"
+): number | null {
+  const typed = text.trim();
+  if (typed === "") return null;
+  if (how === "leave" && typed === openedWith.trim()) return null;
+  const minutes = Number(typed);
+  if (!Number.isFinite(minutes)) return null;
+  return clampDuration(Math.round(minutes) * 60);
+}
+
 export function formatTimerDisplay(seconds: number): string {
   const sign = seconds < 0 ? "+" : "";
   const abs = Math.abs(seconds);

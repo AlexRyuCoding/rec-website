@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { deriveRoomState, RoomRow } from "@/lib/room-status";
 import { VisitView } from "@/lib/patient-flow";
-import { playSound, SoundId } from "@/lib/sounds";
+import { alertSoundStatus, playSound, SoundId } from "@/lib/sounds";
 
 // The sounds themselves — what each one is and why they differ — live in
 // src/lib/sounds.ts. This hook decides WHEN they play:
@@ -22,6 +22,9 @@ const ALARM_PAUSE_MS = 20_000;
 const BETWEEN_SOUNDS_S = 0.5;
 
 const SOUND_PREF_KEY = "rooms-chime-enabled";
+// How long sounds must have been blocked before the board says so. Long
+// enough that the instant between a tap and audio starting shows nothing.
+const SILENT_NOTICE_DELAY_MS = 600;
 
 // ready: the board has loaded its first data. Until then the visit list is
 // just empty, and treating that as "nobody waiting" would make every
@@ -35,6 +38,10 @@ export function useAlarm(
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [audioReady, setAudioReady] = useState(false);
   const ctxRef = useRef<AudioContext | null>(null);
+  // The audio context's own state ("running", "suspended", …); null while
+  // there is no context yet. This is what tells a board that is ringing
+  // from one that only looks ready — see alertSoundStatus.
+  const [contextState, setContextState] = useState<string | null>(null);
   // Counts, not booleans: a second room finishing while one is already
   // alarming restarts the cycle so it gets heard too.
   const statuses = rooms.map(
@@ -45,9 +52,16 @@ export function useAlarm(
 
   const ensureAudio = useCallback(() => {
     if (!ctxRef.current) {
-      ctxRef.current = new AudioContext();
+      const created = new AudioContext();
+      created.onstatechange = () => setContextState(created.state);
+      ctxRef.current = created;
     }
-    ctxRef.current.resume().catch(() => {});
+    const ctx = ctxRef.current;
+    setContextState(ctx.state);
+    ctx
+      .resume()
+      .then(() => setContextState(ctx.state))
+      .catch(() => {});
     setAudioReady(true);
   }, []);
 
@@ -61,21 +75,23 @@ export function useAlarm(
     setSoundEnabled(true);
   }, [ensureAudio]);
 
-  // The enable choice is remembered per device, so the banner only ever
-  // appears once. Browsers still require one user gesture per page load
-  // before audio may start — with the preference saved, the first tap
-  // anywhere on the page (any timer button) unlocks the audio context.
-  // The listeners stay attached to re-resume a context the browser
-  // suspends later (e.g. after a tab switch).
+  // The enable choice is remembered per device, so the "turn on" banner
+  // only ever appears once.
   useEffect(() => {
-    let saved = false;
     try {
-      saved = localStorage.getItem(SOUND_PREF_KEY) === "1";
+      if (localStorage.getItem(SOUND_PREF_KEY) === "1") setSoundEnabled(true);
     } catch {
       // Storage unavailable — fall back to the banner.
     }
-    if (!saved) return;
-    setSoundEnabled(true);
+  }, []);
+
+  // Browsers still require one user gesture per page load before audio
+  // may start, so while sounds are on, the first tap anywhere on the page
+  // (any timer button) unlocks the audio context. The listeners stay
+  // attached to re-resume a context the browser suspends later (a tab
+  // switch, a locked tablet).
+  useEffect(() => {
+    if (!soundEnabled) return;
     const unlock = () => ensureAudio();
     document.addEventListener("pointerdown", unlock);
     document.addEventListener("keydown", unlock);
@@ -83,7 +99,22 @@ export function useAlarm(
       document.removeEventListener("pointerdown", unlock);
       document.removeEventListener("keydown", unlock);
     };
-  }, [ensureAudio]);
+  }, [soundEnabled, ensureAudio]);
+
+  // Until that tap the board is silent while looking exactly like one
+  // that rings — a wall tablet that reloaded by itself overnight would
+  // let a timer end unheard. The page shows a notice for as long as that
+  // lasts.
+  const soundStatus = alertSoundStatus(soundEnabled, contextState);
+  const [silentNotice, setSilentNotice] = useState(false);
+  useEffect(() => {
+    if (soundStatus !== "blocked") {
+      setSilentNotice(false);
+      return;
+    }
+    const t = setTimeout(() => setSilentNotice(true), SILENT_NOTICE_DELAY_MS);
+    return () => clearTimeout(t);
+  }, [soundStatus]);
 
   // Ring immediately, then again after every pause, indefinitely — the
   // only thing that stops it is the alarm condition ending (staff clear
@@ -166,5 +197,5 @@ export function useAlarm(
     [enableSound]
   );
 
-  return { soundEnabled, enableSound, testSound };
+  return { soundEnabled, silentNotice, enableSound, testSound };
 }

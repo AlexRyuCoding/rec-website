@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import { createServiceClient, fetchAllPatientsWithPins } from "@/lib/supabase";
+import { createServiceClient } from "@/lib/supabase";
+import { pinUsedByAnother, saveNewPin } from "@/lib/pin-server";
 import { isAdminAuthorized } from "@/lib/admin-auth";
 import { phoneCandidates } from "@/lib/kiosk-entry";
 
@@ -133,35 +133,21 @@ export async function PATCH(req: Request) {
   }
 
   // PIN lookup is by PIN alone, so each PIN must map to exactly one patient
-  let existing;
+  const taken = NextResponse.json(
+    { error: "That PIN is already taken — please choose a different one." },
+    { status: 409 }
+  );
   try {
-    existing = (await fetchAllPatientsWithPins(supabase)).filter(
-      (p) => p.id !== patient_id
-    );
+    if (await pinUsedByAnother(supabase, pin, patient_id)) return taken;
   } catch {
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
 
-  for (const other of existing) {
-    if (await bcrypt.compare(pin, other.pin)) {
-      return NextResponse.json(
-        { error: "That PIN is already taken — please choose a different one." },
-        { status: 409 }
-      );
-    }
-  }
-
-  const hashed = await bcrypt.hash(pin, 8);
-
-  const { data: patient, error } = await supabase
-    .from("patients")
-    .update({ pin: hashed })
-    .eq("id", patient_id)
-    .is("pin", null)
-    .select("id, first_name, last_name, pb_client_id")
-    .single();
-
-  if (error || !patient) {
+  // Hash + fingerprint (src/lib/pin-server.ts). "taken" here means another
+  // patient saved the same PIN between the check above and this write.
+  const patient = await saveNewPin(supabase, patient_id, pin);
+  if (patient === "taken") return taken;
+  if (patient === "error") {
     return NextResponse.json({ error: "Failed to save PIN" }, { status: 500 });
   }
 

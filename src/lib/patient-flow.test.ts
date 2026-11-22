@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  assignCollision,
+  roomDeleteBlocker,
   applyVisitUpdates,
   assignCompanions,
   AssignOutcome,
@@ -746,5 +748,84 @@ describe("join question", () => {
   ])("closes when %s", (_name, roomsNow, visitsNow) => {
     const q = joinQuestionFor(rooms[0], [called("x"), waiting("a")], "a")!;
     expect(joinQuestionOpen(q, roomsNow, visitsNow)).toBe(false);
+  });
+});
+
+describe("assignCollision (two boards assigning at the same instant)", () => {
+  it("a patient alone in the room they were sent to is fine", () => {
+    expect(assignCollision("r1", [called("a")], "a")).toBe(false);
+  });
+
+  it("two patients each sent to the same empty room collide", () => {
+    const after = [called("a"), called("b")];
+    expect(assignCollision("r1", after, "a")).toBe(true);
+    expect(assignCollision("r1", after, "b")).toBe(true);
+  });
+
+  it("the people the answer named are not a collision", () => {
+    const after = [treating("a"), called("b")];
+    expect(assignCollision("r1", after, "b", ["a"])).toBe(false);
+  });
+
+  it("someone the answer did not name is a collision, named ones or not", () => {
+    const after = [treating("a"), called("b"), called("c")];
+    expect(assignCollision("r1", after, "b", ["a"])).toBe(true);
+  });
+
+  it("two patients each lined up alone for the same room collide", () => {
+    const after = [treating("x"), nextUp("a"), nextUp("b", T0 - MIN)];
+    expect(assignCollision("r1", after, "a")).toBe(true);
+    expect(assignCollision("r1", after, "b")).toBe(true);
+  });
+
+  it("joining the line with the people named is fine", () => {
+    const after = [treating("x"), nextUp("a"), nextUp("b", T0 - MIN)];
+    expect(assignCollision("r1", after, "b", ["a"])).toBe(false);
+  });
+
+  it("being lined up behind the people in the room is not a collision", () => {
+    expect(assignCollision("r1", [treating("x"), nextUp("a")], "a")).toBe(
+      false
+    );
+  });
+
+  it("people in other rooms, and people still waiting, do not count", () => {
+    const after = [called("a"), called("b", "r2"), waiting("c")];
+    expect(assignCollision("r1", after, "a")).toBe(false);
+  });
+
+  it("nothing to take back if the patient is no longer in that room", () => {
+    expect(assignCollision("r1", [waiting("a"), called("b")], "a")).toBe(false);
+    expect(assignCollision("r1", [called("b")], "a")).toBe(false);
+  });
+});
+
+describe("roomDeleteBlocker", () => {
+  const idle = named();
+
+  it("an empty, idle room can be deleted", () => {
+    expect(
+      roomDeleteBlocker(idle, [waiting("a"), called("b", "r2")])
+    ).toBeNull();
+  });
+
+  it("refuses while a patient is in the room", () => {
+    expect(roomDeleteBlocker(idle, [called("a")])).toBe(
+      "Room 5 has patients — finish or move them first"
+    );
+  });
+
+  it("refuses while a patient is lined up for it", () => {
+    expect(roomDeleteBlocker(idle, [nextUp("a")])).toContain("has patients");
+  });
+
+  it("refuses while its timer runs, even with nobody tracked in it", () => {
+    expect(roomDeleteBlocker(named(timerRunning), [])).toBe(
+      "Room 5 has a timer running — clear it first"
+    );
+  });
+
+  it("refuses while it is setting up", () => {
+    expect(roomDeleteBlocker(named(settingUp), [])).toContain("setting up");
   });
 });

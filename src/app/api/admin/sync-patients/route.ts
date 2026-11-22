@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
 import { isAdminAuthorized } from "@/lib/admin-auth";
 import { toPatientRow } from "@/lib/patient-record";
+import { fetchWithTimeout } from "@/lib/fetch-timeout";
 import {
   PB_BASE,
+  PB_LIST_TIMEOUT_MS,
   getPbToken,
   type PbClientRecord,
 } from "@/lib/practice-better";
@@ -40,7 +42,22 @@ export async function POST(req: Request) {
       ? body.before_id
       : null;
 
-  const token = await getPbToken();
+  // Practice Better being down or slow is an answer the dashboard must be
+  // able to show ("could not be reached"), not an unhandled error whose
+  // empty reply reads as "check your connection".
+  const unreachable = () =>
+    NextResponse.json(
+      { error: "Practice Better could not be reached — try again shortly." },
+      { status: 502 }
+    );
+
+  let token: string;
+  try {
+    token = await getPbToken();
+  } catch {
+    console.error("PB token fetch failed");
+    return unreachable();
+  }
 
   const clients: PbClientRecord[] = [];
   // count shrinks with the cursor window; only the first page of the
@@ -53,17 +70,25 @@ export async function POST(req: Request) {
     const params = new URLSearchParams({ limit: String(PAGE_LIMIT) });
     if (cursor) params.set("before_id", cursor);
 
-    const res = await fetch(`${PB_BASE}/consultant/records?${params}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) {
-      console.error("PB records fetch failed:", res.status);
-      return NextResponse.json(
-        { error: `Practice Better fetch failed (${res.status})` },
-        { status: 502 }
+    let data: PbRecordsPage;
+    try {
+      const res = await fetchWithTimeout(
+        `${PB_BASE}/consultant/records?${params}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+        PB_LIST_TIMEOUT_MS
       );
+      if (!res.ok) {
+        console.error("PB records fetch failed:", res.status);
+        return NextResponse.json(
+          { error: `Practice Better fetch failed (${res.status})` },
+          { status: 502 }
+        );
+      }
+      data = await res.json();
+    } catch {
+      console.error("PB records fetch failed: no answer");
+      return unreachable();
     }
-    const data: PbRecordsPage = await res.json();
 
     if (total === null && !body.before_id && typeof data.count === "number") {
       total = data.count;

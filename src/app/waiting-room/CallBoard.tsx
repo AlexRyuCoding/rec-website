@@ -4,6 +4,7 @@ import { ArrowRight, DoorOpen } from "lucide-react";
 import type { NowPlaying } from "@/lib/music";
 import MusicBar from "./music/MusicBar";
 import { Appear, motionVars, ROW_OUT_MS, Swap, useLingering } from "./motion";
+import { CLINIC_TZ } from "@/lib/clinic-time";
 
 export interface Call {
   id: string;
@@ -17,8 +18,6 @@ export type BoardPhase =
   | { kind: "pairing"; code: string }
   | { kind: "live" }
   | { kind: "error" };
-
-const CLINIC_TZ = "America/Los_Angeles";
 
 // A call counts as news — its row opens up and glows gold — for this long
 // after the patient was called. Long enough to cover a slow poll, short

@@ -12,7 +12,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { ArrowLeft, Bell, Pencil, X } from "lucide-react";
+import { ArrowLeft, Bell, BellOff, Pencil, X } from "lucide-react";
 import { deriveRoomState, RoomRow } from "@/lib/room-status";
 import {
   assignOutcome,
@@ -68,7 +68,7 @@ export default function RoomsPage() {
     deleteDoctor,
   } = useRooms();
   const [editMode, setEditMode] = useState(false);
-  const { soundEnabled, enableSound, testSound } = useAlarm(
+  const { soundEnabled, silentNotice, enableSound, testSound } = useAlarm(
     rooms,
     serverNowMs,
     visits,
@@ -291,6 +291,21 @@ export default function RoomsPage() {
         </button>
       )}
 
+      {/* Sounds are on for this device but the browser is holding them
+          back until the screen is touched (every page load starts that
+          way). Fixed to the bottom edge, so the board does not jump under
+          the very tap that clears it. */}
+      {silentNotice && (
+        <button
+          onClick={enableSound}
+          className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-center gap-3 bg-amber-300 px-4 py-3 text-base font-semibold text-amber-950 shadow-[0_-8px_24px_rgba(0,0,0,0.5)]"
+        >
+          <BellOff aria-hidden className="h-6 w-6 shrink-0 animate-pulse" />
+          Alert sounds are silent on this screen until it is touched — tap
+          anywhere
+        </button>
+      )}
+
       {actionError && (
         <p className="mx-auto mb-4 max-w-5xl rounded-lg bg-rose-900/60 px-4 py-2 text-sm">
           {actionError}
@@ -300,15 +315,25 @@ export default function RoomsPage() {
       {loading ? (
         <p className="mx-auto max-w-5xl text-white/60">Loading…</p>
       ) : editMode ? (
-        <LayoutEditor
-          rooms={rooms}
-          doctors={doctors}
-          onCreate={createRoom}
-          onUpdate={updateRoom}
-          onDelete={deleteRoom}
-          onAddDoctor={addDoctor}
-          onDeleteDoctor={deleteDoctor}
-        />
+        <>
+          {/* The doctor alert cannot be dismissed, and opening the layout
+              editor on one tablet must not be a way around that. */}
+          <WaitingBanner
+            alerts={waitingAlerts}
+            nowMs={serverNowMs}
+            busyRoomIds={busyRoomIds}
+            onDoctorIn={doctorIn}
+          />
+          <LayoutEditor
+            rooms={rooms}
+            doctors={doctors}
+            onCreate={createRoom}
+            onUpdate={updateRoom}
+            onDelete={deleteRoom}
+            onAddDoctor={addDoctor}
+            onDeleteDoctor={deleteDoctor}
+          />
+        </>
       ) : (
         <DndContext
           id="rooms-assign"

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
+import { safeNextPath } from "@/lib/staff-session";
 
 export default function AdminLoginPage() {
   const [error, setError] = useState("");
@@ -16,9 +17,12 @@ export default function AdminLoginPage() {
     }
   }, []);
 
+  // Back to the page staff were on (?next=, set by the middleware and by
+  // pages whose session ran out); the kiosk when nothing was asked for.
   const handleSignIn = () => {
     setLoading(true);
-    signIn("google", { callbackUrl: "/admin/patient-signin" });
+    const next = new URLSearchParams(window.location.search).get("next");
+    signIn("google", { callbackUrl: safeNextPath(next) });
   };
 
   return (
@@ -28,7 +32,7 @@ export default function AdminLoginPage() {
           Staff <i>login</i>
         </h1>
         <p className="text-center text-sm text-ink/60">
-          Sign in with your staff Google account to unlock the kiosk.
+          Sign in with your staff Google account.
         </p>
         {error && (
           <p role="alert" className="text-center text-sm text-error">

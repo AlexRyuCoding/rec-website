@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  alertSoundStatus,
   SOUND_IDS,
   soundContour,
   soundDuration,
@@ -109,5 +110,27 @@ describe("alert sounds", () => {
       expect(SOUNDS[id].name.length).toBeGreaterThan(3);
       expect(SOUNDS[id].soundsLike.length).toBeGreaterThan(10);
     }
+  });
+});
+
+describe("alertSoundStatus", () => {
+  it("is off until staff turn sounds on for the device", () => {
+    expect(alertSoundStatus(false, null)).toBe("off");
+    expect(alertSoundStatus(false, "running")).toBe("off");
+  });
+
+  it("is blocked after a page load, before the screen is touched", () => {
+    expect(alertSoundStatus(true, null)).toBe("blocked");
+  });
+
+  it("is blocked while the browser holds audio back", () => {
+    expect(alertSoundStatus(true, "suspended")).toBe("blocked");
+    // iOS Safari, e.g. after the tablet was locked
+    expect(alertSoundStatus(true, "interrupted")).toBe("blocked");
+    expect(alertSoundStatus(true, "closed")).toBe("blocked");
+  });
+
+  it("is on once audio is running", () => {
+    expect(alertSoundStatus(true, "running")).toBe("on");
   });
 });

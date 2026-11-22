@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
 import { isAdminAuthorized } from "@/lib/admin-auth";
-import { commitFlow } from "@/lib/flow-server";
+import { commitAssign, commitFlow } from "@/lib/flow-server";
 import {
   applyVisitUpdates,
   assignUpdate,
@@ -89,7 +89,34 @@ export async function POST(
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 409 });
     }
-    updates.push(...result.updates);
+    // An assign goes through its own guarded write: the rules above were
+    // right about what this request read, but another board may be
+    // assigning at the same instant (see commitAssign).
+    const assigned = await commitAssign(supabase, {
+      room,
+      update: result.updates[0],
+      togetherWith: input.togetherWith ?? [],
+      visitsBefore: visits,
+      nowMs,
+    });
+    if (assigned.ok) {
+      return NextResponse.json({
+        visits: assigned.visits,
+        rooms: assigned.rooms,
+      });
+    }
+    if (assigned.reason === "error") {
+      return NextResponse.json({ error: "Database error" }, { status: 500 });
+    }
+    return NextResponse.json(
+      {
+        error:
+          assigned.reason === "taken"
+            ? "That patient already has a room — please choose again"
+            : `${room.name} changed — please choose again`,
+      },
+      { status: 409 }
+    );
   } else if (input.action === "unassign") {
     updates.push(unassignUpdate(id));
   } else if (input.action === "mark_waiting") {

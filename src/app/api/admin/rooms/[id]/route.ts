@@ -3,12 +3,15 @@ import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
 import { isAdminAuthorized } from "@/lib/admin-auth";
 import { broadcastRoomsUpdated } from "@/lib/rooms-realtime";
+import { roomDeleteBlocker } from "@/lib/patient-flow";
+import { loadActiveVisits } from "@/lib/visits-server";
 import {
   DOCTOR_NAME_MAX_LENGTH,
   GRID_COLS,
   MAX_DURATION_SECONDS,
   MAX_ROOM_CAPACITY,
   MIN_DURATION_SECONDS,
+  RoomRow,
 } from "@/lib/room-status";
 
 const patchSchema = z.object({
@@ -122,6 +125,34 @@ export async function DELETE(
 
   const { id } = await params;
   const supabase = createServiceClient();
+
+  // A room in use is not deleted: its timer would be dropped and its
+  // patients sent back to the waiting list without anyone being told.
+  // If who is in it cannot be read, the answer is also no.
+  const { data: room, error: roomError } = await supabase
+    .from("rooms")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (roomError) {
+    return NextResponse.json({ error: "Database error" }, { status: 500 });
+  }
+  if (!room) {
+    return NextResponse.json({ error: "Room not found" }, { status: 404 });
+  }
+  let blocker: string | null;
+  try {
+    blocker = roomDeleteBlocker(
+      room as RoomRow,
+      await loadActiveVisits(supabase, Date.now())
+    );
+  } catch {
+    return NextResponse.json({ error: "Database error" }, { status: 500 });
+  }
+  if (blocker) {
+    return NextResponse.json({ error: blocker }, { status: 409 });
+  }
+
   const { data, error } = await supabase
     .from("rooms")
     .delete()

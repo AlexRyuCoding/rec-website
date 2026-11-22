@@ -26,6 +26,7 @@ import ConfirmationModal from "./confirmation-modal";
 import DigitSlots from "./kiosk/digit-slots";
 import NumberPad from "./kiosk/number-pad";
 import TapButton from "./kiosk/tap-button";
+import { goToStaffLogin } from "@/lib/staff-login-redirect";
 
 // The patient check-in kiosk. Written for people who are not comfortable
 // with screens, so three rules shape every screen:
@@ -182,7 +183,7 @@ export default function SignInKeypad() {
 
   // Kiosk session expired mid-day — staff need to unlock again.
   const redirectToLogin = () => {
-    window.location.href = "/admin/login";
+    goToStaffLogin();
   };
 
   const loadAppointment = async (
