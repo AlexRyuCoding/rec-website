@@ -26,6 +26,13 @@ import ConfirmationModal from "./confirmation-modal";
 import DigitSlots from "./kiosk/digit-slots";
 import NumberPad from "./kiosk/number-pad";
 import TapButton from "./kiosk/tap-button";
+import {
+  columnClass,
+  headingClass,
+  leadClass,
+  primaryButton,
+  secondaryButton,
+} from "./kiosk/styles";
 import { goToStaffLogin } from "@/lib/staff-login-redirect";
 
 // The patient check-in kiosk. Written for people who are not comfortable
@@ -103,19 +110,14 @@ const FRONT_DESK = "ask the front desk for help";
 const phoneReducer = (value: string, key: PadKey | { type: "reset" }) =>
   key.type === "reset" ? "" : applyPhoneKey(value, key);
 
-const primaryButton =
-  "flex items-center justify-center gap-2 rounded-full bg-brand-primary px-8 py-[min(1.7dvh,16px)] text-[clamp(1.1rem,2.9dvh,1.5rem)] font-medium text-white data-[pressed=true]:bg-brand-secondary";
-const secondaryButton =
-  "flex items-center justify-center gap-2 rounded-full border-2 border-cream/50 px-6 py-[min(1.7dvh,16px)] text-[clamp(1.1rem,2.9dvh,1.5rem)] text-cream data-[pressed=true]:bg-cream/15";
-// Screens without the number pad: one centred column.
-const columnClass =
-  "flex w-full max-w-[520px] flex-col items-center gap-[min(2dvh,18px)]";
-const headingClass =
-  "text-center font-serif text-[clamp(1.7rem,4.6dvh,2.75rem)] leading-tight";
-const leadClass =
-  "text-center text-[clamp(1rem,2.5dvh,1.35rem)] leading-snug text-cream/80";
-
-export default function SignInKeypad() {
+// What to do when the server says this browser may not use the kiosk
+// (401): the page that hosts the keypad decides — see kiosk-gate.tsx.
+// Without one, the old behaviour: to the staff login.
+export default function SignInKeypad({
+  onUnauthorized = goToStaffLogin,
+}: {
+  onUnauthorized?: () => void;
+} = {}) {
   const [screen, setScreen] = useState<Screen>("signin");
 
   // Sign in
@@ -181,10 +183,9 @@ export default function SignInKeypad() {
     kioskTapGuard.block(SCREEN_CHANGE_GUARD_MS);
   }, [screen, contactMode, isModalOpen]);
 
-  // Kiosk session expired mid-day — staff need to unlock again.
-  const redirectToLogin = () => {
-    goToStaffLogin();
-  };
+  // The kiosk is no longer allowed in (its pairing was removed, or the
+  // staff sign-in it ran on ended).
+  const redirectToLogin = onUnauthorized;
 
   const loadAppointment = async (
     pbClientId: string | null
@@ -425,6 +426,10 @@ export default function SignInKeypad() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ patient_id: patient.id }),
       });
+      if (res.status === 401) {
+        redirectToLogin();
+        return "error";
+      }
       if (!res.ok) return "error";
       const data = await res.json();
       return data.duplicate ? "duplicate" : "ok";

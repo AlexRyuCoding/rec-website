@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
 import { findPatientByPin } from "@/lib/pin-server";
-import { isAdminAuthorized } from "@/lib/admin-auth";
+import { isKioskAuthorized } from "@/lib/kiosk-auth-server";
 import { pinAttemptsExhausted, recordPinFailure } from "@/lib/pin-rate-limit";
 
 export async function POST(req: Request) {
-  if (!(await isAdminAuthorized())) {
+  if (!(await isKioskAuthorized())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (await pinAttemptsExhausted()) {

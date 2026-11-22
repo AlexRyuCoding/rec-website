@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
 import { pinUsedByAnother, saveNewPin } from "@/lib/pin-server";
-import { isAdminAuthorized } from "@/lib/admin-auth";
+import { isKioskAuthorized } from "@/lib/kiosk-auth-server";
 import { phoneCandidates } from "@/lib/kiosk-entry";
 
 function normalizePhone(raw: string): string {
@@ -47,7 +47,7 @@ function resolveMatches(matches: ContactMatch[]) {
 }
 
 export async function POST(req: Request) {
-  if (!(await isAdminAuthorized())) {
+  if (!(await isKioskAuthorized())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -93,7 +93,7 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  if (!(await isAdminAuthorized())) {
+  if (!(await isKioskAuthorized())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
