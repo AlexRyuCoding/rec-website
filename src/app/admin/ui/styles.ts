@@ -16,10 +16,14 @@ const FOCUS =
 // reduced-motion class repeats the :not(:disabled) part on purpose: with
 // less of the selector it loses to the press it is meant to cancel.)
 //
+// The `before:` part keeps the press under the pointer: a button that
+// moves down 2px slides out from under a pointer resting on its top edge
+// and the click is lost; while pressed, the button reaches 2px up again.
+//
 // The skin of a button — edge, press, focus, disabled — apart from its
 // layout, for buttons that keep a layout and size of their own (the rooms
 // board's finger-sized ones).
-const BUTTON_SKIN = `border transition-[transform,box-shadow,background-color,border-color,color] duration-100 [&:not(:disabled)]:active:translate-y-[2px] [&:not(:disabled)]:active:shadow-none motion-reduce:[&:not(:disabled)]:active:translate-y-0 disabled:opacity-50 ${FOCUS}`;
+const BUTTON_SKIN = `border transition-[transform,box-shadow,background-color,border-color,color] duration-100 [&:not(:disabled)]:active:translate-y-[2px] [&:not(:disabled)]:active:shadow-none motion-reduce:[&:not(:disabled)]:active:translate-y-0 [&:not(:disabled)]:active:before:absolute [&:not(:disabled)]:active:before:inset-x-0 [&:not(:disabled)]:active:before:-top-[2px] [&:not(:disabled)]:active:before:h-[2px] [&:not(:disabled)]:active:before:content-[''] disabled:opacity-50 ${FOCUS}`;
 const BUTTON_BASE = `inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium ${BUTTON_SKIN}`;
 
 const BUTTON_VARIANT: Record<ButtonVariant, string> = {

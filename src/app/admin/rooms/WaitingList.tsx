@@ -86,7 +86,7 @@ function ChipLabel({
               level === "long"
                 ? "bg-ui-on-accent text-rose-700"
                 : level === "warn"
-                  ? "bg-amber-950 text-ui-caution"
+                  ? "bg-amber-950 text-amber-300"
                   : "bg-amber-300 text-amber-950"
             }`}
           >
@@ -221,13 +221,17 @@ function WaitingChip({
       // A raised key: it is pressed (name, then room). The longer a
       // patient has been kept waiting (waitLevel), the harder it is to
       // overlook: amber from ten minutes, red from twenty — the same in
-      // both themes. The picked one stays pressed in, with a ring.
-      className={`flex shrink-0 items-stretch overflow-hidden rounded-xl text-left transition-[background-color,color,opacity,transform,box-shadow] duration-200 ${
+      // both themes. Pressed or picked, it loses its ledge; the picked
+      // one also gets a ring.
+      // It never moves by CSS: this element's transform belongs to the
+      // arrival animation (GSAP leaves an inline transform behind, which
+      // would beat a class anyway) and to the drag library.
+      className={`flex shrink-0 items-stretch overflow-hidden rounded-xl text-left transition-[background-color,color,opacity,box-shadow] duration-200 ${
         CHIP_SKIN[level]
       } ${
         selected
-          ? `translate-y-[2px] ${CHIP_PICKED[level]}`
-          : `${CHIP_LEDGE[level]} active:translate-y-[2px] active:shadow-none motion-reduce:active:translate-y-0`
+          ? CHIP_PICKED[level]
+          : `${CHIP_LEDGE[level]} active:shadow-none`
       } ${isDragging ? "opacity-40" : ""}`}
     >
       <button

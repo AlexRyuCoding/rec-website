@@ -16,7 +16,7 @@ const config: Config = {
         cream: "#eceae6",
         gold: "#e9c46a",
         error: "#ff3c3c",
-        // The staff look (dashboard; rooms board next). Values live in
+        // The staff look (dashboard and rooms board). Values live in
         // src/app/admin/staff-theme.css, one set per theme, under
         // html[data-staff-theme]. No opacity modifiers on these — every
         // tint has its own name.

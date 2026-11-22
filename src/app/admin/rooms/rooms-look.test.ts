@@ -28,6 +28,8 @@ const TILE = [
   "WaitingBanner.tsx",
   ...readdirSync(join(ROOMS, "tile")).map((name) => `tile/${name}`),
 ];
+// Files of the board that draw nothing themed or coloured themselves.
+const OTHER = ["layout.tsx"];
 const read = (file: string) => readFileSync(join(ROOMS, file), "utf8");
 
 // Colours in the frame that are NOT the theme's, each a decision. They
@@ -61,6 +63,17 @@ const FRAME_SIGNALS: Record<string, (string | RegExp)[]> = {
 };
 
 describe("the rooms board's look", () => {
+  // A new panel must be put on one side or the other, or it is guarded
+  // by nothing.
+  it("every component of the board is either frame or tile", () => {
+    const known = new Set([...FRAME, ...TILE, ...OTHER]);
+    const all = [
+      ...readdirSync(ROOMS),
+      ...readdirSync(join(ROOMS, "tile")).map((name) => `tile/${name}`),
+    ].filter((name) => name.endsWith(".tsx"));
+    expect(all.filter((name) => !known.has(name))).toEqual([]);
+  });
+
   it.each(FRAME)(
     "%s: the frame uses the theme's colours and hard ledges",
     (file) => {
@@ -87,9 +100,13 @@ describe("the rooms board's look", () => {
   });
 
   it.each(TILE)("%s: a tile never follows the theme", (file) => {
-    const themed = read(file)
+    const source = read(file);
+    // Not a theme colour, not a theme ledge (shadow-lift-…, shadow-sunk)…
+    const themed = source
       .split(/[\s"'`]+/)
-      .filter((cls) => /(^|[:-])ui-[a-z]/.test(cls));
+      .filter((cls) => /(^|[:-])ui-[a-z]|(^|:)shadow-(lift|sunk)/.test(cls));
     expect(themed).toEqual([]);
+    // … and not through the themed pieces either.
+    expect(source).not.toMatch(/from "\.\.\/(\.\.\/)?ui\//);
   });
 });

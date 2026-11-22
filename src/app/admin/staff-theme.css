@@ -1,5 +1,5 @@
 /* The staff look: every colour, ledge and animation of the staff pages
-   that carry the theme switch (the dashboard; the rooms board next).
+   that carry the theme switch (the dashboard and the rooms board).
 
    Everything hangs off html[data-staff-theme], which a themed page puts on
    <html> while it is mounted and takes off when it leaves

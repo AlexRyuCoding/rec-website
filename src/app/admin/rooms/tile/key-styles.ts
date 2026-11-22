@@ -15,10 +15,18 @@ import type { RoomState } from "@/lib/room-status";
 // the tile's geometry (grid.ts) and every press target stay exactly as
 // they were. Never turn one into a border or a margin.
 
-// The ledge under a key and its press: down 2px onto the ledge. Not when
-// disabled, and without the movement for people who asked for less motion.
-export const tilePress =
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_2px_0_rgba(0,0,0,0.38)] transition-[transform,box-shadow,background-color] duration-100 [&:not(:disabled)]:active:translate-y-[2px] [&:not(:disabled)]:active:shadow-none motion-reduce:[&:not(:disabled)]:active:translate-y-0";
+// The ledge under a key; pressed, the ledge goes. For keys that something
+// else already moves — the doctor list's options slide in with GSAP, and
+// a CSS transition or transform on them would fight that.
+export const tileLedge =
+  "shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_2px_0_rgba(0,0,0,0.38)] [&:not(:disabled)]:active:shadow-none";
+
+// The same ledge, with the press: down 2px onto it. Not when disabled, and
+// without the movement for people who asked for less motion.
+// The `before:` part keeps the press under the pointer: a key that moves
+// down 2px slides out from under a pointer resting on its top edge, and
+// the press would be lost; while pressed, the key reaches 2px up again.
+export const tilePress = `${tileLedge} transition-[transform,box-shadow,background-color] duration-100 [&:not(:disabled)]:active:translate-y-[2px] motion-reduce:[&:not(:disabled)]:active:translate-y-0 [&:not(:disabled)]:active:before:absolute [&:not(:disabled)]:active:before:inset-x-0 [&:not(:disabled)]:active:before:-top-[2px] [&:not(:disabled)]:active:before:h-[2px] [&:not(:disabled)]:active:before:content-['']`;
 
 // An ordinary key on a tile.
 export const tileKey = `bg-white/20 hover:bg-white/30 ${tilePress}`;

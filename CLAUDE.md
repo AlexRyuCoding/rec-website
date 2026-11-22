@@ -475,6 +475,13 @@ ThemeSwitch, Backdrop, styles.ts); the theme rule: src/lib/staff-theme.ts
   text and control sits on an opaque surface — which is why toolbars are
   panels and messages are banners. The tab's accent line takes its
   colour from the photo (forest green / copper); buttons stay teal.
+- A pressed button moves down 2px onto its ledge — and, while pressed,
+  reaches 2px back up (the `before:` part of the classes), so a pointer
+  resting on its top edge is still on it when the press is let go.
+  Without that the click is lost.
+- Pressing the theme item that is already shown stores nothing: on the
+  board "nothing chosen" means dark, and a stored "system" would undo
+  that (the dashboard shows "system" for both).
 - Motion is short (80–280 ms) and follows the change, never delays it.
   A switch's thumb and the tab tile slide (use-thumb.ts — only after a
   press on that control; every other time they are put in place); a
@@ -501,11 +508,24 @@ ThemeSwitch, Backdrop, styles.ts); the theme rule: src/lib/staff-theme.ts
     this tablet" (rooms/layout.tsx, useStaffTheme("dark")): the wall
     iPads are on automatic appearance and the board would change its
     look at sunset by itself. A choice made on either page wins on both.
-  - Ledges are shadows and rings, never borders or margins: the restyle
-    changed no size (10 tiles, 77 buttons and the waiting names were
-    measured against the old board — identical — and the second row of
-    rooms sits exactly where it did). Keep it that way: a 1px border on
-    a waiting name pushed every room 2px down the tablet.
+  - On tiles, their keys and the waiting names, ledges and edges are
+    shadows and rings, never borders or margins: the restyle changed no
+    size there (10 tiles, 77 in-tile buttons and the waiting names were
+    measured against the old board — identical). Keep it that way: a 1px
+    border on a waiting name pushed every room 2px down the tablet. The
+    frame's own buttons did gain a 1px edge: the "tap to turn on sounds"
+    bar and the error bar are 2px taller, the top bar 2px shorter — with
+    sounds on, the rooms sit 2px higher than they did.
+  - A literal fill carries literal text. A theme colour on a signal's
+    fill is right in one theme only ("First visit" on an amber name was
+    2.2:1 in light). The doctor alert has a dark edge of its own (the
+    ring's offset) because its pale fill disappears against the light
+    photo; doctorColorClasses' fallback is a solid grey pill, not white
+    on a see-through band, for the same reason.
+  - Nothing that GSAP or the drag library moves gets a CSS transform or
+    a transition on transform: waiting names (arrivals, dragging) and
+    the doctor list's options lose their ledge when pressed but do not
+    move. GSAP leaves an inline transform behind that beats any class.
   - The photo goes UNDER the board's content (`<Backdrop under />` in an
     `isolate` root) instead of the content being lifted over it, so the
     board's own layers — Sounds popover, the sticky doctor alert, the

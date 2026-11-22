@@ -269,9 +269,9 @@ export default function RoomsPage() {
     // dialog, the silent-sounds bar) stack exactly as they always have.
     <main className="relative isolate min-h-screen pb-4 text-ui-text sm:pb-6">
       <Backdrop under />
-      {/* No taller than the header it replaced (bar + the gap under it =
-          84px): two rows of rooms and a doctor alert have to stay as high
-          on a 10-inch tablet as they were. */}
+      {/* No taller than the header it replaced (that one: 84px with the
+          gap under it; this one: 82px): two rows of rooms and a doctor
+          alert have to sit as high on a 10-inch tablet as they did. */}
       <header className="mb-4 border-b border-ui-line bg-ui-panel px-4 shadow-lift-2 sm:px-6">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-x-3 gap-y-2 py-3">
           <div className="flex items-center gap-3">
