@@ -106,6 +106,11 @@ export function useStaffTheme(fallback: ThemeChoice = "system"): {
 
   const setChoice = useCallback(
     (next: ThemeChoice) => {
+      // Pressing the item already shown is not a choice. It must not be
+      // stored as one: on the rooms board "nothing chosen" means dark,
+      // and a stored "system" would make the wall tablets follow the
+      // sunset (the dashboard shows "system" for both).
+      if (next === choiceRef.current) return;
       choiceRef.current = next;
       setChoiceState(next);
       try {

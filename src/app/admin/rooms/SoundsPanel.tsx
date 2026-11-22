@@ -4,6 +4,7 @@ import { Play, Volume2 } from "lucide-react";
 import { LONG_WAIT_MS, REPEAT_MS } from "@/lib/alert-escalation";
 import { doctorColorClasses, DoctorRow } from "@/lib/room-status";
 import { SoundId, SOUNDS, STAFF_SOUND_IDS } from "@/lib/sounds";
+import { buttonClass, buttonSkinClass } from "../ui/styles";
 
 // The board's sounds, on one panel.
 //
@@ -58,13 +59,13 @@ export default function SoundsPanel({
       <button
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20"
+        className={`${buttonClass()} text-sm`}
       >
         <Volume2 className="h-4 w-4" /> Sounds
         {/* A tablet that rings for some doctors only says so, so nobody
             wonders why it stayed quiet. */}
         {!everyone && (
-          <span className="max-w-28 truncate rounded-full bg-white/15 px-2 text-xs">
+          <span className="max-w-28 truncate rounded-full bg-ui-panel-2 px-2 text-xs font-normal">
             {doorbellDoctors.join(", ")}
           </span>
         )}
@@ -73,40 +74,40 @@ export default function SoundsPanel({
         <div
           role="dialog"
           aria-label="Alert sounds"
-          className="absolute right-0 top-full z-40 mt-2 w-80 rounded-2xl bg-neutral-900 p-3 shadow-2xl ring-1 ring-white/10"
+          className="absolute right-0 top-full z-40 mt-2 w-80 rounded-2xl bg-ui-panel p-3 text-ui-text shadow-lift-2 ring-1 ring-ui-line-strong"
         >
-          <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-widest text-white/60">
+          <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-widest text-ui-text-2">
             What each sound means
           </p>
           <ul className="space-y-1.5">
             {STAFF_SOUND_IDS.map((id) => (
               <li
                 key={id}
-                className="flex items-center gap-3 rounded-xl bg-white/5 px-3 py-2"
+                className="flex items-center gap-3 rounded-xl bg-ui-panel-2 px-3 py-2"
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold">{SOUNDS[id].name}</p>
-                  <p className="text-xs text-white/60">
+                  <p className="text-xs text-ui-text-2">
                     {SOUNDS[id].soundsLike}
                   </p>
                 </div>
                 <button
                   aria-label={`Play: ${SOUNDS[id].name}`}
                   onClick={() => onPlay(id)}
-                  className="flex shrink-0 items-center gap-1 rounded-lg bg-white/90 px-3 py-1.5 text-sm font-semibold text-neutral-900 hover:bg-white"
+                  className={`flex shrink-0 items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-semibold ${buttonSkinClass()}`}
                 >
                   <Play className="h-3.5 w-3.5" /> Play
                 </button>
               </li>
             ))}
           </ul>
-          <p className="mt-2 px-1 text-xs text-white/50">
+          <p className="mt-2 px-1 text-xs text-ui-text-3">
             Playing a sound also turns alert sounds on for this device.
           </p>
 
           {doctors.length > 0 && (
-            <div className="mt-3 border-t border-white/10 pt-3">
-              <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-widest text-white/60">
+            <div className="mt-3 border-t border-ui-line pt-3">
+              <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-widest text-ui-text-2">
                 Doorbell on this tablet rings for
               </p>
               <div className="flex flex-wrap gap-2">
@@ -115,8 +116,8 @@ export default function SoundsPanel({
                   onClick={() => onDoorbellDoctors([])}
                   className={`${choice} ${
                     everyone
-                      ? "bg-white text-neutral-900"
-                      : "bg-white/10 text-white/70 hover:bg-white/20"
+                      ? "bg-ui-text text-ui-page"
+                      : "bg-ui-panel-2 text-ui-text-2 hover:text-ui-text"
                   }`}
                 >
                   Everyone
@@ -129,7 +130,9 @@ export default function SoundsPanel({
                       aria-pressed={on}
                       onClick={() => toggle(doctor.name)}
                       className={`${choice} ${doctorColorClasses(doctor.color)} ${
-                        on ? "ring-2 ring-white" : "opacity-45 hover:opacity-80"
+                        on
+                          ? "ring-2 ring-ui-text"
+                          : "opacity-45 hover:opacity-80"
                       }`}
                     >
                       {doctor.name}
@@ -137,7 +140,7 @@ export default function SoundsPanel({
                   );
                 })}
               </div>
-              <p className="mt-2 px-1 text-xs text-white/50">
+              <p className="mt-2 px-1 text-xs text-ui-text-3">
                 {everyone
                   ? "Rings when any patient starts waiting for a doctor."
                   : `Rings when a patient starts waiting for ${doorbellDoctors.join(

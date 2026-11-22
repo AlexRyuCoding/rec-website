@@ -5,15 +5,19 @@ import Segmented from "./Segmented";
 
 // Light / dark / match this computer — remembered on this browser
 // (use-staff-theme.ts). Icons only, each with a name for screen readers
-// and a tooltip.
+// and a tooltip. `device`: what "this" is — the rooms board runs on wall
+// tablets.
 export default function ThemeSwitch({
   choice,
   onChange,
+  device = "computer",
 }: {
   choice: ThemeChoice;
   onChange: (next: ThemeChoice) => void;
+  device?: "computer" | "tablet";
 }) {
   const icon = "size-4";
+  const match = `Match this ${device}`;
   return (
     <Segmented<ThemeChoice>
       label="Colour theme"
@@ -24,8 +28,8 @@ export default function ThemeSwitch({
         {
           value: "system",
           label: <Monitor aria-hidden className={icon} />,
-          ariaLabel: "Match this computer",
-          title: "Match this computer",
+          ariaLabel: match,
+          title: match,
         },
         {
           value: "light",

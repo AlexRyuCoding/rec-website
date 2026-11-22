@@ -7,6 +7,7 @@ import {
   TimerAction,
   typedMinutesToSeconds,
 } from "@/lib/room-status";
+import { tileKey } from "./key-styles";
 
 // The tile's time, with − and + beside it. Tapping the time opens a box
 // to type minutes into.
@@ -65,8 +66,7 @@ export default function TimeControl({
   };
 
   // A full finger's width each: these are pressed without looking.
-  const stepButton =
-    "flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 hover:bg-white/25 disabled:opacity-40";
+  const stepButton = `flex h-10 w-10 shrink-0 items-center justify-center rounded-full disabled:opacity-40 ${tileKey}`;
   const time = formatTimerDisplay(displaySeconds);
 
   return (
