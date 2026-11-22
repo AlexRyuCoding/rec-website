@@ -4,8 +4,8 @@
 
 Redesigning the hidden patient check-in page at /admin/patient-signin.
 Patients check in physically using a 4-digit PIN. The page is kiosk-style —
-admin unlocks it once at the start of the day, then patients use it
-throughout the day unassisted.
+the tablet is paired once as a kiosk device (see "Kiosk pairing"), then
+patients use it unassisted; it needs no staff sign-in.
 
 ## Tech Stack
 
@@ -41,7 +41,10 @@ throughout the day unassisted.
 
 ## Route Structure
 
-- /admin/patient-signin — the kiosk page (protected by middleware)
+- /admin/patient-signin — the kiosk page. The page shell is public and
+  holds no patient data (like /waiting-room): it has to open on a tablet
+  with no credentials, to show a pairing code. Its API routes answer only
+  a paired kiosk or a staff session
 - /admin/dashboard — staff dashboard: check-ins viewer (Today/Yesterday/
   week/month/custom + Refresh + CSV export; shows appointment time and
   service per check-in) and patient search with Check in + Reset PIN;
@@ -78,8 +81,14 @@ throughout the day unassisted.
   together with; mark_waiting undoes a mistaken "Doctor in")
 - /api/admin/rooms/[id]/doctor-in — POST: the doctor has walked in; marks
   the room's waiting patients seen (no timer change)
-- /api/admin/displays — GET paired screens; /approve POST {code, label?}
-  pairs the TV showing that code; /[id] DELETE revokes a screen
+- /api/admin/displays — GET paired screens AND kiosks (each with `kind`:
+  'tv' | 'kiosk'); /approve POST {code, label?, kind?} pairs the device
+  showing that code — looked up only among devices of that kind (default
+  'tv'); /[id] DELETE revokes a screen or a kiosk
+- /api/kiosk/pair — PUBLIC POST: the kiosk tablet asks for a pairing code
+  (same rules as the TV's); DELETE = "Cancel" on the code screen, refused
+  for an approved kiosk. /api/kiosk/status — PUBLIC GET: paired | staff |
+  pending (+code) | none | error; what the kiosk page should show
 - /api/display/pair — PUBLIC POST: a TV asks for a pairing code (useless
   until staff approve it; rate limited 10/hour/IP, fails closed)
 - /api/display/calls — GET who is being called to which room; paired
@@ -118,7 +127,7 @@ throughout the day unassisted.
 
 ## Auth (Google sign-in via NextAuth)
 
-- Staff unlock the kiosk by signing in with Google at /admin/login. There is
+- Staff sign in with Google at /admin/login. There is
   no password — nothing to brute-force; Google supplies MFA and account
   security. NextAuth v4, JWT sessions (config: src/lib/auth.ts).
 - A sign-in ends at the clinic's next 3 am (src/lib/staff-session.ts,
@@ -138,10 +147,13 @@ throughout the day unassisted.
   (src/lib/admin-allowlist.ts). The allowlist is enforced in the signIn
   callback AND re-checked on every request (middleware + API guard), so
   removing an email revokes access immediately.
-- src/middleware.ts protects /admin/\* via getToken() from next-auth/jwt.
+- src/middleware.ts protects /admin/\* via getToken() from next-auth/jwt;
+  the decision itself is adminPageGate (src/lib/admin-gate.ts, pure,
+  tested). /admin/login and the kiosk page shell are open.
 - The patient API routes (lookup, setup-pin, appointments/today, checkins)
-  require the session via isAdminAuthorized() (src/lib/admin-auth.ts) —
-  401 without it. The webhook route is public but HMAC-signature verified.
+  require a paired kiosk OR a staff session via isKioskAuthorized()
+  (src/lib/kiosk-auth-server.ts) — 401 without. The webhook route is
+  public but HMAC-signature verified.
 - Failed PIN lookups are rate limited durably in Supabase
   (src/lib/pin-rate-limit.ts + pin_attempt_failures table): 20 failures per
   10 minutes, fails closed on DB errors. Defense against enumerating the
@@ -210,6 +222,7 @@ default duration, timer_* timestamps, capacity (beds, default 1; Room 5 =
 2), turnover_started_at. doctors (0009–0010): roster of ≤5 names with a
 color each. display_devices (0011): paired waiting-room screens — pairing
 code, sha256 of the device secret, label, approved/revoked/last-seen.
+kiosk_devices (0018): paired check-in kiosks, same columns, own table.
 
 ## Patient search (migration 0014 — should be applied)
 
@@ -551,11 +564,51 @@ src/app/waiting-room/music/ (useRadio, useYouTube, useSpotify, MusicBar).
 ### Kiosk Screen (main UI) — two modes:
 
 The kiosk page has NO link to any other staff page (do not add one back):
-the tablet is signed in as staff and left with patients, and a corner
-icon was a one-tap door to patient search and PIN resets. The tablet does
-still hold a staff session — typing /admin/dashboard in its address bar
-works. Closing that fully means pairing the kiosk as a device, like the
-TV (not built).
+the tablet is left with patients, and a corner icon was a one-tap door to
+patient search and PIN resets.
+
+#### Kiosk pairing (migration 0018 — must be applied to pair)
+
+The tablet used to run on a staff member's Google sign-in, which made it
+a signed-in staff browser in the waiting room. It is now paired once as a
+device, exactly like the TV (display-auth.ts; shared step 1 in
+src/lib/pairing-server.ts), with its own table (kiosk_devices) and cookie
+(rac_kiosk, httpOnly, 400 days, re-set on use).
+
+- Flow: tablet opens /admin/patient-signin → set-up screen ("Please see
+  the front desk" + Staff: "Show pairing code") → 6-char code → staff
+  choose "Check-in kiosk" in Dashboard → Screens and type it → the PIN pad
+  appears by itself. Code: src/components/kiosk/kiosk-gate.tsx, which
+  stands in front of signin-keypad.tsx.
+- A kiosk is never staff (do not regress). A browser carrying a rac_kiosk
+  cookie gets no staff page — the login page included — and no staff API,
+  whatever Google session it also holds: adminPageGate redirects it to
+  the kiosk, getAdminEmail() returns null. Only the cookie's SHAPE is
+  checked for this (src/lib/device-cookie.ts, Edge-safe); a forged one
+  only takes access away. Whether the pairing is real is checked against
+  the database by the kiosk's API routes.
+- The exit is the dashboard: Revoke in Screens. The tablet's next status
+  check answers "none" and clears the cookie, making it an ordinary
+  browser again. An APPROVED kiosk cannot clear its own cookie (DELETE
+  /api/kiosk/pair answers 409).
+- The page never asks for a code by itself — only on the "Show pairing
+  code" tap. Asking sets the cookie, and a staff member who merely opened
+  the kiosk page on their own computer must not be locked out of the
+  dashboard. (They get the PIN pad through their staff session.)
+- Staff say what they are pairing, and the code is looked up only in that
+  kind's table: a kiosk can do more than a screen (PIN lookup, PIN setup,
+  check-in), so a kiosk code typed as a TV is "not found". Separate
+  tables also mean a TV cookie can never open the kiosk's routes.
+- A staff session still opens the kiosk's routes, so an unpaired tablet
+  keeps working the old way ("Sign in as staff instead") and nothing
+  breaks before 0018 is applied.
+- The gate re-checks every 60 s while the PIN pad is up (notices a
+  revoke, keeps the cookie and "last seen" fresh). "error" (the pairing
+  could not be checked) never takes a working PIN pad away; on load it
+  shows "One moment, please" and retries. A 401 from a kiosk route
+  re-checks instead of going to the staff login.
+- The set-up and code screens follow the kiosk rules: TapButton, the
+  350 ms screen-change guard, dvh sizes, fit 1024×700 and 768×950.
 
 Written for patients who are not comfortable with screens. Three rules:
 one question per screen in plain words; nothing changes without the
@@ -643,7 +696,11 @@ Input rules (do not regress these — each fixes a way presses were lost):
   policies, so the anon key can read nothing
 - Staff auth = Google sign-in (NextAuth) restricted to ALLOWED_ADMIN_EMAILS;
   no shared password exists
-- Patient API routes require the staff session (401 otherwise)
+- Patient API routes require a paired kiosk or the staff session (401
+  otherwise)
+- The check-in kiosk authenticates with a staff-approved device cookie
+  that opens only the kiosk's own routes; a browser carrying one is never
+  treated as staff
 - Staff sign-ins end at 3 am clinic time; the dashboard has Sign out
 - Dashboard patient searches, PIN resets and staff check-ins are recorded
   in staff_audit_log (who, when, which patients); patient names are never
@@ -652,7 +709,8 @@ Input rules (do not regress these — each fixes a way presses were lost):
   PIN uniqueness across patients
 - Failed PIN lookups rate limited durably in Supabase (fails closed)
 - No patient data logged to console
-- /admin/\* routes protected by middleware.ts
+- /admin/\* routes protected by middleware.ts (the login page and the
+  kiosk page shell are open; the kiosk shell holds no patient data)
 - Waiting-room screens authenticate with a staff-approved device cookie;
   they can read only "First L." + room name of patients being called,
   the music setting, and a one-hour Spotify access token (which can play

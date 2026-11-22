@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
-import { isAdminAuthorized } from "@/lib/admin-auth";
+import { isKioskAuthorized } from "@/lib/kiosk-auth-server";
 import { createCheckin } from "@/lib/checkin-server";
 
 // The kiosk's check-in: the patient confirmed "Yes — check me in". The
@@ -9,7 +9,7 @@ import { createCheckin } from "@/lib/checkin-server";
 // src/lib/checkin-server.ts; staff check a patient in themselves through
 // POST /api/admin/checkins.
 export async function POST(req: Request) {
-  if (!(await isAdminAuthorized())) {
+  if (!(await isKioskAuthorized())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

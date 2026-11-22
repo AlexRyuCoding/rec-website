@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  DeviceKind,
+  DEVICES,
   DISPLAY_COOKIE,
   DISPLAY_COOKIE_MAX_AGE_S,
   isApprovable,
@@ -7,7 +9,8 @@ import {
   verifySecret,
 } from "./display-auth";
 
-// Database side of waiting-room screen pairing (see display-auth.ts).
+// Database side of device pairing (see display-auth.ts): the waiting-room
+// screen, and — in its own table — the check-in kiosk.
 
 export type DisplayAuth =
   | { status: "ok" }
@@ -27,13 +30,17 @@ const LAST_SEEN_INTERVAL_MS = 60_000;
 export async function authorizeDisplay(
   supabase: SupabaseClient,
   cookieValue: string | undefined,
-  nowMs: number
+  nowMs: number,
+  // Which kind of device the cookie must belong to. Each kind has its own
+  // table, so a TV's cookie is simply unknown to the kiosk and vice versa.
+  kind: DeviceKind = "tv"
 ): Promise<DisplayAuth> {
   const parsed = parseDisplayCookie(cookieValue);
   if (!parsed) return { status: "none" };
+  const table = DEVICES[kind].table;
 
   const { data: row, error } = await supabase
-    .from("display_devices")
+    .from(table)
     .select(
       "id, code, secret_hash, created_at, approved_at, revoked_at, last_seen_at"
     )
@@ -55,11 +62,15 @@ export async function authorizeDisplay(
   const lastSeenMs = row.last_seen_at ? Date.parse(row.last_seen_at) : 0;
   if (nowMs - lastSeenMs > LAST_SEEN_INTERVAL_MS) {
     await supabase
-      .from("display_devices")
+      .from(table)
       .update({ last_seen_at: new Date(nowMs).toISOString() })
       .eq("id", row.id);
   }
   return { status: "ok" };
+}
+
+export function deviceCookieOptions(kind: DeviceKind) {
+  return { ...displayCookieOptions, name: DEVICES[kind].cookie };
 }
 
 export const displayCookieOptions = {

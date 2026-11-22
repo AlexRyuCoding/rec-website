@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
 import { getAdminEmail } from "@/lib/admin-auth";
 import {
+  DEVICES,
   isApprovable,
   normalizePairCode,
   PAIR_CODE_LENGTH,
@@ -11,11 +12,21 @@ import {
 const bodySchema = z.object({
   code: z.string().max(20),
   label: z.string().trim().max(40).optional(),
+  // What staff said the device is. A dashboard tab from before kiosks
+  // could be paired sends nothing: a screen.
+  kind: z.enum(["tv", "kiosk"]).default("tv"),
 });
 
+const DEFAULT_LABELS = { tv: "Waiting room screen", kiosk: "Check-in kiosk" };
+
 // Step 2 of pairing: a signed-in staff member types the code shown on the
-// TV. Only this turns a pending pairing into a working screen, so only
-// staff can ever create one.
+// device. Only this turns a pending pairing into a working screen or
+// kiosk, so only staff can ever create one.
+//
+// The code is looked up only among devices of the kind staff chose. A
+// kiosk can do more than a screen (PIN lookup, PIN setup, check-in), so
+// it must never be approved by someone who believed they were pairing a
+// TV: a kiosk's code entered as a screen is simply "not found".
 export async function POST(req: Request) {
   const email = await getAdminEmail();
   if (!email) {
@@ -30,8 +41,9 @@ export async function POST(req: Request) {
   }
 
   const supabase = createServiceClient();
+  const table = DEVICES[parsed.data.kind].table;
   const { data: candidates, error: readError } = await supabase
-    .from("display_devices")
+    .from(table)
     .select("id, created_at, approved_at, revoked_at")
     .eq("code", code)
     .is("approved_at", null)
@@ -50,11 +62,11 @@ export async function POST(req: Request) {
   }
 
   const { data, error } = await supabase
-    .from("display_devices")
+    .from(table)
     .update({
       approved_at: new Date().toISOString(),
       approved_by: email,
-      label: parsed.data.label || "Waiting room screen",
+      label: parsed.data.label || DEFAULT_LABELS[parsed.data.kind],
     })
     .eq("id", pending.id)
     .is("approved_at", null)
@@ -67,6 +79,7 @@ export async function POST(req: Request) {
   return NextResponse.json({
     display: {
       id: data.id,
+      kind: parsed.data.kind,
       label: data.label,
       approvedAt: data.approved_at,
       lastSeenAt: data.last_seen_at,

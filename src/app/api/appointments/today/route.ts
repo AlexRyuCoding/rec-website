@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { CLINIC_TZ, fetchTodaySession } from "@/lib/practice-better";
-import { isAdminAuthorized } from "@/lib/admin-auth";
+import { isKioskAuthorized } from "@/lib/kiosk-auth-server";
 
 export async function GET(req: Request) {
-  if (!(await isAdminAuthorized())) {
+  if (!(await isKioskAuthorized())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

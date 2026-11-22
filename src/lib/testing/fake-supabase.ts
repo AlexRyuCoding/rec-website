@@ -15,6 +15,8 @@ type Filter = (row: Row) => boolean;
 interface Reply {
   data: unknown;
   error: { code: string } | null;
+  // Only for select(…, { count: "exact", head: true }).
+  count?: number | null;
 }
 
 export interface FakeQuery {
@@ -30,6 +32,9 @@ export interface FakeDbOptions {
   // Unique columns: a write that would repeat a non-null value is refused
   // with 23505.
   unique?: Record<string, string[]>;
+  // What the database would fill in on a new row (an id, a timestamp):
+  // called with each row about to be inserted, to complete it in place.
+  onInsert?: (table: string, row: Record<string, unknown>) => void;
   // Runs before each query is answered; return an error code to make that
   // query fail. Also the place to change rows "from another request".
   onQuery?: (query: FakeQuery, index: number) => string | void;
@@ -46,6 +51,7 @@ export function fakeSupabase(
     let kind: FakeQuery["kind"] = "select";
     let payload: Row | Row[] | null = null;
     let returning = false;
+    let countOnly = false;
     let one: "single" | "maybeSingle" | null = null;
     let limit: number | null = null;
     let range: [number, number] | null = null;
@@ -82,6 +88,7 @@ export function fakeSupabase(
         const added = (Array.isArray(payload) ? payload : [payload!]).map(
           (r) => ({ ...r })
         );
+        added.forEach((r) => options.onInsert?.(table, r));
         if (added.some((r) => clash(r))) {
           return { data: null, error: { code: "23505" } };
         }
@@ -99,6 +106,7 @@ export function fakeSupabase(
         result.forEach((r) => rows.splice(rows.indexOf(r), 1));
       } else {
         result = matches();
+        if (countOnly) return { data: null, error: null, count: result.length };
         if (orderBy) {
           const key = orderBy;
           result = [...result].sort((a, b) =>
@@ -127,9 +135,10 @@ export function fakeSupabase(
     };
 
     const builder = {
-      select(list = "*") {
+      select(list = "*", options?: { count?: string; head?: boolean }) {
         named(list);
         if (kind !== "select") returning = true;
+        if (options?.head) countOnly = true;
         return builder;
       },
       insert(value: Row | Row[]) {
@@ -152,8 +161,9 @@ export function fakeSupabase(
       },
       eq: (c: string, v: unknown) => where(c, (x) => x === v),
       neq: (c: string, v: unknown) => where(c, (x) => x !== v),
-      gte: (c: string, v: string) => where(c, (x) => String(x) >= v),
-      lt: (c: string, v: string) => where(c, (x) => String(x) < v),
+      gte: (c: string, v: string) =>
+        where(c, (x) => x != null && String(x) >= v),
+      lt: (c: string, v: string) => where(c, (x) => x != null && String(x) < v),
       in: (c: string, v: unknown[]) => where(c, (x) => v.includes(x)),
       is: (c: string, v: null) => where(c, (x) => (x ?? null) === v),
       not(c: string, operator: string, v: unknown) {

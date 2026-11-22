@@ -1,4 +1,9 @@
 import { createHash, randomBytes, randomInt, timingSafeEqual } from "crypto";
+import {
+  DISPLAY_COOKIE,
+  KIOSK_COOKIE,
+  parseDeviceCookie,
+} from "./device-cookie";
 
 // Pairing for the waiting-room screen. The screen is a TV left running for
 // days, so it cannot use the staff Google sign-in (24 h sessions, awkward
@@ -13,8 +18,19 @@ import { createHash, randomBytes, randomInt, timingSafeEqual } from "crypto";
 // The server stores only a hash of the secret, so a database leak does not
 // hand out working screens. This file is the pure part; the database side
 // is display-server.ts.
+//
+// The check-in kiosk is paired the same way (see kiosk-auth-server.ts):
+// same code, same cookie shape, its own table and cookie name, so a TV
+// pairing can never open the kiosk's routes or the other way round.
 
-export const DISPLAY_COOKIE = "rac_display";
+export { DISPLAY_COOKIE, KIOSK_COOKIE };
+
+export type DeviceKind = "tv" | "kiosk";
+
+export const DEVICES: Record<DeviceKind, { table: string; cookie: string }> = {
+  tv: { table: "display_devices", cookie: DISPLAY_COOKIE },
+  kiosk: { table: "kiosk_devices", cookie: KIOSK_COOKIE },
+};
 // 400 days is the longest lifetime browsers honour; it is re-set on use.
 export const DISPLAY_COOKIE_MAX_AGE_S = 400 * 24 * 60 * 60;
 // No 0/O or 1/I: the code is read off a TV across a room.
@@ -23,11 +39,6 @@ export const PAIR_CODE_LENGTH = 6;
 // How long staff have to type the code in before the TV shows a new one.
 export const PENDING_TTL_MS = 10 * 60 * 1000;
 export const PAIR_MAX_PER_HOUR = 10;
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-// 32 random bytes as base64url are always exactly 43 characters.
-const SECRET_RE = /^[A-Za-z0-9_-]{43}$/;
 
 export function generatePairCode(): string {
   let code = "";
@@ -58,17 +69,9 @@ export function formatDisplayCookie(id: string, secret: string): string {
 }
 
 // Anything that is not exactly "<uuid>.<43-char secret>" is treated as no
-// cookie at all — the screen simply pairs again.
-export function parseDisplayCookie(
-  value: string | undefined | null
-): { id: string; secret: string } | null {
-  if (!value) return null;
-  const parts = value.split(".");
-  if (parts.length !== 2) return null;
-  const [id, secret] = parts;
-  if (!UUID_RE.test(id) || !SECRET_RE.test(secret)) return null;
-  return { id, secret };
-}
+// cookie at all — the screen simply pairs again. (Lives in
+// device-cookie.ts so the Edge middleware can use it.)
+export const parseDisplayCookie = parseDeviceCookie;
 
 // What staff type, forgiving of case, spaces and dashes.
 export function normalizePairCode(input: string): string {
