@@ -52,6 +52,7 @@ export function fakeSupabase(
     let payload: Row | Row[] | null = null;
     let returning = false;
     let countOnly = false;
+    let withCount = false;
     let one: "single" | "maybeSingle" | null = null;
     let limit: number | null = null;
     let range: [number, number] | null = null;
@@ -67,6 +68,7 @@ export function fakeSupabase(
         .filter((c) => c && c !== "*" && !c.includes("("))
         .forEach((c) => columns.add(c));
 
+    let queueCount = 0;
     const run = (): Reply => {
       const query: FakeQuery = { table, kind, columns: [...columns] };
       const index = queries.push(query) - 1;
@@ -108,6 +110,11 @@ export function fakeSupabase(
       } else {
         result = matches();
         if (countOnly) return { data: null, error: null, count: result.length };
+        const matched = result.length;
+        if (withCount) {
+          // the count is of everything that matched, not of the page
+          queueCount = matched;
+        }
         if (orderBy) {
           const key = orderBy;
           result = [...result].sort((a, b) =>
@@ -121,6 +128,9 @@ export function fakeSupabase(
 
       const copies = result.map((r) => ({ ...r }));
       if (kind !== "select" && !returning) return { data: null, error: null };
+      if (kind === "select" && withCount && !one) {
+        return { data: copies, error: null, count: queueCount };
+      }
       if (one) {
         if (copies.length > 1 || (one === "single" && copies.length === 0)) {
           return { data: null, error: { code: "PGRST116" } };
@@ -141,6 +151,7 @@ export function fakeSupabase(
         named(list);
         if (kind !== "select") returning = true;
         if (options?.head) countOnly = true;
+        else if (options?.count) withCount = true;
         return builder;
       },
       insert(value: Row | Row[]) {
