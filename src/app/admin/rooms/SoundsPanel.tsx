@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Play, Volume2 } from "lucide-react";
+import { LONG_WAIT_MS, REPEAT_MS } from "@/lib/alert-escalation";
 import { doctorColorClasses, DoctorRow } from "@/lib/room-status";
 import { SoundId, SOUNDS, STAFF_SOUND_IDS } from "@/lib/sounds";
 
@@ -14,7 +15,7 @@ import { SoundId, SOUNDS, STAFF_SOUND_IDS } from "@/lib/sounds";
 // And one setting, kept on this tablet: whose patients the doorbell rings
 // for here. A tablet in one doctor's room need not ring every time
 // another doctor's patient is shown in — but it is only ever quiet for
-// the first five minutes: after that a waiting patient rings everywhere
+// the first few minutes: after that a waiting patient rings everywhere
 // (src/lib/alert-escalation.ts). The timer sounds are not affected.
 export default function SoundsPanel({
   onPlay,
@@ -142,8 +143,9 @@ export default function SoundsPanel({
                   : `Rings when a patient starts waiting for ${doorbellDoctors.join(
                       " or "
                     )}.`}{" "}
-                A patient still waiting after 5 minutes rings on every tablet,
-                and again every 3 minutes.
+                A patient still waiting after {LONG_WAIT_MS / 60_000} minutes
+                rings on every tablet, and again every {REPEAT_MS / 60_000}{" "}
+                minutes.
               </p>
             </div>
           )}

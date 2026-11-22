@@ -14,7 +14,7 @@ export interface WaitingAlert {
   patientNames: string[];
   // When the longest-waiting of them was called.
   sinceMs: number;
-  // Nobody has come for five minutes: by now it rings on every tablet,
+  // Nobody has come for LONG_WAIT_MS: by now it rings on every tablet,
   // and keeps ringing (alert-escalation.ts).
   long: boolean;
 }

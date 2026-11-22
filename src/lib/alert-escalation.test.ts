@@ -52,11 +52,11 @@ function ringTimes(
 }
 
 describe("the ladder's constants", () => {
-  it("a wait is long after five minutes, and then repeats every three", () => {
-    expect(LONG_WAIT_MS).toBe(5 * MIN);
+  it("a wait is long after seven minutes, and then repeats every three", () => {
+    expect(LONG_WAIT_MS).toBe(7 * MIN);
     expect(REPEAT_MS).toBe(3 * MIN);
-    expect(isLongWait(T0, T0 + 5 * MIN - 1)).toBe(false);
-    expect(isLongWait(T0, T0 + 5 * MIN)).toBe(true);
+    expect(isLongWait(T0, T0 + 7 * MIN - 1)).toBe(false);
+    expect(isLongWait(T0, T0 + 7 * MIN)).toBe(true);
   });
 });
 
@@ -101,7 +101,7 @@ describe("ringsOnThisTablet", () => {
   });
 
   it("a long wait is everyone's, whoever the tablet is set to", () => {
-    expect(ringsOnThisTablet(wait("a", "Ryu"), ["Kim"], T0 + 5 * MIN)).toBe(
+    expect(ringsOnThisTablet(wait("a", "Ryu"), ["Kim"], T0 + 7 * MIN)).toBe(
       true
     );
   });
@@ -114,23 +114,23 @@ describe("doorbellStep", () => {
     now >= calledAt ? [wait("a", "Ryu", calledAt)] : [];
 
   it("rings at the call, when the wait turns long, then every three minutes", () => {
-    expect(ringTimes(unanswered, EVERYONE, T0 + 12 * MIN)).toEqual([
+    expect(ringTimes(unanswered, EVERYONE, T0 + 14 * MIN)).toEqual([
       10, // the call
-      10 + 5 * 60, // long
-      10 + 8 * 60,
-      10 + 11 * 60,
+      10 + 7 * 60, // long
+      10 + 10 * 60,
+      10 + 13 * 60,
     ]);
   });
 
   it("stops once the doctor is in", () => {
-    const seenAfter6 = (now: number) =>
-      now >= calledAt && now < calledAt + 6 * MIN
+    const seenAfter8 = (now: number) =>
+      now >= calledAt && now < calledAt + 8 * MIN
         ? [wait("a", "Ryu", calledAt)]
         : [];
-    expect(ringTimes(seenAfter6, EVERYONE, T0 + 15 * MIN)).toEqual([10, 310]);
+    expect(ringTimes(seenAfter8, EVERYONE, T0 + 20 * MIN)).toEqual([10, 430]);
   });
 
-  it("a doctor who comes within five minutes hears it once", () => {
+  it("a doctor who comes within seven minutes hears it once", () => {
     const seenAfter3 = (now: number) =>
       now >= calledAt && now < calledAt + 3 * MIN
         ? [wait("a", "Ryu", calledAt)]
@@ -139,15 +139,15 @@ describe("doorbellStep", () => {
   });
 
   it("another doctor's tablet stays quiet until the wait is long, then joins in", () => {
-    expect(ringTimes(unanswered, ["Kim"], T0 + 12 * MIN)).toEqual([
-      310, // the long-wait mark is its first ring
-      490,
-      670,
+    expect(ringTimes(unanswered, ["Kim"], T0 + 14 * MIN)).toEqual([
+      430, // the long-wait mark is its first ring
+      610,
+      790,
     ]);
   });
 
   it("that doctor's own tablet rings from the call", () => {
-    expect(ringTimes(unanswered, ["Ryu"], T0 + 6 * MIN)).toEqual([10, 310]);
+    expect(ringTimes(unanswered, ["Ryu"], T0 + 8 * MIN)).toEqual([10, 430]);
   });
 
   it("a room with no doctor rings on a tablet set to someone", () => {

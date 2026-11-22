@@ -92,7 +92,8 @@ export default function RoomTile({
   // Patients called to or being treated in this room, and those lined up
   // behind it (called automatically once the room is ready).
   occupants: VisitView[];
-  // A patient here has waited five minutes for the doctor: the tile is
+  // A patient here has waited long for the doctor (LONG_WAIT_MS in
+  // alert-escalation.ts): the tile is
   // outlined and says so.
   longWait: boolean;
   nextUp: VisitView[];

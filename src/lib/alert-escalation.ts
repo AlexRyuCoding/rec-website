@@ -20,7 +20,7 @@
 // by how long that patient has been kept — see waitLevel.
 
 // A patient in a room this long without the doctor is a long wait.
-export const LONG_WAIT_MS = 5 * 60 * 1000;
+export const LONG_WAIT_MS = 7 * 60 * 1000;
 // How often the doorbell repeats once a wait is long.
 export const REPEAT_MS = 3 * 60 * 1000;
 

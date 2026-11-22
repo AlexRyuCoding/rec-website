@@ -460,16 +460,16 @@ through src/lib/flow-server.ts.
   1. At the call it rings on tablets set to that room's doctor, on
      tablets set to everyone, and on every tablet if the room has no
      doctor on its pill.
-  2. After 5 minutes with no "Doctor in" (LONG_WAIT_MS) it rings on EVERY
+  2. After 7 minutes with no "Doctor in" (LONG_WAIT_MS) it rings on EVERY
      tablet, whoever each is set to, and again every 3 minutes
      (REPEAT_MS) until someone goes. The banner gets a red outline and
-     "Long wait 5:13"; the tile is outlined and its status line reads
-     "Long wait 5:13".
+     "Long wait 7:13"; the tile is outlined and its status line reads
+     "Long wait 7:13".
   Rung 1 is the per-tablet setting in the board's Sounds panel ("Doorbell
   on this tablet rings for": Everyone, or one or more doctors), kept in
   that tablet's localStorage and shown on the Sounds button. Rung 2 is
   what makes it safe (do not weaken it): a tablet is only ever quiet for
-  the first five minutes, so a quiet tablet is never why a patient is
+  the first seven minutes, so a quiet tablet is never why a patient is
   forgotten. The setting changes SOUND only — every banner shows on
   every board, as before — and not the timer sounds. A tablet set only
   to doctors no longer on the roster rings for everyone. Patients

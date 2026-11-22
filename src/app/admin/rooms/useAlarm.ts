@@ -20,8 +20,8 @@ import {
 //   each cycle plays both, one after the other, so neither hides the other.
 // - patient_waiting (doorbell ×3): a patient started waiting for the
 //   doctor. Rings at the call on the tablets set to that doctor (or to
-//   everyone); after five minutes with nobody going it rings on every
-//   tablet, and again every three minutes. Rules: alert-escalation.ts.
+//   everyone); once the wait is long with nobody going it rings on every
+//   tablet, and keeps repeating. Rules and times: alert-escalation.ts.
 //
 // Browsers block audio until the user interacts with the page, so the
 // page shows an enable-sound button that calls enableSound() (creating
