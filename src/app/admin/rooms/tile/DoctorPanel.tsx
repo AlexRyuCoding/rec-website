@@ -3,6 +3,7 @@ import { useRef } from "react";
 import { ChevronDown, Stethoscope } from "lucide-react";
 import { gsap, useGSAP } from "@/lib/gsap";
 import { doctorColorClasses, DoctorRow } from "@/lib/room-status";
+import { tileKey, tileKeySolid, tilePress } from "./key-styles";
 
 // The roster, laid over the tile: assign a doctor without entering edit
 // mode. The panel emerges from the pull tab at the bottom edge, options
@@ -63,7 +64,7 @@ export default function DoctorPanel({
                 key={doctor.id}
                 data-doctor-option
                 onClick={() => onPick(doctor.name)}
-                className={`min-h-10 w-full truncate rounded-lg px-2 text-sm font-medium ${doctorColorClasses(
+                className={`min-h-10 w-full truncate rounded-lg px-2 text-sm font-medium ${tilePress} ${doctorColorClasses(
                   doctor.color
                 )} ${
                   doctor.name === current
@@ -79,8 +80,8 @@ export default function DoctorPanel({
               onClick={() => onPick(null)}
               className={`min-h-10 w-full truncate rounded-lg px-2 text-sm ${
                 current === null
-                  ? "bg-white/90 font-medium text-neutral-900"
-                  : "bg-white/10 hover:bg-white/20"
+                  ? `${tileKeySolid} font-medium text-neutral-900`
+                  : tileKey
               }`}
             >
               None
