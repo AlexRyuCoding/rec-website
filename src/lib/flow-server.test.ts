@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { commitAssign, commitFlow } from "./flow-server";
+import { commitAssign, commitFlow, commitRestore } from "./flow-server";
 import { assignUpdate, FlowVisit } from "./patient-flow";
 import type { RoomRow } from "./room-status";
 import { broadcastFlowUpdated } from "./rooms-realtime";
@@ -243,5 +243,111 @@ describe("commitFlow", () => {
     ).rejects.toThrow("visit write failed");
     expect(stored(db, "a").seen_at).toBeNull();
     expect(broadcastFlowUpdated).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("commitRestore", () => {
+  const finished = (id: string, roomId: string | null = "r1") =>
+    visit(id, {
+      room_id: roomId,
+      room_assigned_at: roomId ? iso(NOW - 40 * MIN) : null,
+      called_at: roomId ? iso(NOW - 40 * MIN) : null,
+      seen_at: roomId ? iso(NOW - 38 * MIN) : null,
+      done_at: iso(NOW - 2 * MIN),
+    });
+  const open = (db: ReturnType<typeof fakeSupabase>) =>
+    snapshot(db).filter((v) => v.done_at === null);
+  const restore = (
+    db: ReturnType<typeof fakeSupabase>,
+    id: string,
+    r = room()
+  ) =>
+    commitRestore(db.client, {
+      visit: stored(db, id),
+      room: r,
+      openVisits: open(db),
+      nowMs: NOW,
+    });
+
+  it("puts the patient back in their empty room exactly as they were", async () => {
+    const db = fakeSupabase({
+      checkins: [finished("a")],
+      rooms: [room()],
+      doctors: [],
+    });
+    const result = await restore(db, "a");
+    expect(result).toMatchObject({ ok: true, restoredTo: "room" });
+    expect(stored(db, "a")).toMatchObject({
+      done_at: null,
+      room_id: "r1",
+      called_at: iso(NOW - 40 * MIN),
+      seen_at: iso(NOW - 38 * MIN),
+    });
+    expect(broadcastFlowUpdated).toHaveBeenCalledTimes(1);
+  });
+
+  it("to the waiting list when the room has been given to someone else", async () => {
+    const db = fakeSupabase({
+      checkins: [finished("a"), inRoom("x")],
+      rooms: [room()],
+      doctors: [],
+    });
+    const result = await restore(db, "a");
+    expect(result).toMatchObject({ ok: true, restoredTo: "waiting" });
+    expect(stored(db, "a")).toMatchObject({
+      done_at: null,
+      room_id: null,
+      called_at: null,
+      seen_at: null,
+    });
+    expect(stored(db, "x").room_id).toBe("r1");
+  });
+
+  it("to the waiting list when another patient reached the room at the same instant", async () => {
+    const db = fakeSupabase(
+      { checkins: [finished("a"), visit("x")], rooms: [room()], doctors: [] },
+      {
+        // The other board's assign lands right after our write.
+        onQuery: (_query, index) => {
+          if (index === 1) Object.assign(stored(db, "x"), inRoom("x"));
+        },
+      }
+    );
+    const result = await restore(db, "a");
+    expect(result).toMatchObject({ ok: true, restoredTo: "waiting" });
+    expect(stored(db, "a")).toMatchObject({ done_at: null, room_id: null });
+  });
+
+  it("to the waiting list when it cannot check who is in the room", async () => {
+    const db = fakeSupabase(
+      { checkins: [finished("a")], rooms: [room()], doctors: [] },
+      { onQuery: (_query, index) => (index === 1 ? "XX000" : undefined) }
+    );
+    const result = await restore(db, "a");
+    expect(result).toMatchObject({ ok: true, restoredTo: "waiting" });
+    expect(stored(db, "a").room_id).toBeNull();
+  });
+
+  it("a patient who had no room goes to the waiting list", async () => {
+    const db = fakeSupabase({
+      checkins: [finished("a", null)],
+      rooms: [],
+      doctors: [],
+    });
+    const result = await restore(db, "a", undefined);
+    expect(result).toMatchObject({ ok: true, restoredTo: "waiting" });
+    expect(stored(db, "a").done_at).toBeNull();
+  });
+
+  it("says so when another board restored them first", async () => {
+    const db = fakeSupabase(
+      { checkins: [finished("a")], rooms: [room()], doctors: [] },
+      {
+        onQuery: (_query, index) => {
+          if (index === 0) stored(db, "a").done_at = null;
+        },
+      }
+    );
+    expect(await restore(db, "a")).toEqual({ ok: false, reason: "gone" });
   });
 });

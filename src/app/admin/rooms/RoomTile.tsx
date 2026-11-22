@@ -2,43 +2,34 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { gsap, useGSAP } from "@/lib/gsap";
+import { Check, ChevronDown, ChevronUp, Play, RotateCcw } from "lucide-react";
 import {
-  Check,
-  ChevronDown,
-  ChevronUp,
-  Minus,
-  Pause,
-  Play,
-  Plus,
-  RotateCcw,
-  Stethoscope,
-} from "lucide-react";
-import {
-  ADJUST_STEP_SECONDS,
   doctorColorClasses,
   DoctorRow,
   formatTimerDisplay,
   RoomRow,
   RoomState,
   TimerAction,
-  typedMinutesToSeconds,
 } from "@/lib/room-status";
-import {
-  AssignOutcome,
-  CALL_DISPLAY_MS,
-  JoinQuestion,
-  VisitView,
-} from "@/lib/patient-flow";
-import { createTapGuard, SCREEN_CHANGE_GUARD_MS } from "@/lib/tap-guard";
+import { AssignOutcome, CALL_DISPLAY_MS, VisitView } from "@/lib/patient-flow";
+import DoctorPanel from "./tile/DoctorPanel";
+import JoinQuestionOverlay, { TileQuestion } from "./tile/JoinQuestionOverlay";
+import PatientMenu, { ARMED_MS } from "./tile/PatientMenu";
+import TimeControl from "./tile/TimeControl";
+import { visitNote } from "./tile/visit-note";
 
-// "Together with Alex R.?" — shown over the tile before a patient is put
-// in a room that has someone in it, or behind people already lined up.
-export interface TileQuestion {
-  // The patient being placed, and the people they would join.
-  patientName: string;
-  companionNames: string[];
-  kind: JoinQuestion["kind"];
-}
+export type { TileQuestion };
+
+// One room on the board. This file is the tile's face — name, doctor,
+// who is in it, the time, the buttons for its current status. What opens
+// over it lives in ./tile: the doctor list, a patient's menu, the
+// "together?" question, and the time with its − / + (TimeControl).
+//
+// Sizes: everything pressed without looking — − / +, Start, Pause, ✓,
+// Reset — is at least 40 px, a finger's width, and the status line is
+// large enough to read from across the room. The tile's height (grid.ts)
+// is set so all of it fits when a room has patients, a line and a
+// service to show.
 
 const ASSIGN_LABELS: Record<AssignOutcome, string> = {
   send: "Send here",
@@ -48,9 +39,6 @@ const ASSIGN_LABELS: Record<AssignOutcome, string> = {
   ask_join_line: "Join the line…",
   full: "Full",
 };
-
-// How long an armed Remove / Reset waits for its second tap.
-const ARMED_MS = 4000;
 
 const STATUS_STYLES: Record<
   RoomState["status"],
@@ -66,6 +54,12 @@ const STATUS_STYLES: Record<
   complete: { card: "bg-amber-600", label: "Remove Needles" },
   overtime: { card: "bg-rose-700", label: "Overtime" },
 };
+
+// A button in the tile's action row.
+const actionButton =
+  "flex min-h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-2.5 text-sm font-medium disabled:opacity-40";
+const iconButton =
+  "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl disabled:opacity-40";
 
 export default function RoomTile({
   room,
@@ -121,37 +115,25 @@ export default function RoomTile({
   // The doctor has walked in: ends the "patient waiting" alert.
   onDoctorIn: () => void;
 }) {
-  const [editingTime, setEditingTime] = useState(false);
-  const [minutesInput, setMinutesInput] = useState("");
-  // What the box showed when it opened, and whether it has been closed
-  // already (Enter and Escape close it; the box going away can then still
-  // report a "blur", which must not count as a second answer).
-  const openedMinutesRef = useRef("");
-  const timeEditClosedRef = useRef(true);
   const [doctorListOpen, setDoctorListOpen] = useState(false);
   // The patient whose name was tapped (opens the move/remove menu).
   const [menuVisitId, setMenuVisitId] = useState<string | null>(null);
   const menuVisit =
     [...occupants, ...nextUp].find((v) => v.id === menuVisitId) ?? null;
-  // Two actions here end something with no way back, and both sit a
-  // finger's width from a button pressed all day: "Remove" finishes the
-  // patient's visit, Reset throws away a running timer. Like the × in
-  // the waiting list, each takes two taps — the first arms it, the
-  // second does it — and an armed button disarms itself.
-  const [armed, setArmed] = useState<"remove" | "reset" | null>(null);
+  // Reset throws away a running timer and sits beside ✓, the button
+  // pressed all day. It takes two taps — the first arms it, the second
+  // does it — and an armed Reset disarms itself. (The other two-tap
+  // action, "Remove", is in the patient menu.)
+  const [resetArmed, setResetArmed] = useState(false);
   useEffect(() => {
-    if (!armed) return;
-    const t = setTimeout(() => setArmed(null), ARMED_MS);
+    if (!resetArmed) return;
+    const t = setTimeout(() => setResetArmed(false), ARMED_MS);
     return () => clearTimeout(t);
-  }, [armed]);
-  // The remove confirmation belongs to the menu it was armed in.
-  useEffect(() => {
-    setArmed((a) => (a === "remove" ? null : a));
-  }, [menuVisitId]);
+  }, [resetArmed]);
   // A reset can only be confirmed while the timer it was armed for runs.
   const timerRunning = room.timer_started_at !== null;
   useEffect(() => {
-    if (!timerRunning) setArmed((a) => (a === "reset" ? null : a));
+    if (!timerRunning) setResetArmed(false);
   }, [timerRunning]);
   // The nametag pill morphs through a ball on every assignment change:
   // collapse showing the old value, swap color/text at the smallest point,
@@ -160,7 +142,6 @@ export default function RoomTile({
   const [displayedDoctor, setDisplayedDoctor] = useState(room.doctor_name);
   const pillRef = useRef<HTMLButtonElement>(null);
   const pillTextRef = useRef<HTMLSpanElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   // The whole tile is where a waiting chip dragged with the mouse can be
   // dropped (page.tsx decides what the drop does). The ref callback is
@@ -174,18 +155,6 @@ export default function RoomTile({
     },
     [setDropRef]
   );
-
-  // The question appears right where the tile was just tapped, with
-  // "Yes" under the same finger. A double tap must not answer it: for a
-  // moment after it opens, its buttons ignore presses (the kiosk's rule).
-  const questionGuard = useRef(createTapGuard()).current;
-  const questionOpen = question !== null;
-  useEffect(() => {
-    if (questionOpen) questionGuard.block(SCREEN_CHANGE_GUARD_MS);
-  }, [questionOpen, questionGuard]);
-  const answer = (together: boolean) => {
-    if (!questionGuard.blocked()) onAnswer(together);
-  };
 
   // Tapping anywhere outside this tile dismisses the doctor list and the
   // patient menu, so an abandoned panel doesn't sit open on the board.
@@ -201,6 +170,7 @@ export default function RoomTile({
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [panelOpen]);
+
   const style = STATUS_STYLES[state.status];
   const displaySeconds =
     state.remainingSeconds ?? room.default_duration_seconds;
@@ -218,51 +188,29 @@ export default function RoomTile({
   // Time's up: flash the label, alternating each second between the room
   // name and the instruction. The page rerenders every second (nowMs
   // ticks), so no local timer is needed.
-  const label =
-    armed === "reset"
-      ? "Tap again to reset"
-      : timeUp
-        ? Math.floor(nowMs / 1000) % 2 === 0
-          ? `${room.name} done`
-          : "Remove needles"
-        : state.paused
-          ? "Paused"
-          : state.status === "patient_waiting" && waitingSinceMs !== null
-            ? `Patient waiting ${formatTimerDisplay(
-                Math.max(0, Math.floor((nowMs - waitingSinceMs) / 1000))
-              )}`
-            : style.label;
+  const label = resetArmed
+    ? "Tap again to reset"
+    : timeUp
+      ? Math.floor(nowMs / 1000) % 2 === 0
+        ? `${room.name} done`
+        : "Remove needles"
+      : state.paused
+        ? "Paused"
+        : state.status === "patient_waiting" && waitingSinceMs !== null
+          ? // "Waiting", not "Patient waiting": at this size the full
+            // words would push the minutes — the news — off the tile.
+            `Waiting ${formatTimerDisplay(
+              Math.max(0, Math.floor((nowMs - waitingSinceMs) / 1000))
+            )}`
+          : style.label;
   // A patient told to come in after the timer was already running (a late
   // partner in a shared room) is marked while they are on their way.
   const arriving = (v: VisitView) =>
     v.seen_at === null &&
     v.called_at !== null &&
     nowMs - Date.parse(v.called_at) < CALL_DISPLAY_MS;
-
-  const openTimeEditor = () => {
-    if (busy) return;
-    const shown = String(Math.max(1, Math.round(displaySeconds / 60)));
-    openedMinutesRef.current = shown;
-    timeEditClosedRef.current = false;
-    setMinutesInput(shown);
-    setEditingTime(true);
-  };
-
-  // Enter sets the number in the box. Leaving the box sets it only if it
-  // was changed: a tap elsewhere must never move a timer by itself (see
-  // typedMinutesToSeconds). Escape sets nothing.
-  const closeTimeEditor = (how: "enter" | "leave" | "cancel") => {
-    if (timeEditClosedRef.current) return;
-    timeEditClosedRef.current = true;
-    setEditingTime(false);
-    if (how === "cancel") return;
-    const seconds = typedMinutesToSeconds(
-      minutesInput,
-      openedMinutesRef.current,
-      how
-    );
-    if (seconds !== null) onAction("set", seconds);
-  };
+  // "First visit · Fire cupping", one entry per patient in the room.
+  const notes = occupants.map(visitNote).filter(Boolean);
 
   const assignDoctor = (name: string | null) => {
     setDoctorListOpen(false);
@@ -321,46 +269,23 @@ export default function RoomTile({
     { dependencies: [displayedDoctor] }
   );
 
-  // Doctor list entrance: the panel emerges from the pull tab at the
-  // bottom edge, options following with a slight stagger. Closing is
-  // intentionally instant.
-  useGSAP(
-    () => {
-      if (!doctorListOpen || !panelRef.current) return;
-      gsap.from(panelRef.current, {
-        opacity: 0,
-        y: 10,
-        scaleY: 0.92,
-        transformOrigin: "bottom center",
-        duration: 0.25,
-        ease: "house",
-      });
-      gsap.from(panelRef.current.querySelectorAll("[data-doctor-option]"), {
-        opacity: 0,
-        y: 6,
-        duration: 0.2,
-        ease: "house",
-        stagger: 0.03,
-        delay: 0.05,
-      });
-    },
-    { dependencies: [doctorListOpen] }
-  );
-
   return (
     <div
       ref={setRootRef}
-      className={`${style.card} relative flex h-full flex-col items-center justify-between overflow-hidden rounded-2xl p-3 pb-0 text-center text-white shadow-lg transition-colors duration-500 select-none`}
+      data-room-tile={room.name}
+      className={`${style.card} relative flex h-full flex-col items-center justify-between overflow-hidden rounded-2xl px-2.5 pt-2 text-center text-white shadow-lg transition-colors duration-500 select-none`}
     >
       <div className="w-full min-w-0">
-        <h2 className="truncate text-base font-semibold">{room.name}</h2>
+        <h2 className="truncate text-base font-semibold leading-5">
+          {room.name}
+        </h2>
         <button
           ref={pillRef}
           aria-label={doctorListOpen ? "Close doctor list" : "Choose doctor"}
           aria-expanded={doctorListOpen}
           disabled={busy}
           onClick={() => setDoctorListOpen((v) => !v)}
-          className={`inline-flex max-w-full items-center overflow-hidden whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold disabled:opacity-70 ${
+          className={`inline-flex min-h-[26px] max-w-full items-center overflow-hidden whitespace-nowrap rounded-full px-2.5 text-xs font-semibold disabled:opacity-70 ${
             displayedDoctor
               ? doctorColorClasses(
                   doctors.find((d) => d.name === displayedDoctor)?.color
@@ -375,14 +300,14 @@ export default function RoomTile({
         {occupants.length > 0 && (
           // One line however many share the room: each name gives up
           // width equally and truncates; the tap menu shows it in full.
-          <p className="mt-0.5 flex min-w-0 items-center justify-center gap-x-1 text-xs font-semibold leading-tight">
+          <p className="flex min-w-0 items-center justify-center gap-x-1 text-sm font-semibold leading-tight">
             {occupants.map((visit, i) => (
               <span key={visit.id} className="flex min-w-0 items-center">
                 {i > 0 && <span className="mr-1 text-white/50">·</span>}
                 <button
                   aria-label={`Options for ${visit.display_name}`}
                   onClick={() => setMenuVisitId(visit.id)}
-                  className="flex min-w-0 items-center gap-1 rounded px-0.5 hover:bg-white/15"
+                  className="flex min-h-[26px] min-w-0 items-center gap-1 rounded px-1 hover:bg-white/15"
                 >
                   {arriving(visit) && sessionActive && (
                     <span className="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-white" />
@@ -393,8 +318,18 @@ export default function RoomTile({
             ))}
           </p>
         )}
+        {notes.length > 0 && (
+          // What the visit is, for the doctor about to walk in. Cut off
+          // if long; the patient's menu has it in full.
+          <p
+            data-visit-notes
+            className="truncate text-[11px] leading-[14px] text-white/75"
+          >
+            {notes.join("  ·  ")}
+          </p>
+        )}
         {nextUp.length > 0 && (
-          <p className="truncate text-[11px] leading-tight text-white/75">
+          <p className="truncate text-xs leading-tight text-white/75">
             Next:{" "}
             {nextUp.map((visit, i) => (
               <span key={visit.id}>
@@ -402,7 +337,7 @@ export default function RoomTile({
                 <button
                   aria-label={`Options for ${visit.display_name}`}
                   onClick={() => setMenuVisitId(visit.id)}
-                  className="rounded px-0.5 hover:bg-white/15"
+                  className="min-h-[18px] rounded px-0.5 hover:bg-white/15"
                 >
                   {visit.display_name}
                 </button>
@@ -412,59 +347,14 @@ export default function RoomTile({
         )}
       </div>
 
-      {/* With no timer running this edits the room's default — on a free
-          room, and equally while Setting Up, where it is the length of
-          the session "Another session" would start. */}
-      <div className="flex w-full items-center justify-center gap-1.5">
-        <button
-          aria-label="Less time"
-          disabled={busy}
-          onClick={() => onAction("adjust", -ADJUST_STEP_SECONDS)}
-          className="shrink-0 rounded-full bg-white/15 p-1.5 hover:bg-white/25 disabled:opacity-40"
-        >
-          <Minus className="h-4 w-4" />
-        </button>
-        {editingTime ? (
-          <input
-            autoFocus
-            type="number"
-            inputMode="numeric"
-            min={1}
-            max={60}
-            value={minutesInput}
-            onChange={(e) => setMinutesInput(e.target.value)}
-            onFocus={(e) => e.target.select()}
-            onBlur={() => closeTimeEditor("leave")}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") closeTimeEditor("enter");
-              if (e.key === "Escape") closeTimeEditor("cancel");
-            }}
-            aria-label="Minutes"
-            className="w-20 rounded-lg bg-white/15 px-1 py-0.5 text-center text-2xl font-bold tabular-nums outline-none ring-2 ring-white/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-          />
-        ) : (
-          <button
-            aria-label="Type a time in minutes"
-            disabled={busy}
-            onClick={openTimeEditor}
-            className={`rounded-lg px-1 font-bold tabular-nums ${
-              turningOver ? "text-2xl" : "text-3xl"
-            } transition-opacity duration-200 hover:bg-white/10 disabled:opacity-70 ${
-              state.paused ? "animate-pulse" : ""
-            } ${adjustPending ? "opacity-50" : ""}`}
-          >
-            {formatTimerDisplay(displaySeconds)}
-          </button>
-        )}
-        <button
-          aria-label="More time"
-          disabled={busy}
-          onClick={() => onAction("adjust", ADJUST_STEP_SECONDS)}
-          className="shrink-0 rounded-full bg-white/15 p-1.5 hover:bg-white/25 disabled:opacity-40"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
-      </div>
+      <TimeControl
+        displaySeconds={displaySeconds}
+        busy={busy}
+        paused={state.paused}
+        adjustPending={adjustPending}
+        compact={turningOver}
+        onAction={onAction}
+      />
 
       {turningOver ? (
         // Needles are out, or the next session is being set up: the
@@ -475,11 +365,11 @@ export default function RoomTile({
         // Side by side on two lines each: stacked full-width buttons do
         // not fit the tile's fixed height once names and a line are shown
         // (the status label below gets squeezed out).
-        <div className="grid w-full grid-cols-2 gap-1.5">
+        <div className="grid w-full grid-cols-2 gap-2">
           <button
             disabled={busy}
             onClick={() => onAction("again")}
-            className="rounded-xl bg-white/20 px-1 py-1 text-sm font-medium leading-tight hover:bg-white/30 disabled:opacity-40"
+            className="min-h-11 rounded-xl bg-white/20 px-1 text-sm font-medium leading-tight hover:bg-white/30 disabled:opacity-40"
           >
             Another
             <br />
@@ -488,7 +378,7 @@ export default function RoomTile({
           <button
             disabled={busy}
             onClick={() => onAction("ready")}
-            className="rounded-xl bg-white/90 px-1 py-1 text-sm font-semibold leading-tight text-slate-800 hover:bg-white disabled:opacity-40"
+            className="min-h-11 rounded-xl bg-white/90 px-1 text-sm font-semibold leading-tight text-slate-800 hover:bg-white disabled:opacity-40"
           >
             Room
             <br />
@@ -496,12 +386,12 @@ export default function RoomTile({
           </button>
         </div>
       ) : (
-        <div className="flex w-full items-center justify-center gap-1.5">
+        <div className="flex w-full items-center justify-center gap-2">
           {state.status === "patient_waiting" && (
             <button
               disabled={busy}
               onClick={onDoctorIn}
-              className="whitespace-nowrap rounded-xl bg-white/90 px-2.5 py-1.5 text-sm font-semibold text-purple-800 hover:bg-white disabled:opacity-40"
+              className={`${actionButton} bg-white/90 font-semibold text-purple-800 hover:bg-white`}
             >
               Doctor in
             </button>
@@ -512,60 +402,59 @@ export default function RoomTile({
             <button
               disabled={busy}
               onClick={() => onAction("start")}
-              className="flex items-center gap-1.5 whitespace-nowrap rounded-xl bg-white/20 px-2.5 py-1.5 text-sm font-medium hover:bg-white/30 disabled:opacity-40"
+              className={`${actionButton} bg-white/20 hover:bg-white/30`}
             >
               <Play className="h-4 w-4" /> Start
             </button>
           )}
           {state.status === "in_use" && (
+            // Words only: with the icon as well, the three buttons of a
+            // running room do not fit side by side at a finger's width.
             <button
               disabled={busy}
               onClick={() => onAction(state.paused ? "resume" : "pause")}
-              className="flex items-center gap-1.5 rounded-xl bg-white/20 px-3 py-1.5 text-sm font-medium hover:bg-white/30 disabled:opacity-40"
+              className={`${actionButton} bg-white/20 px-3 hover:bg-white/30`}
             >
-              {state.paused ? (
-                <>
-                  <Play className="h-4 w-4" /> Resume
-                </>
-              ) : (
-                <>
-                  <Pause className="h-4 w-4" /> Pause
-                </>
-              )}
+              {state.paused ? "Resume" : "Pause"}
             </button>
           )}
           {sessionActive && (
             <>
               <button
                 aria-label={
-                  armed === "reset"
-                    ? "Confirm: cancel this timer"
-                    : "Reset timer"
+                  resetArmed ? "Confirm: cancel this timer" : "Reset timer"
                 }
                 disabled={busy}
                 onClick={() => {
-                  if (armed === "reset") {
-                    setArmed(null);
+                  if (resetArmed) {
+                    setResetArmed(false);
                     onAction("reset");
                   } else {
-                    setArmed("reset");
+                    setResetArmed(true);
                   }
                 }}
-                className={`rounded-xl p-2 disabled:opacity-40 ${
-                  armed === "reset"
+                className={`${iconButton} ${
+                  resetArmed
                     ? "bg-rose-600 ring-2 ring-white"
                     : "bg-white/15 hover:bg-white/25"
                 }`}
               >
-                <RotateCcw className="h-4 w-4" />
+                <RotateCcw className="h-5 w-5" />
               </button>
+              {/* Time's up: this is THE button — the alarm stops when it
+                  is pressed — so it takes the rest of the row. */}
               <button
                 aria-label="Clear room"
                 disabled={busy}
                 onClick={() => onAction("clear")}
-                className="rounded-xl bg-white/90 p-2 text-emerald-700 hover:bg-white disabled:opacity-40"
+                className={
+                  timeUp
+                    ? `${actionButton} min-h-11 flex-1 bg-white/90 font-semibold text-emerald-800 hover:bg-white`
+                    : `${iconButton} bg-white/90 text-emerald-700 hover:bg-white`
+                }
               >
-                <Check className="h-4 w-4" />
+                <Check className="h-5 w-5" />
+                {timeUp && "Needles out"}
               </button>
             </>
           )}
@@ -573,8 +462,9 @@ export default function RoomTile({
       )}
 
       <p
-        className={`w-full truncate text-[11px] font-semibold uppercase tracking-widest ${
-          timeUp ? "text-white" : "text-white/80"
+        data-status-label
+        className={`w-full truncate text-[13px] font-bold uppercase leading-[18px] tracking-wide ${
+          timeUp ? "text-white" : "text-white/85"
         }`}
       >
         {label}
@@ -587,122 +477,36 @@ export default function RoomTile({
         aria-expanded={doctorListOpen}
         disabled={busy}
         onClick={() => setDoctorListOpen((v) => !v)}
-        className="mt-1 flex w-full items-center justify-center gap-1 rounded-t-lg bg-black/20 py-0.5 text-white/70 hover:bg-black/30 hover:text-white disabled:opacity-40"
+        className="flex h-6 w-full shrink-0 items-center justify-center rounded-t-lg bg-black/20 text-white/70 hover:bg-black/30 hover:text-white disabled:opacity-40"
       >
         {doctorListOpen ? (
-          <ChevronDown className="h-3.5 w-3.5" />
+          <ChevronDown className="h-4 w-4" />
         ) : (
-          <ChevronUp className="h-3.5 w-3.5" />
+          <ChevronUp className="h-4 w-4" />
         )}
       </button>
 
       {doctorListOpen && (
-        <div
-          ref={panelRef}
-          className="absolute inset-0 z-10 flex flex-col overflow-hidden rounded-2xl bg-neutral-900/95 p-2"
-        >
-          <p className="mb-1 flex items-center justify-center gap-1 text-[11px] font-semibold uppercase tracking-widest text-white/60">
-            <Stethoscope className="h-3.5 w-3.5" /> Doctor
-          </p>
-          <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
-            {doctors.length === 0 ? (
-              <p className="px-1 py-2 text-xs text-white/60">
-                No doctors yet — add them in Edit layout.
-              </p>
-            ) : (
-              <>
-                {doctors.map((doctor) => (
-                  <button
-                    key={doctor.id}
-                    data-doctor-option
-                    onClick={() => assignDoctor(doctor.name)}
-                    className={`w-full truncate rounded-lg px-2 py-1.5 text-sm font-medium ${doctorColorClasses(
-                      doctor.color
-                    )} ${
-                      doctor.name === room.doctor_name
-                        ? "ring-2 ring-inset ring-white"
-                        : "opacity-85 hover:opacity-100"
-                    }`}
-                  >
-                    {doctor.name}
-                  </button>
-                ))}
-                <button
-                  data-doctor-option
-                  onClick={() => assignDoctor(null)}
-                  className={`w-full truncate rounded-lg px-2 py-1.5 text-sm ${
-                    room.doctor_name === null
-                      ? "bg-white/90 font-medium text-neutral-900"
-                      : "bg-white/10 hover:bg-white/20"
-                  }`}
-                >
-                  None
-                </button>
-              </>
-            )}
-          </div>
-          <button
-            aria-label="Close doctor list"
-            onClick={() => setDoctorListOpen(false)}
-            className="mt-1 flex w-full items-center justify-center rounded-lg bg-white/10 py-0.5 text-white/70 hover:bg-white/20"
-          >
-            <ChevronDown className="h-3.5 w-3.5" />
-          </button>
-        </div>
+        <DoctorPanel
+          doctors={doctors}
+          current={room.doctor_name}
+          onPick={assignDoctor}
+          onClose={() => setDoctorListOpen(false)}
+        />
       )}
 
       {menuVisit && (
-        <div className="absolute inset-0 z-10 flex flex-col justify-center gap-1.5 rounded-2xl bg-neutral-900/95 p-2">
-          <p className="truncate text-sm font-semibold">
-            {menuVisit.display_name}
-          </p>
-          {/* Undo for a mistaken "Doctor in". Only before the timer runs:
-              once needles are in, the doctor has plainly been. */}
-          {menuVisit.seen_at !== null && !sessionActive && !turningOver && (
-            <button
-              onClick={() => {
-                setMenuVisitId(null);
-                onVisitAction(menuVisit.id, "mark_waiting");
-              }}
-              className="w-full rounded-lg bg-purple-700 px-2 py-1.5 text-sm hover:bg-purple-600"
-            >
-              Doctor hasn&apos;t come yet
-            </button>
-          )}
-          <button
-            onClick={() => {
-              setMenuVisitId(null);
-              onVisitAction(menuVisit.id, "unassign");
-            }}
-            className="w-full rounded-lg bg-white/10 px-2 py-1.5 text-sm hover:bg-white/20"
-          >
-            Back to waiting list
-          </button>
-          <button
-            onClick={() => {
-              if (armed !== "remove") {
-                setArmed("remove");
-                return;
-              }
-              setArmed(null);
-              setMenuVisitId(null);
-              onVisitAction(menuVisit.id, "remove");
-            }}
-            className={`w-full rounded-lg px-2 py-1.5 text-sm ${
-              armed === "remove"
-                ? "bg-rose-600 font-semibold ring-2 ring-inset ring-white"
-                : "bg-rose-900/70 hover:bg-rose-900"
-            }`}
-          >
-            {armed === "remove" ? "Tap again to remove" : "Remove"}
-          </button>
-          <button
-            onClick={() => setMenuVisitId(null)}
-            className="w-full rounded-lg px-2 py-1 text-xs text-white/60 hover:bg-white/10"
-          >
-            Cancel
-          </button>
-        </div>
+        <PatientMenu
+          visit={menuVisit}
+          canMarkWaiting={
+            menuVisit.seen_at !== null && !sessionActive && !turningOver
+          }
+          onAction={(action) => {
+            setMenuVisitId(null);
+            onVisitAction(menuVisit.id, action);
+          }}
+          onClose={() => setMenuVisitId(null)}
+        />
       )}
 
       {changed && (
@@ -720,51 +524,13 @@ export default function RoomTile({
       )}
 
       {question && !changed && (
-        <div
-          data-assign-keep
-          className="absolute inset-0 z-20 flex flex-col justify-center gap-1.5 rounded-2xl bg-neutral-900/95 p-2 ring-2 ring-inset ring-white/70"
-        >
-          {/* The answers are the one choice on this board that decides
-              whether a patient walks in on someone: full finger height,
-              and apart from each other. */}
-          <p className="truncate text-xs font-medium text-white/70">
-            {question.patientName} → {room.name}
-          </p>
-          <p className="line-clamp-2 text-sm font-semibold leading-tight">
-            Together with {question.companionNames.join(" & ")}
-            {question.kind === "ask_join_line" && " (next up)"}?
-          </p>
-          <button
-            disabled={busy}
-            onClick={() => answer(true)}
-            className="w-full rounded-lg bg-white/90 px-2 py-2.5 text-sm font-semibold text-neutral-900 hover:bg-white disabled:opacity-40"
-          >
-            {question.kind === "ask_join_room"
-              ? "Yes, send in"
-              : "Yes, line up together"}
-          </button>
-          {question.kind === "ask_join_room" ? (
-            <button
-              disabled={busy}
-              onClick={() => answer(false)}
-              className="mt-0.5 w-full rounded-lg bg-white/15 px-2 py-2.5 text-sm font-semibold hover:bg-white/25 disabled:opacity-40"
-            >
-              No, next up
-            </button>
-          ) : (
-            // No "No" here: this room's line is another group, so the
-            // answer would be a refusal. Say why instead.
-            <p className="text-[11px] leading-tight text-white/60">
-              {room.name} already has someone waiting for it.
-            </p>
-          )}
-          <button
-            onClick={onCancelQuestion}
-            className="w-full rounded-lg px-2 py-0.5 text-xs text-white/60 hover:bg-white/10"
-          >
-            Cancel
-          </button>
-        </div>
+        <JoinQuestionOverlay
+          question={question}
+          roomName={room.name}
+          busy={busy}
+          onAnswer={onAnswer}
+          onCancel={onCancelQuestion}
+        />
       )}
 
       {assignMode && !question && !changed && (

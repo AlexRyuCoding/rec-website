@@ -21,7 +21,13 @@ import {
 } from "@/lib/rooms-realtime";
 import { goToStaffLogin } from "@/lib/staff-login-redirect";
 
-export type VisitAction = "assign" | "unassign" | "remove" | "mark_waiting";
+export type VisitAction =
+  | "assign"
+  | "unassign"
+  | "remove"
+  | "mark_waiting"
+  // A finished visit is open again (the board's "Finished" list).
+  | "restore";
 
 interface MutationBody {
   room?: RoomRow;
@@ -342,9 +348,10 @@ export function useRooms() {
           ),
         }
       );
-      if (!body) return;
+      if (!body) return false;
       if (body.visits) setVisits(body.visits);
       for (const room of body.rooms ?? []) upsertRoom(room);
+      return true;
     },
     [mutate, upsertRoom]
   );

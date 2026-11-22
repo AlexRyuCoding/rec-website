@@ -75,10 +75,13 @@ patients use it unassisted; it needs no staff sign-in.
   has patients, a line, a running timer or is setting up —
   roomDeleteBlocker). /api/admin/rooms/[id]/timer POST timer
   actions (start/pause/resume/adjust/set/reset/clear/ready/again)
+- /api/admin/visits/finished — GET today's finished visits ("First L."),
+  newest first, for the board's Finished list
 - /api/admin/visits/[id] — POST {action: assign(roomId, togetherWith?) |
-  unassign | remove | mark_waiting} moves a checked-in patient through
+  unassign | remove | mark_waiting | restore} moves a checked-in patient through
   the flow (togetherWith = the visit ids staff said the patient is
-  together with; mark_waiting undoes a mistaken "Doctor in")
+  together with; mark_waiting undoes a mistaken "Doctor in"; restore
+  reopens a FINISHED visit)
 - /api/admin/rooms/[id]/doctor-in — POST: the doctor has walked in; marks
   the room's waiting patients seen (no timer change)
 - /api/admin/displays — GET paired screens AND kiosks (each with `kind`:
@@ -294,6 +297,16 @@ tested).
   unkeyed hash is reversed by trying them all; the key lives only on the
   server.
 
+## When a staff page breaks
+
+src/app/admin/error.tsx. The rooms board and the kiosk run unattended, so
+a page that fails to render says "One moment, please" and reloads itself
+after 8 s — worded for whoever is standing there, which on the kiosk is a
+patient. After three reloads in a row (within 2 minutes) it stops and
+asks for the front desk; a page that breaks every time must not flicker
+forever. After a reload the board's sounds are blocked until touched —
+the silent-board bar says so.
+
 ## Staff check-in
 
 Dashboard → Patients → "Check in" on a search result (the rooms board
@@ -438,6 +451,38 @@ through src/lib/flow-server.ts.
   the number was changed; an emptied box and Escape set nothing
   (typedMinutesToSeconds in room-status.ts). Leaving must never move a
   timer by itself — the box opens rounded to whole minutes.
+- Finished → Restore (the waiting list's "Finished" button): the way
+  back from the two taps that end a visit with no undo — "Room ready" on
+  the wrong tile, a wrong "Remove". Lists visits that ended within the
+  12 h window. Where a restore lands is restoreTarget (pure, tested;
+  the button says it): back in the room they had been called into,
+  exactly as they were (same call time, same "seen" — nobody is called
+  again), but ONLY if that room now stands idle and empty with no line;
+  otherwise the waiting list. Never into a room with anyone in it or
+  lined up for it. commitRestore writes only while the visit is still
+  finished, re-reads, and moves the patient to the waiting list if
+  anyone else reached that room at the same instant (or it cannot tell).
+- Today's service (service_name, already snapshotted at check-in) is
+  shown on the staff board — waiting chips, a line under the names on a
+  tile, in full in the patient's menu. It tells the doctor what the visit
+  is before walking in (fire cupping = two sessions). Staff board only:
+  never the waiting-room TV, never a broadcast.
+- "First visit" badge = the patient's record is under 60 days old AND
+  they have never checked in before (firstVisitIds, tested). Both, on
+  purpose: the check-in log only goes back to when the kiosk started, so
+  "never checked in" alone would greet patients of many years as new. A
+  wrong badge is worse than none — anything unknown is not a first visit.
+  History is only queried for patients with a new record (usually none).
+- Tile sizes (do not shrink back): everything pressed without looking —
+  − / +, Start, Pause, Reset, ✓, Doctor in — is at least 40×40 px; when
+  time is up ✓ is the wide "Needles out" button; the status line is
+  13 px. With a wait running the status line reads "Waiting 12:34" (the
+  full "Patient waiting" would push the minutes off the tile). The tile
+  height (grid.ts, 238 px) is the least that fits a room with patients, a
+  service, a line and those buttons — and two rows of rooms plus one
+  doctor alert still fit a 10-inch tablet (1080×810). RoomTile.tsx is
+  the tile's face; what opens over it is in rooms/tile/ (TimeControl,
+  DoctorPanel, PatientMenu, JoinQuestionOverlay).
 - Patient names leave the server only as "First L." (display_name).
 - NEVER put patient data in a Realtime broadcast: the channel is readable
   with the public anon key. Room broadcasts carry anonymous room rows;

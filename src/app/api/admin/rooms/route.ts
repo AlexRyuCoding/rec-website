@@ -5,7 +5,7 @@ import { isAdminAuthorized } from "@/lib/admin-auth";
 import { broadcastRoomsUpdated } from "@/lib/rooms-realtime";
 import { GRID_COLS } from "@/lib/room-status";
 import { VisitView } from "@/lib/patient-flow";
-import { loadActiveVisits, toVisitView } from "@/lib/visits-server";
+import { loadActiveVisits, toVisitViews } from "@/lib/visits-server";
 
 // Room timer board data. GET returns every room, the doctor roster, and
 // the server clock so devices with skewed clocks still render identical
@@ -31,7 +31,12 @@ export async function GET() {
   // (e.g. the flow migration is not applied yet): degrade to no visits.
   let visits: VisitView[] = [];
   try {
-    visits = (await loadActiveVisits(supabase, Date.now())).map(toVisitView);
+    const nowMs = Date.now();
+    visits = await toVisitViews(
+      supabase,
+      await loadActiveVisits(supabase, nowMs),
+      nowMs
+    );
   } catch {
     visits = [];
   }

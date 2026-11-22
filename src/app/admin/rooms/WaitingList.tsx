@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { UserPlus, Users, X } from "lucide-react";
+import { History, UserPlus, Users, X } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
 import { gsap, useGSAP } from "@/lib/gsap";
 import {
@@ -9,7 +9,8 @@ import {
   matchRosterDoctor,
   VisitView,
 } from "@/lib/patient-flow";
-import { doctorColorClasses, DoctorRow } from "@/lib/room-status";
+import { doctorColorClasses, DoctorRow, RoomRow } from "@/lib/room-status";
+import FinishedPanel from "./FinishedPanel";
 import { CLINIC_TZ } from "@/lib/clinic-time";
 
 function formatAppointment(iso: string): string {
@@ -30,7 +31,8 @@ function formatWaited(sinceIso: string, nowMs: number): string {
   return `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
 }
 
-// Name on top, then appointment time · doctor · how long they have waited.
+// Name on top (with "First visit" beside it), then appointment time ·
+// doctor · service · how long they have waited.
 // Shared by the chip in the list and the copy that follows the mouse
 // while it is dragged.
 function ChipLabel({
@@ -48,8 +50,19 @@ function ChipLabel({
   const rosterColor = doctors.find((d) => d.name === rosterName)?.color;
   return (
     <>
-      <span className="block text-sm font-semibold leading-tight">
+      <span className="flex items-center gap-1.5 text-sm font-semibold leading-tight">
         {visit.display_name}
+        {visit.first_visit && (
+          <span
+            className={`rounded-full px-1.5 text-[10px] font-bold uppercase tracking-wide ${
+              selected
+                ? "bg-neutral-900 text-white"
+                : "bg-amber-300 text-amber-950"
+            }`}
+          >
+            First visit
+          </span>
+        )}
       </span>
       <span
         className={`flex items-center gap-1.5 text-[11px] leading-tight ${
@@ -73,6 +86,10 @@ function ChipLabel({
           </span>
         )}
         {visit.practitioner_name && <span aria-hidden>·</span>}
+        {visit.service_name && (
+          <span className="max-w-40 truncate">{visit.service_name}</span>
+        )}
+        {visit.service_name && <span aria-hidden>·</span>}
         <span>{formatWaited(visit.checked_in_at, nowMs)}</span>
       </span>
     </>
@@ -188,7 +205,7 @@ function WaitingChip({
             onArm(visit.id);
           }
         }}
-        className={`flex items-center px-2 text-[11px] font-semibold ${
+        className={`flex min-w-11 items-center justify-center px-2 text-[11px] font-semibold ${
           armed
             ? "bg-rose-600 text-white"
             : selected
@@ -196,7 +213,7 @@ function WaitingChip({
               : "text-white/40 hover:bg-white/10 hover:text-white"
         }`}
       >
-        {armed ? "Remove?" : <X className="h-3.5 w-3.5" />}
+        {armed ? "Remove?" : <X className="h-4 w-4" />}
       </button>
     </div>
   );
@@ -208,15 +225,22 @@ function WaitingChip({
 // With a mouse the chip can also be dragged straight onto a room.
 export default function WaitingList({
   visits,
+  allVisits,
+  rooms,
   doctors,
   nowMs,
   selectedId,
   dragging,
   onSelect,
   onRemove,
+  onRestore,
 }: {
   // Waiting visits only, already in display order.
   visits: VisitView[];
+  // Everyone on the board and the rooms, for the "Finished" list (where
+  // a restored patient would land).
+  allVisits: VisitView[];
+  rooms: RoomRow[];
   doctors: DoctorRow[];
   nowMs: number;
   selectedId: string | null;
@@ -225,9 +249,11 @@ export default function WaitingList({
   dragging: boolean;
   onSelect: (visitId: string | null) => void;
   onRemove: (visitId: string) => void;
+  onRestore: (visitId: string) => Promise<boolean>;
 }) {
   // Removing is two taps on the ×: the first arms it, the second confirms.
   const [armedRemoveId, setArmedRemoveId] = useState<string | null>(null);
+  const [finishedOpen, setFinishedOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const seenIdsRef = useRef<Set<string> | null>(null);
 
@@ -306,13 +332,31 @@ export default function WaitingList({
             forgotten PIN, someone removed by mistake. The search itself
             is on the dashboard: it shows full names and contact details,
             which do not belong on a board patients walk past. */}
-        <Link
-          href="/admin/dashboard?tab=patients"
-          className="ml-auto flex shrink-0 items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1.5 text-xs font-medium text-white/80 hover:bg-white/20 hover:text-white"
-        >
-          <UserPlus className="h-3.5 w-3.5" /> Check in a patient
-        </Link>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {/* The way back for a patient who was finished or removed by
+              mistake. */}
+          <button
+            aria-expanded={finishedOpen}
+            onClick={() => setFinishedOpen((v) => !v)}
+            className={`flex min-h-10 items-center gap-1.5 rounded-lg px-3 text-xs font-medium ${
+              finishedOpen
+                ? "bg-white text-neutral-900"
+                : "bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+            }`}
+          >
+            <History className="h-4 w-4" /> Finished
+          </button>
+          <Link
+            href="/admin/dashboard?tab=patients"
+            className="flex min-h-10 items-center gap-1.5 rounded-lg bg-white/10 px-3 text-xs font-medium text-white/80 hover:bg-white/20 hover:text-white"
+          >
+            <UserPlus className="h-4 w-4" /> Check in a patient
+          </Link>
+        </div>
       </div>
+      {finishedOpen && (
+        <FinishedPanel rooms={rooms} visits={allVisits} onRestore={onRestore} />
+      )}
       {selectedId && !dragging && (
         <p className="mt-1.5 text-xs text-white/60">
           Tap a room to send{" "}
