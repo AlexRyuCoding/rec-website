@@ -16,6 +16,39 @@ const config: Config = {
         cream: "#eceae6",
         gold: "#e9c46a",
         error: "#ff3c3c",
+        // The staff look (dashboard; rooms board next). Values live in
+        // src/app/admin/staff-theme.css, one set per theme, under
+        // html[data-staff-theme]. No opacity modifiers on these — every
+        // tint has its own name.
+        ui: {
+          page: "var(--ui-page)",
+          panel: "var(--ui-panel)",
+          "panel-2": "var(--ui-panel-2)",
+          well: "var(--ui-well)",
+          btn: "var(--ui-btn)",
+          line: "var(--ui-line)",
+          "line-strong": "var(--ui-line-strong)",
+          text: "var(--ui-text)",
+          "text-2": "var(--ui-text-2)",
+          "text-3": "var(--ui-text-3)",
+          "accent-fill": "var(--ui-accent-fill)",
+          "accent-fill-hover": "var(--ui-accent-fill-hover)",
+          "accent-text": "var(--ui-accent-text)",
+          "on-accent": "var(--ui-on-accent)",
+          "tab-accent": "var(--ui-tab-accent)",
+          error: "var(--ui-error)",
+          "error-fill": "var(--ui-error-fill)",
+          caution: "var(--ui-caution)",
+          "st-waiting": "var(--ui-st-waiting)",
+          "st-waiting-bg": "var(--ui-st-waiting-bg)",
+          "st-next": "var(--ui-st-next)",
+          "st-next-bg": "var(--ui-st-next-bg)",
+          "st-called": "var(--ui-st-called)",
+          "st-called-bg": "var(--ui-st-called-bg)",
+          "st-doctor": "var(--ui-st-doctor)",
+          "st-doctor-bg": "var(--ui-st-doctor-bg)",
+          "st-open": "var(--ui-st-open)",
+        },
         // Legacy palette — now aliased to the dark register. Admin/kiosk only.
         brand: {
           background: "#0e181d", // canvas
@@ -38,6 +71,14 @@ const config: Config = {
             500: "#6b7280",
           },
         },
+      },
+      // Hard ledges of the staff look — never a blur (staff-theme.css).
+      boxShadow: {
+        "lift-1": "var(--ui-lift-1)",
+        "lift-2": "var(--ui-lift-2)",
+        "lift-accent": "var(--ui-lift-accent)",
+        "lift-danger": "var(--ui-lift-danger)",
+        sunk: "var(--ui-sunk)",
       },
       borderRadius: {
         card: "30px",

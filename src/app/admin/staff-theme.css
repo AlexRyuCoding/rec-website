@@ -1,0 +1,280 @@
+/* The staff look: every colour, ledge and animation of the staff pages
+   that carry the theme switch (the dashboard; the rooms board next).
+
+   Everything hangs off html[data-staff-theme], which a themed page puts on
+   <html> while it is mounted and takes off when it leaves
+   (src/app/admin/ui/use-staff-theme.ts) — so nothing here can reach the
+   kiosk, the waiting-room TV or the public site.
+
+   Rules the values keep (src/app/admin/staff-theme.test.ts checks them):
+   - both themes define the same names;
+   - text is at least 4.5:1 on the surfaces it sits on;
+   - no shadow has a blur. Depth is a hard ledge: raised things sit on a
+     solid edge like the side of a key, sunken things have a solid inner
+     line. Raised = pressed or holds work; sunken = typed or chosen in;
+     flat = only read. */
+
+html[data-staff-theme="dark"] {
+  color-scheme: dark;
+  --ui-page: #101619;
+  --ui-panel: #1a2125;
+  --ui-panel-2: #232c31;
+  --ui-well: #131a1d;
+  --ui-btn: #2a343a;
+  --ui-line: #2b363b;
+  --ui-line-strong: #3d4a51;
+  --ui-text: #e4e7e6;
+  --ui-text-2: #aab5b7;
+  --ui-text-3: #93a1a4;
+  --ui-accent-fill: #1f8376;
+  --ui-accent-fill-hover: #1a7368;
+  --ui-accent-text: #56c7b6;
+  --ui-on-accent: #ffffff;
+  /* Taken from the theme's photo: the ridge's copper glow at night. */
+  --ui-tab-accent: #e0895a;
+  --ui-error: #ff7b72;
+  --ui-error-fill: #c53a32;
+  --ui-caution: #f2c261;
+  --ui-st-waiting: #f2c261;
+  --ui-st-waiting-bg: #38382d;
+  --ui-st-next: #bcaaf7;
+  --ui-st-next-bg: #343747;
+  --ui-st-called: #7fbaf3;
+  --ui-st-called-bg: #293844;
+  --ui-st-doctor: #5fd0b8;
+  --ui-st-doctor-bg: #243a3a;
+  --ui-st-open: #f59a7a;
+  --ui-lift-1: inset 0 1px 0 #3b484f, 0 2px 0 #05080a;
+  --ui-lift-2: inset 0 1px 0 #283237, 0 3px 0 rgba(0, 0, 0, 0.72);
+  --ui-lift-accent: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 2px 0 #0b3a33;
+  --ui-lift-danger: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 2px 0 #6e1d19;
+  --ui-sunk: inset 0 2px 0 #0a0f11;
+  --ui-scrim: rgba(8, 12, 14, 0.18);
+  --ui-photo-light: 0;
+  --ui-photo-dark: 1;
+}
+
+html[data-staff-theme="light"] {
+  color-scheme: light;
+  --ui-page: #e6eae9;
+  --ui-panel: #ffffff;
+  --ui-panel-2: #f4f6f5;
+  --ui-well: #f1f4f3;
+  --ui-btn: #ffffff;
+  --ui-line: #dde3e1;
+  --ui-line-strong: #c3cdca;
+  --ui-text: #1b2529;
+  --ui-text-2: #4c5a5f;
+  --ui-text-3: #5a686e;
+  --ui-accent-fill: #1c7a6e;
+  --ui-accent-fill-hover: #17695f;
+  --ui-accent-text: #17695f;
+  --ui-on-accent: #ffffff;
+  /* Taken from the theme's photo: the forest green of the hills. */
+  --ui-tab-accent: #3b7a52;
+  --ui-error: #c22f2f;
+  --ui-error-fill: #c22f2f;
+  --ui-caution: #7d5200;
+  --ui-st-waiting: #7d5200;
+  --ui-st-waiting-bg: #faf0d6;
+  --ui-st-next: #5438c0;
+  --ui-st-next-bg: #eae7f7;
+  --ui-st-called: #145c9f;
+  --ui-st-called-bg: #e3ebf3;
+  --ui-st-doctor: #0e675b;
+  --ui-st-doctor-bg: #e0ebea;
+  --ui-st-open: #ad3817;
+  --ui-lift-1: inset 0 1px 0 #ffffff, 0 2px 0 #a9b6b2;
+  --ui-lift-2: 0 3px 0 rgba(16, 28, 24, 0.32);
+  --ui-lift-accent: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 2px 0 #0f4b42;
+  --ui-lift-danger: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 2px 0 #7c1c1c;
+  --ui-sunk: inset 0 2px 0 #dbe2df;
+  --ui-scrim: rgba(230, 234, 233, 0.18);
+  --ui-photo-light: 1;
+  --ui-photo-dark: 0;
+}
+
+html[data-staff-theme] body {
+  background: var(--ui-page);
+  color: var(--ui-text);
+}
+
+/* ---- The photo behind the page -------------------------------------
+   A fixed layer per theme (not background-attachment: fixed, which iPad
+   Safari ignores), so a theme change cross-fades the two. Nothing is read
+   straight off it: every piece of text sits on an opaque surface. While a
+   photo loads, or if it fails, the page colour shows.
+   The photo of the theme that is NOT showing is only asked for once the
+   page has loaded (Backdrop sets data-all). */
+.staff-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: var(--ui-page);
+}
+.staff-backdrop > i {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  transition: opacity 420ms ease;
+}
+.staff-backdrop-light {
+  opacity: var(--ui-photo-light);
+}
+.staff-backdrop-dark {
+  opacity: var(--ui-photo-dark);
+}
+html[data-staff-theme="light"] .staff-backdrop-light,
+.staff-backdrop[data-all] .staff-backdrop-light {
+  background-image: url("/staff-bg-light.jpg");
+}
+html[data-staff-theme="dark"] .staff-backdrop-dark,
+.staff-backdrop[data-all] .staff-backdrop-dark {
+  background-image: url("/staff-bg-dark.jpg");
+}
+.staff-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--ui-scrim);
+}
+
+/* ---- Motion ---------------------------------------------------------
+   Short, and after the fact: the state changes at once, the animation
+   follows. Nothing a person is about to press moves. Arrivals are
+   keyframes, which start by themselves when the element appears. */
+
+/* The raised thumb that slides to the chosen item of a switch or the tab
+   row (use-thumb.ts moves it). "still" = put in place without sliding. */
+.ui-thumb {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  transition:
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ui-thumb-still {
+  transition: none;
+}
+/* The tab row's thumb: the same raised tile, with the photo's accent
+   colour as a line inside its bottom edge. */
+.ui-tab-thumb {
+  box-shadow:
+    inset 0 -3px 0 var(--ui-tab-accent),
+    var(--ui-lift-1);
+}
+
+@keyframes ui-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes ui-settle {
+  from {
+    opacity: 0.3;
+  }
+}
+@keyframes ui-fade {
+  from {
+    opacity: 0;
+  }
+}
+/* A tab's content, or the fields of a newly chosen option, arriving. */
+.ui-enter {
+  animation: ui-rise 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* Fresh numbers for a newly chosen range. */
+.ui-settle {
+  animation: ui-settle 260ms ease-out;
+}
+/* Something appearing where movement would be in the way. */
+.ui-fade-in {
+  animation: ui-fade 160ms ease-out;
+}
+
+/* Fields that slide open beside a switch (the custom dates). Closed, they
+   cannot be seen, clicked or tabbed to. The padding leaves room for a
+   focus ring inside the clipped box. */
+.ui-reveal-x {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  max-width: 0;
+  /* No height either while closed: on a narrow screen it wraps onto a
+     line of its own, which would otherwise stay there, empty. */
+  max-height: 0;
+  padding: 3px 0;
+  margin: -3px 0;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    max-width 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    padding 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 200ms ease,
+    max-height 0s linear 280ms,
+    visibility 0s linear 280ms;
+}
+.ui-reveal-x[data-open] {
+  max-width: 400px;
+  max-height: 120px;
+  padding: 3px;
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+/* A box whose height glides when its content changes (AutoHeight.tsx). */
+.ui-auto-height {
+  overflow: hidden;
+  padding: 4px;
+  margin: -4px;
+  transition: height 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* A theme change cross-fades every colour, edge and ledge — only while
+   the switch is being used (the class is on <html> for under half a
+   second), so ordinary hovers are never slowed by it. */
+html.staff-theming,
+html.staff-theming * {
+  transition:
+    background-color 280ms ease,
+    color 280ms ease,
+    border-color 280ms ease,
+    outline-color 280ms ease,
+    box-shadow 280ms ease,
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 420ms ease !important;
+}
+
+/* Reduced motion: fades stay, sliding and resizing go (the same rule as
+   the waiting-room TV). */
+@media (prefers-reduced-motion: reduce) {
+  .ui-thumb,
+  .ui-reveal-x,
+  .ui-auto-height {
+    transition: none;
+  }
+  .ui-enter {
+    animation: ui-fade 160ms ease-out;
+  }
+  html.staff-theming,
+  html.staff-theming * {
+    transition:
+      background-color 280ms ease,
+      color 280ms ease,
+      border-color 280ms ease,
+      outline-color 280ms ease,
+      box-shadow 280ms ease,
+      opacity 420ms ease !important;
+  }
+}

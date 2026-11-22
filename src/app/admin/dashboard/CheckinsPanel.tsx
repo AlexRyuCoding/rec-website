@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { ChevronDown, RefreshCw } from "lucide-react";
 import {
   customRange,
   DateRange,
@@ -12,11 +12,22 @@ import {
 import { FLOW_EVENT, ROOMS_CHANNEL } from "@/lib/rooms-realtime";
 import { goToStaffLogin } from "@/lib/staff-login-redirect";
 import { createBrowserClient } from "@/lib/supabase-browser";
+import Banner from "../ui/Banner";
+import Button from "../ui/Button";
+import Panel from "../ui/Panel";
+import Segmented from "../ui/Segmented";
+import StatusPill from "../ui/StatusPill";
+import {
+  fieldClass,
+  tableClass,
+  tdClass,
+  thClass,
+  trClass,
+} from "../ui/styles";
 import {
   CheckinRecord,
   checkinsCsv,
   checkinStatus,
-  isOpenStatus,
   Measure,
   PractitionerSummary,
   statusLabel,
@@ -71,30 +82,65 @@ const dateAndTime = (iso: string) =>
 
 const minutes = (n: number | null) => (n === null ? "—" : `${n} min`);
 
-// One number of the summary: the typical (median) time, how many visits
-// it is based on and the longest.
+// The summary's numbers are raised tiles in two groups: how today stands
+// (counts) and how long things took (times). No heading over a group —
+// the page behind them is a photograph, and nothing is read off that.
+
+// One time of the summary: the typical (median) time, how many visits it
+// is based on and the longest.
 function MeasureTile({ label, measure }: { label: string; measure: Measure }) {
   return (
-    <div className="min-w-40 flex-1 rounded-lg border border-brand-foreground/40 px-4 py-3">
-      <p className="text-sm text-cream/60">{label}</p>
-      <p className="text-2xl font-semibold tabular-nums">
-        {minutes(measure.median)}
+    <Panel className="px-3.5 pb-3 pt-2.5">
+      <p className="text-[13px] text-ui-text-2">{label}</p>
+      <p className="text-[28px] font-semibold leading-tight tracking-tight tabular-nums">
+        {measure.median === null ? (
+          "—"
+        ) : (
+          <>
+            {measure.median}{" "}
+            <span className="text-[15px] font-medium tracking-normal text-ui-text-2">
+              min
+            </span>
+          </>
+        )}
       </p>
-      <p className="text-xs text-cream/50">
+      <p className="text-xs text-ui-text-3">
         {measure.count === 0
           ? "no visits yet"
           : `typical of ${measure.count} · longest ${minutes(measure.longest)}`}
       </p>
-    </div>
+    </Panel>
   );
 }
 
-function CountTile({ label, value }: { label: string; value: number }) {
+// `dot`: the colour of the status the count is about, as on the pills in
+// the list below.
+function CountTile({
+  label,
+  value,
+  dot,
+}: {
+  label: string;
+  value: number;
+  dot?: "waiting" | "doctor";
+}) {
   return (
-    <div className="min-w-28 flex-1 rounded-lg border border-brand-foreground/40 px-4 py-3">
-      <p className="text-sm text-cream/60">{label}</p>
-      <p className="text-2xl font-semibold tabular-nums">{value}</p>
-    </div>
+    <Panel className="px-3.5 pb-3 pt-2.5">
+      <p className="flex items-center gap-1.5 text-[13px] text-ui-text-2">
+        {dot && (
+          <span
+            aria-hidden
+            className={`size-2 shrink-0 rounded-full ${
+              dot === "waiting" ? "bg-ui-st-waiting" : "bg-ui-st-doctor"
+            }`}
+          />
+        )}
+        {label}
+      </p>
+      <p className="text-[28px] font-semibold leading-tight tracking-tight tabular-nums">
+        {value}
+      </p>
+    </Panel>
   );
 }
 
@@ -116,6 +162,7 @@ export default function CheckinsPanel({ active }: { active: boolean }) {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [byPractitionerOpen, setByPractitionerOpen] = useState(false);
   const [error, setError] = useState("");
   // Re-read once a minute so "Waiting · 8 min" keeps counting.
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -313,14 +360,28 @@ export default function CheckinsPanel({ active }: { active: boolean }) {
   const count = (test: (s: (typeof statuses)[number]) => boolean) =>
     statuses.filter(test).length;
 
+  const today = preset === "today";
+  const timeTiles = stats && (
+    <>
+      <MeasureTile label="Wait for a room" measure={stats.all.waitForRoom} />
+      <MeasureTile
+        label="Wait for the doctor, in the room"
+        measure={stats.all.waitForDoctor}
+      />
+      <MeasureTile label="Whole visit" measure={stats.all.visit} />
+    </>
+  );
+  const maxDate = defaultCustomDates(new Date()).to;
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-2">
-        {PRESETS.map(([p, label]) => (
-          <button
-            key={p}
-            aria-pressed={preset === p}
-            onClick={() => {
+      <Panel className="flex flex-wrap items-center justify-between gap-2.5 px-2.5 pb-[9px] pt-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Segmented
+            label="Dates"
+            value={preset}
+            options={PRESETS.map(([value, label]) => ({ value, label }))}
+            onChange={(p) => {
               // Custom starts prefilled — the last 30 days — so the range
               // loads without both fields typed in.
               if (p === "custom" && (!customFrom || !customTo)) {
@@ -330,242 +391,282 @@ export default function CheckinsPanel({ active }: { active: boolean }) {
               }
               setPreset(p);
             }}
-            className={`px-4 py-2 rounded-full border transition-colors ${
-              preset === p
-                ? "bg-brand-primary text-white border-brand-primary"
-                : "border-brand-foreground hover:bg-brand-muted"
-            }`}
+          />
+          {/* Always in the page, so they can slide open and shut; while
+              shut they cannot be seen, clicked or tabbed to (.ui-reveal-x). */}
+          <span
+            className="ui-reveal-x"
+            data-open={preset === "custom" ? "" : undefined}
           >
-            {label}
-          </button>
-        ))}
-        {preset === "custom" && (
-          <span className="flex items-center gap-2">
             <input
               type="date"
               aria-label="From"
               value={customFrom}
-              max={defaultCustomDates(new Date()).to}
+              max={maxDate}
               onChange={(e) => setCustomFrom(e.target.value)}
-              className="px-3 py-2 border border-brand-foreground rounded-lg bg-transparent"
+              className={fieldClass}
             />
-            <span>to</span>
+            <span className="text-ui-text-2">to</span>
             <input
               type="date"
               aria-label="To"
               value={customTo}
-              max={defaultCustomDates(new Date()).to}
+              max={maxDate}
               onChange={(e) => setCustomTo(e.target.value)}
-              className="px-3 py-2 border border-brand-foreground rounded-lg bg-transparent"
+              className={fieldClass}
             />
           </span>
-        )}
-        <button
-          onClick={() => load("refresh")}
-          disabled={loading || refreshing}
-          aria-label="Refresh check-ins"
-          className="ml-auto flex items-center gap-2 px-4 py-2 rounded-full border border-brand-foreground hover:bg-brand-muted disabled:opacity-50 transition-colors"
-        >
-          <RefreshCw
-            className={`size-4 ${loading || refreshing ? "animate-spin" : ""}`}
-          />
-          Refresh
-        </button>
-        <button
-          onClick={exportCsv}
-          disabled={rows.length === 0 || exporting}
-          className="px-4 py-2 rounded-full border border-brand-foreground hover:bg-brand-muted disabled:opacity-50 transition-colors"
-        >
-          {exporting ? "Exporting…" : "Export CSV"}
-        </button>
-      </div>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <Button
+            variant="quiet"
+            onClick={() => load("refresh")}
+            disabled={loading || refreshing}
+            aria-label="Refresh check-ins"
+          >
+            <RefreshCw
+              aria-hidden
+              className={`size-4 ${loading || refreshing ? "animate-spin" : ""}`}
+            />
+            Refresh
+          </Button>
+          <Button onClick={exportCsv} disabled={rows.length === 0 || exporting}>
+            {exporting ? "Exporting…" : "Export CSV"}
+          </Button>
+        </div>
+      </Panel>
 
       {error && (
-        <p role="alert" className="text-error">
+        <Banner tone="error" role="alert">
           {error}
-        </p>
+        </Banner>
       )}
 
+      {/* Mounted afresh when a new range has loaded, which is what makes
+          the numbers fade up (.ui-settle) — and only then: a refresh of
+          the same range keeps them mounted, and nothing moves. */}
       {!loading && (rows.length > 0 || stats) && (
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap gap-3">
-            <CountTile label="Checked in" value={total} />
-            {preset === "today" && (
-              <>
+        <div className="ui-settle flex flex-col gap-4">
+          {today ? (
+            <div className="grid gap-x-6 gap-y-3 lg:grid-cols-[4fr_5fr]">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <CountTile label="Checked in" value={total} />
                 <CountTile
                   label="Waiting"
+                  dot="waiting"
                   value={count((s) => s === "waiting" || s === "next_up")}
                 />
                 <CountTile
                   label="In a room"
+                  dot="doctor"
                   value={count((s) => s === "called" || s === "with_doctor")}
                 />
                 <CountTile
                   label="Finished"
                   value={count((s) => s === "finished")}
                 />
-              </>
-            )}
-          </div>
-          {stats && (
-            <div className="flex flex-wrap gap-3">
-              <MeasureTile
-                label="Wait for a room"
-                measure={stats.all.waitForRoom}
-              />
-              <MeasureTile
-                label="Wait for the doctor, in the room"
-                measure={stats.all.waitForDoctor}
-              />
-              <MeasureTile label="Whole visit" measure={stats.all.visit} />
+              </div>
+              {timeTiles && (
+                <div className="grid gap-3 sm:grid-cols-3">{timeTiles}</div>
+              )}
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1.35fr_1.35fr_1.35fr]">
+              <CountTile label="Checked in" value={total} />
+              {timeTiles}
             </div>
           )}
           {stats && !stats.complete && (
-            <p className="text-sm text-gold">
+            <Banner tone="caution">
               This range is very large: the times above cover its most recent
               20,000 check-ins.
-            </p>
+            </Banner>
           )}
           {stats && stats.byPractitioner.length > 1 && (
-            <details className="rounded-lg border border-brand-foreground/40 px-4 py-2">
-              <summary className="cursor-pointer py-1 text-sm text-cream/70">
+            <Panel className="overflow-hidden">
+              <button
+                type="button"
+                aria-expanded={byPractitionerOpen}
+                aria-controls="checkins-by-practitioner"
+                onClick={() => setByPractitionerOpen((open) => !open)}
+                className="flex w-full items-center gap-2 px-[18px] py-2.5 text-left text-sm text-ui-text-2 hover:text-ui-text focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ui-accent-text"
+              >
+                <ChevronDown
+                  aria-hidden
+                  className={`size-4 transition-transform duration-200 motion-reduce:transition-none ${
+                    byPractitionerOpen ? "rotate-180" : ""
+                  }`}
+                />
                 By practitioner
-              </summary>
-              <div className="overflow-x-auto">
-                <table className="mt-2 w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-brand-foreground/40 text-cream/60">
-                      <th className="py-1.5 pr-4 font-normal">Practitioner</th>
-                      <th className="py-1.5 pr-4 font-normal">Check-ins</th>
-                      <th className="py-1.5 pr-4 font-normal">
-                        Wait for a room
-                      </th>
-                      <th className="py-1.5 pr-4 font-normal">
-                        Wait for the doctor
-                      </th>
-                      <th className="py-1.5 font-normal">Whole visit</th>
-                    </tr>
-                  </thead>
-                  <tbody className="tabular-nums">
-                    {stats.byPractitioner.map((p) => (
-                      <tr
-                        key={p.practitioner ?? "none"}
-                        className="border-b border-brand-muted last:border-0"
-                      >
-                        <td className="py-1.5 pr-4">
-                          {p.practitioner ?? "No appointment that day"}
-                        </td>
-                        <td className="py-1.5 pr-4">{p.checkins}</td>
-                        <td className="py-1.5 pr-4">
-                          {minutes(p.waitForRoom.median)}
-                        </td>
-                        <td className="py-1.5 pr-4">
-                          {minutes(p.waitForDoctor.median)}
-                        </td>
-                        <td className="py-1.5">{minutes(p.visit.median)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              </button>
+              {/* Opens with a glide: a grid row that goes from no height
+                  to its content's height. The table stays in the page
+                  while shut (it holds nothing that can be focused). */}
+              <div
+                id="checkins-by-practitioner"
+                className={`grid transition-[grid-template-rows] duration-300 ease-out-quint motion-reduce:transition-none ${
+                  byPractitionerOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                }`}
+              >
+                <div
+                  className={`min-h-0 overflow-hidden ${
+                    byPractitionerOpen ? "" : "invisible"
+                  }`}
+                >
+                  <div className="overflow-x-auto border-t border-ui-line">
+                    <table className={`${tableClass} text-sm`}>
+                      <thead>
+                        <tr>
+                          <th className={thClass}>Practitioner</th>
+                          <th className={thClass}>Check-ins</th>
+                          <th className={thClass}>Wait for a room</th>
+                          <th className={thClass}>Wait for the doctor</th>
+                          <th className={thClass}>Whole visit</th>
+                        </tr>
+                      </thead>
+                      <tbody className="tabular-nums">
+                        {stats.byPractitioner.map((p) => (
+                          <tr
+                            key={p.practitioner ?? "none"}
+                            className={trClass}
+                          >
+                            <td className={tdClass}>
+                              {p.practitioner ?? "No appointment that day"}
+                            </td>
+                            <td className={tdClass}>{p.checkins}</td>
+                            <td className={tdClass}>
+                              {minutes(p.waitForRoom.median)}
+                            </td>
+                            <td className={tdClass}>
+                              {minutes(p.waitForDoctor.median)}
+                            </td>
+                            <td className={tdClass}>
+                              {minutes(p.visit.median)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
-            </details>
+            </Panel>
           )}
         </div>
       )}
 
-      {loading ? (
-        <p className="py-8 text-center text-cream/50">Loading...</p>
-      ) : rows.length === 0 ? (
-        !error && (
-          <p className="py-8 text-center text-cream/50">
-            No check-ins in this range.
-          </p>
-        )
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-brand-foreground">
-                <th className="py-2 pr-4">Checked in</th>
-                <th className="py-2 pr-4">Patient</th>
-                <th className="py-2 pr-4">Appointment</th>
-                <th className="py-2 pr-4">Service</th>
-                <th className="py-2 pr-4">Practitioner</th>
-                <th className="py-2 pr-4">Status</th>
-                <th className="py-2">Waited for a room</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => {
-                const status = statuses[i];
-                const times = visitTimes(r);
-                return (
-                  <tr key={r.id} className="border-b border-brand-muted">
-                    <td className="py-2 pr-4 whitespace-nowrap">
-                      {when(r.checked_in_at)}
-                    </td>
-                    <td className="py-2 pr-4">
-                      {r.first_name} {r.last_name}
-                    </td>
-                    <td className="py-2 pr-4 whitespace-nowrap">
-                      {r.appointment_at ? when(r.appointment_at) : "—"}
-                    </td>
-                    <td className="py-2 pr-4">{r.service_name ?? "—"}</td>
-                    <td className="py-2 pr-4">{r.practitioner_name ?? "—"}</td>
-                    <td
-                      className={`py-2 pr-4 whitespace-nowrap ${
-                        isOpenStatus(status)
-                          ? "text-brand-primary"
-                          : status === "finished"
-                            ? ""
-                            : "text-cream/50"
-                      }`}
-                    >
-                      {statusLabel(status, r.room_name)}
-                      {status === "waiting" &&
-                        ` · ${Math.max(
-                          0,
-                          Math.round(
-                            (nowMs - Date.parse(r.checked_in_at)) / 60_000
-                          )
-                        )} min`}
-                      {status === "finished" && r.done_at && (
-                        <span className="text-cream/50">
-                          {" "}
-                          {timeOnly(r.done_at)}
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-2 whitespace-nowrap tabular-nums">
-                      {minutes(times.waitForRoomMin)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-cream/50">
-            {truncated ? (
-              <>
-                <span>
-                  Showing the most recent {rows.length} of {total} check-ins.
-                  Export CSV includes all of them.
-                </span>
-                <button
-                  onClick={loadMore}
-                  disabled={loadingMore}
-                  className="px-4 py-1.5 rounded-full border border-brand-foreground text-cream hover:bg-brand-muted disabled:opacity-50 transition-colors"
-                >
-                  {loadingMore ? "Loading…" : "Load more"}
-                </button>
-              </>
-            ) : (
-              <span>
-                {total} check-in{total === 1 ? "" : "s"}
-              </span>
-            )}
-          </div>
-        </div>
+      {/* The list's panel stays while a new range loads, so the page does
+          not lose and regain a block; with nothing to say (a failed load,
+          which has its own message above) it is left out. */}
+      {(loading || rows.length > 0 || !error) && (
+        <Panel className="overflow-hidden">
+          {loading ? (
+            <p className="py-10 text-center text-ui-text-3">Loading...</p>
+          ) : rows.length === 0 ? (
+            <p className="py-10 text-center text-ui-text-3">
+              No check-ins in this range.
+            </p>
+          ) : (
+            <div className="ui-settle">
+              <div className="overflow-x-auto">
+                <table className={tableClass}>
+                  <thead>
+                    <tr>
+                      <th className={thClass}>Checked in</th>
+                      <th className={thClass}>Patient</th>
+                      <th className={thClass}>Appointment</th>
+                      <th className={thClass}>Service</th>
+                      <th className={thClass}>Practitioner</th>
+                      <th className={thClass}>Status</th>
+                      <th className={`${thClass} text-right`}>
+                        Waited for a room
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r, i) => {
+                      const status = statuses[i];
+                      const times = visitTimes(r);
+                      return (
+                        <tr key={r.id} className={trClass}>
+                          <td
+                            className={`${tdClass} whitespace-nowrap tabular-nums text-ui-text-2`}
+                          >
+                            {when(r.checked_in_at)}
+                          </td>
+                          <td className={`${tdClass} font-semibold`}>
+                            {r.first_name} {r.last_name}
+                          </td>
+                          <td
+                            className={`${tdClass} whitespace-nowrap tabular-nums text-ui-text-2`}
+                          >
+                            {r.appointment_at ? when(r.appointment_at) : "—"}
+                          </td>
+                          <td className={`${tdClass} text-ui-text-2`}>
+                            {r.service_name ?? "—"}
+                          </td>
+                          <td className={`${tdClass} text-ui-text-2`}>
+                            {r.practitioner_name ?? "—"}
+                          </td>
+                          <td className={tdClass}>
+                            <StatusPill status={status}>
+                              {/* The spaces are for whoever copies the
+                                  cell, searches the page or has it read
+                                  out: the gap on screen is the pill's own. */}
+                              {statusLabel(status, r.room_name)}
+                              {status === "waiting" && " "}
+                              {status === "waiting" && (
+                                <span className="font-medium tabular-nums">
+                                  ·{" "}
+                                  {Math.max(
+                                    0,
+                                    Math.round(
+                                      (nowMs - Date.parse(r.checked_in_at)) /
+                                        60_000
+                                    )
+                                  )}{" "}
+                                  min
+                                </span>
+                              )}
+                              {status === "finished" && r.done_at && " "}
+                              {status === "finished" && r.done_at && (
+                                <span className="font-medium tabular-nums">
+                                  {timeOnly(r.done_at)}
+                                </span>
+                              )}
+                            </StatusPill>
+                          </td>
+                          <td
+                            className={`${tdClass} whitespace-nowrap text-right tabular-nums`}
+                          >
+                            {minutes(times.waitForRoomMin)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 border-t border-ui-line px-[18px] py-2.5 text-[13px] text-ui-text-3">
+                {truncated ? (
+                  <>
+                    <span>
+                      Showing the most recent {rows.length} of {total}{" "}
+                      check-ins. Export CSV includes all of them.
+                    </span>
+                    <Button size="sm" onClick={loadMore} disabled={loadingMore}>
+                      {loadingMore ? "Loading…" : "Load more"}
+                    </Button>
+                  </>
+                ) : (
+                  <span>
+                    {total} check-in{total === 1 ? "" : "s"}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </Panel>
       )}
     </div>
   );

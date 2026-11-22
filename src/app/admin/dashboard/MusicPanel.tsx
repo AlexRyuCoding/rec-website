@@ -3,6 +3,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Music, Pause, Play, Plus, Radio } from "lucide-react";
 import type { MusicSource, RadioPreset, SavedStation } from "@/lib/music";
 import { goToStaffLogin } from "@/lib/staff-login-redirect";
+import AutoHeight from "../ui/AutoHeight";
+import Panel from "../ui/Panel";
+import Segmented from "../ui/Segmented";
+import { buttonClass, fieldClass, selectClass } from "../ui/styles";
 
 interface Settings {
   source: MusicSource;
@@ -39,10 +43,11 @@ const GLYPHS = {
     "M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z",
 };
 
-// Each service in its own colour: Spotify green, YouTube red. Radio has
-// no brand of its own, so it takes the clinic's gold.
+// Each service in its own colour: Spotify green, YouTube red (theirs, so
+// the same in both themes). Radio has no brand of its own, so it takes
+// the theme's amber.
 const SOURCE_COLOR: Partial<Record<MusicSource, string>> = {
-  radio: "text-brand-accent",
+  radio: "text-ui-caution",
   youtube: "text-[#FF0000]",
   spotify: "text-[#1ED760]",
 };
@@ -128,6 +133,8 @@ export default function MusicPanel() {
   // "Other station…" was picked by hand: keep its fields open even if what
   // is typed happens to match a listed station, or is still empty.
   const [otherChosen, setOtherChosen] = useState(false);
+  // True once the source has been switched by hand on this page.
+  const [sourceSwitched, setSourceSwitched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(
@@ -370,18 +377,17 @@ export default function MusicPanel() {
     }
   };
 
-  const pill =
-    "px-4 py-2 rounded-full border border-brand-foreground hover:bg-brand-muted transition-colors disabled:opacity-40";
-  const field =
-    "w-full rounded-lg border border-brand-foreground bg-transparent px-3 py-2 placeholder:opacity-40";
+  const pill = buttonClass();
+  const field = `${fieldClass} w-full text-[15px]`;
   // A dropdown must NOT be transparent: the browser paints the open list
   // itself, and with no background of its own it falls back to white —
-  // under this page's light text. A solid dark background, dark-scheme
-  // native controls, and the same colours on every entry keep the list
-  // readable in every browser.
-  const selectField =
-    "w-full rounded-lg border border-brand-foreground bg-brand-background px-3 py-2 text-brand-foreground [color-scheme:dark]";
-  const optionColors = "bg-brand-background text-brand-foreground";
+  // which in the dark theme is under light text. A solid background, the
+  // theme's own colour scheme for native controls (staff-theme.css), and
+  // the same colours on every entry keep the list readable in every
+  // browser and both themes.
+  const selectField = `${selectClass} w-full text-[15px]`;
+  const optionColors = "bg-ui-btn text-ui-text";
+  const label = "flex flex-col gap-1 text-sm text-ui-text-2";
 
   const set = (change: Partial<Settings>) =>
     setDraft((d) => (d ? { ...d, ...change } : d));
@@ -402,15 +408,12 @@ export default function MusicPanel() {
   const playingSomething = saved !== null && saved.source !== "off";
 
   return (
-    <section
-      id="music"
-      className="mt-10 scroll-mt-6 border border-brand-foreground rounded-lg p-6"
-    >
-      <h2 className="mb-2 flex items-center gap-2 text-xl font-semibold">
-        <Music className="size-5" />
+    <Panel as="section" id="music" className="scroll-mt-6 p-5">
+      <h2 className="mb-2 flex items-center gap-2 text-lg font-semibold">
+        <Music aria-hidden className="size-5 text-ui-accent-text" />
         Waiting-room music
       </h2>
-      <p className="mb-5 text-sm opacity-70">
+      <p className="mb-5 text-sm text-ui-text-2">
         Plays through the waiting-room screen, which shows what is playing at
         the top. It starts once someone has clicked that screen&apos;s page (the
         same click that turns on the call chime), and dips for a moment whenever
@@ -418,297 +421,303 @@ export default function MusicPanel() {
       </p>
 
       {!draft || !saved ? (
-        <p className="text-sm opacity-60">
+        <p className="text-sm text-ui-text-3">
           {failed
             ? "Music settings couldn't be loaded. Reload the page to try again."
             : "Loading…"}
         </p>
       ) : (
         <>
-          <div
-            role="radiogroup"
-            aria-label="Music source"
-            className="flex flex-wrap gap-2"
-          >
-            {SOURCES.map((s) => (
-              <button
-                key={s.id}
-                role="radio"
-                aria-checked={draft.source === s.id}
-                onClick={() => set({ source: s.id })}
-                className={`flex items-center gap-2 px-5 py-2 rounded-full border transition-colors ${
-                  draft.source === s.id
-                    ? "border-brand-primary bg-brand-primary text-white"
-                    : "border-brand-foreground hover:bg-brand-muted"
-                }`}
-              >
-                {/* In its brand colour; white on the filled (chosen)
-                    button, where green or red on teal would be hard to
-                    see. */}
-                <SourceIcon
-                  source={s.id}
-                  className={
-                    draft.source === s.id ? "" : (SOURCE_COLOR[s.id] ?? "")
-                  }
-                />
-                {s.label}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label="Music source"
+            semantics="radio"
+            value={draft.source}
+            onChange={(source) => {
+              if (source !== draft.source) setSourceSwitched(true);
+              set({ source });
+            }}
+            options={SOURCES.map((s) => ({
+              value: s.id,
+              label: (
+                <>
+                  <SourceIcon
+                    source={s.id}
+                    className={SOURCE_COLOR[s.id] ?? ""}
+                  />
+                  {s.label}
+                </>
+              ),
+            }))}
+          />
 
-          <div className="mt-5 max-w-2xl space-y-3">
-            {draft.source === "radio" && (
-              <>
-                <label className="flex flex-col gap-1 text-sm">
-                  Station
-                  <select
-                    value={stationChoice}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      const pickedMine = value.startsWith(MINE)
-                        ? stations.find((s) => MINE + s.id === value)
-                        : undefined;
-                      const pickedPreset = presets.find((p) => p.id === value);
-                      setOtherChosen(value === OTHER_STATION);
-                      if (pickedMine) {
-                        // The name goes along, so the screen shows it (and
-                        // keeps showing it if the station is later removed).
-                        set({
-                          radioUrl: pickedMine.url,
-                          radioName: pickedMine.name,
-                        });
-                      } else if (pickedPreset) {
-                        set({ radioUrl: pickedPreset.url, radioName: "" });
-                      } else {
-                        set({ radioUrl: "", radioName: "" });
-                      }
-                    }}
-                    className={selectField}
-                  >
-                    <option value="" disabled className={optionColors}>
-                      Choose a station…
-                    </option>
-                    {stations.length > 0 && (
-                      <optgroup label="My stations" className={optionColors}>
-                        {stations.map((s) => (
+          {/* The fields of the chosen source: the card's height glides to
+              fit them and they rise into place — after a switch, not when
+              the settings first load. */}
+          <AutoHeight watch={draft.source}>
+            <div
+              key={draft.source}
+              className={`mt-5 max-w-2xl space-y-3 ${
+                sourceSwitched ? "ui-enter" : ""
+              }`}
+            >
+              {draft.source === "radio" && (
+                <>
+                  <label className={label}>
+                    Station
+                    <select
+                      value={stationChoice}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        const pickedMine = value.startsWith(MINE)
+                          ? stations.find((s) => MINE + s.id === value)
+                          : undefined;
+                        const pickedPreset = presets.find(
+                          (p) => p.id === value
+                        );
+                        setOtherChosen(value === OTHER_STATION);
+                        if (pickedMine) {
+                          // The name goes along, so the screen shows it (and
+                          // keeps showing it if the station is later removed).
+                          set({
+                            radioUrl: pickedMine.url,
+                            radioName: pickedMine.name,
+                          });
+                        } else if (pickedPreset) {
+                          set({ radioUrl: pickedPreset.url, radioName: "" });
+                        } else {
+                          set({ radioUrl: "", radioName: "" });
+                        }
+                      }}
+                      className={selectField}
+                    >
+                      <option value="" disabled className={optionColors}>
+                        Choose a station…
+                      </option>
+                      {stations.length > 0 && (
+                        <optgroup label="My stations" className={optionColors}>
+                          {stations.map((s) => (
+                            <option
+                              key={s.id}
+                              value={MINE + s.id}
+                              className={optionColors}
+                            >
+                              {s.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      <optgroup label="Built-in" className={optionColors}>
+                        {presets.map((p) => (
                           <option
-                            key={s.id}
-                            value={MINE + s.id}
+                            key={p.id}
+                            value={p.id}
                             className={optionColors}
                           >
-                            {s.name}
+                            {p.name} — {p.about}
                           </option>
                         ))}
                       </optgroup>
-                    )}
-                    <optgroup label="Built-in" className={optionColors}>
-                      {presets.map((p) => (
-                        <option
-                          key={p.id}
-                          value={p.id}
-                          className={optionColors}
-                        >
-                          {p.name} — {p.about}
-                        </option>
-                      ))}
-                    </optgroup>
-                    <option value={OTHER_STATION} className={optionColors}>
-                      Other station…
-                    </option>
-                  </select>
-                </label>
-                {stationChoice === OTHER_STATION && (
-                  <>
-                    <label className="flex flex-col gap-1 text-sm">
-                      Stream address
-                      <input
-                        value={draft.radioUrl}
-                        onChange={(e) => set({ radioUrl: e.target.value })}
-                        placeholder="https://…"
-                        inputMode="url"
-                        spellCheck={false}
-                        autoComplete="off"
-                        maxLength={500}
-                        className={field}
-                      />
-                    </label>
-                    <label className="flex flex-col gap-1 text-sm">
-                      Station name (shown on the screen)
-                      <input
-                        value={draft.radioName}
-                        onChange={(e) => set({ radioName: e.target.value })}
-                        placeholder="e.g. KUSC Classical"
-                        maxLength={60}
-                        className={field}
-                      />
-                    </label>
-                    <p className="text-sm opacity-60">
-                      Use the station&apos;s direct stream address (it usually
-                      ends in .mp3 or .aac and starts with https://), not the
-                      address of its website.
-                    </p>
-                    {stationsAvailable && (
-                      <div className="flex flex-wrap items-center gap-3">
-                        <button
-                          onClick={addStation}
-                          disabled={
-                            busy ||
-                            !draft.radioUrl.trim() ||
-                            !draft.radioName.trim()
-                          }
-                          className={`${pill} flex items-center gap-2`}
-                        >
-                          <Plus className="size-4" /> Add to My stations
-                        </button>
-                        <p className="text-sm opacity-60">
-                          Keeps it in the Station list for next time.
-                        </p>
-                      </div>
-                    )}
-                  </>
-                )}
-                {stations.length > 0 && (
-                  <div className="pt-2">
-                    <h3 className="text-sm font-semibold">My stations</h3>
-                    <ul className="mt-1 divide-y divide-brand-foreground/20">
-                      {stations.map((s) => (
-                        <li
-                          key={s.id}
-                          className="flex flex-wrap items-center justify-between gap-3 py-2"
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate font-medium">{s.name}</p>
-                            <p className="truncate text-sm opacity-60">
-                              {streamHost(s.url)}
-                            </p>
-                          </div>
-                          {removingId === s.id ? (
-                            <span className="flex items-center gap-2">
-                              <button
-                                onClick={() => removeStation(s)}
-                                disabled={busy}
-                                className="px-3 py-1 rounded-full bg-error text-white disabled:opacity-40"
-                              >
-                                Confirm remove
-                              </button>
-                              <button
-                                onClick={() => setRemovingId(null)}
-                                className="px-3 py-1 rounded-full border border-brand-foreground hover:bg-brand-muted transition-colors"
-                              >
-                                Cancel
-                              </button>
-                            </span>
-                          ) : (
-                            <button
-                              onClick={() => setRemovingId(s.id)}
-                              disabled={busy}
-                              aria-label={`Remove ${s.name}`}
-                              className="px-3 py-1 rounded-full border border-brand-foreground hover:bg-brand-muted transition-colors disabled:opacity-40"
-                            >
-                              Remove
-                            </button>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </>
-            )}
-
-            {draft.source === "youtube" && (
-              <>
-                <label className="flex flex-col gap-1 text-sm">
-                  YouTube link
-                  <input
-                    value={draft.youtubeUrl}
-                    onChange={(e) => set({ youtubeUrl: e.target.value })}
-                    placeholder="https://www.youtube.com/watch?v=…"
-                    inputMode="url"
-                    spellCheck={false}
-                    autoComplete="off"
-                    maxLength={500}
-                    className={field}
-                  />
-                </label>
-                <p className="text-sm opacity-60">
-                  A long video, a live stream or a playlist. Only the sound
-                  plays; a single video repeats when it ends. YouTube may play
-                  adverts unless the screen&apos;s browser is signed in to a
-                  YouTube Premium account.
-                </p>
-              </>
-            )}
-
-            {draft.source === "spotify" && spotify && (
-              <>
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand-foreground/40 px-4 py-3">
-                  {spotify.connected ? (
+                      <option value={OTHER_STATION} className={optionColors}>
+                        Other station…
+                      </option>
+                    </select>
+                  </label>
+                  {stationChoice === OTHER_STATION && (
                     <>
-                      <p className="text-sm">
-                        Connected
-                        {spotify.accountName && (
-                          <>
-                            {" "}
-                            as <strong>{spotify.accountName}</strong>
-                          </>
-                        )}
+                      <label className={label}>
+                        Stream address
+                        <input
+                          value={draft.radioUrl}
+                          onChange={(e) => set({ radioUrl: e.target.value })}
+                          placeholder="https://…"
+                          inputMode="url"
+                          spellCheck={false}
+                          autoComplete="off"
+                          maxLength={500}
+                          className={field}
+                        />
+                      </label>
+                      <label className={label}>
+                        Station name (shown on the screen)
+                        <input
+                          value={draft.radioName}
+                          onChange={(e) => set({ radioName: e.target.value })}
+                          placeholder="e.g. KUSC Classical"
+                          maxLength={60}
+                          className={field}
+                        />
+                      </label>
+                      <p className="text-sm text-ui-text-3">
+                        Use the station&apos;s direct stream address (it usually
+                        ends in .mp3 or .aac and starts with https://), not the
+                        address of its website.
                       </p>
-                      <button
-                        onClick={disconnectSpotify}
-                        disabled={busy}
-                        className="px-3 py-1 rounded-full border border-brand-foreground hover:bg-brand-muted transition-colors disabled:opacity-40"
-                      >
-                        Disconnect
-                      </button>
+                      {stationsAvailable && (
+                        <div className="flex flex-wrap items-center gap-3">
+                          <button
+                            onClick={addStation}
+                            disabled={
+                              busy ||
+                              !draft.radioUrl.trim() ||
+                              !draft.radioName.trim()
+                            }
+                            className={pill}
+                          >
+                            <Plus className="size-4" /> Add to My stations
+                          </button>
+                          <p className="text-sm text-ui-text-3">
+                            Keeps it in the Station list for next time.
+                          </p>
+                        </div>
+                      )}
                     </>
-                  ) : spotify.configured ? (
-                    <>
-                      <p className="text-sm">
-                        No Spotify account connected yet (Premium needed).
-                      </p>
-                      {/* A full page load on purpose: it leaves for
-                          Spotify's own sign-in page. */}
-                      <a href="/api/admin/spotify/login" className={pill}>
-                        Connect Spotify
-                      </a>
-                    </>
-                  ) : (
-                    <p className="text-sm text-error">
-                      Spotify isn&apos;t set up on the server yet: add
-                      SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in Vercel,
-                      then reload this page.
-                    </p>
                   )}
-                </div>
-                <label className="flex flex-col gap-1 text-sm">
-                  Spotify playlist link
-                  <input
-                    value={draft.spotifyUrl}
-                    onChange={(e) => set({ spotifyUrl: e.target.value })}
-                    placeholder="https://open.spotify.com/playlist/…"
-                    inputMode="url"
-                    spellCheck={false}
-                    autoComplete="off"
-                    maxLength={500}
-                    className={field}
-                  />
-                </label>
-                <p className="text-sm opacity-60">
-                  In Spotify: Share → Copy link to playlist (an album or artist
-                  link works too). Spotify plays on one device at a time:
-                  starting music on this account anywhere else stops it on the
-                  screen until you press Save here again.
-                </p>
-              </>
-            )}
-          </div>
+                  {stations.length > 0 && (
+                    <div className="pt-2">
+                      <h3 className="text-sm font-semibold">My stations</h3>
+                      <ul className="mt-1 divide-y divide-ui-line">
+                        {stations.map((s) => (
+                          <li
+                            key={s.id}
+                            className="flex flex-wrap items-center justify-between gap-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">{s.name}</p>
+                              <p className="truncate text-sm text-ui-text-3">
+                                {streamHost(s.url)}
+                              </p>
+                            </div>
+                            {removingId === s.id ? (
+                              <span className="flex items-center gap-2">
+                                <button
+                                  onClick={() => removeStation(s)}
+                                  disabled={busy}
+                                  className={buttonClass({
+                                    variant: "danger",
+                                    size: "sm",
+                                  })}
+                                >
+                                  Confirm remove
+                                </button>
+                                <button
+                                  onClick={() => setRemovingId(null)}
+                                  className={buttonClass({ size: "sm" })}
+                                >
+                                  Cancel
+                                </button>
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => setRemovingId(s.id)}
+                                disabled={busy}
+                                aria-label={`Remove ${s.name}`}
+                                className={buttonClass({ size: "sm" })}
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {draft.source === "youtube" && (
+                <>
+                  <label className={label}>
+                    YouTube link
+                    <input
+                      value={draft.youtubeUrl}
+                      onChange={(e) => set({ youtubeUrl: e.target.value })}
+                      placeholder="https://www.youtube.com/watch?v=…"
+                      inputMode="url"
+                      spellCheck={false}
+                      autoComplete="off"
+                      maxLength={500}
+                      className={field}
+                    />
+                  </label>
+                  <p className="text-sm text-ui-text-3">
+                    A long video, a live stream or a playlist. Only the sound
+                    plays; a single video repeats when it ends. YouTube may play
+                    adverts unless the screen&apos;s browser is signed in to a
+                    YouTube Premium account.
+                  </p>
+                </>
+              )}
+
+              {draft.source === "spotify" && spotify && (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-ui-line bg-ui-panel-2 px-4 py-3">
+                    {spotify.connected ? (
+                      <>
+                        <p className="text-sm">
+                          Connected
+                          {spotify.accountName && (
+                            <>
+                              {" "}
+                              as <strong>{spotify.accountName}</strong>
+                            </>
+                          )}
+                        </p>
+                        <button
+                          onClick={disconnectSpotify}
+                          disabled={busy}
+                          className={buttonClass({ size: "sm" })}
+                        >
+                          Disconnect
+                        </button>
+                      </>
+                    ) : spotify.configured ? (
+                      <>
+                        <p className="text-sm">
+                          No Spotify account connected yet (Premium needed).
+                        </p>
+                        {/* A full page load on purpose: it leaves for
+                          Spotify's own sign-in page. */}
+                        <a href="/api/admin/spotify/login" className={pill}>
+                          Connect Spotify
+                        </a>
+                      </>
+                    ) : (
+                      <p className="text-sm text-ui-error">
+                        Spotify isn&apos;t set up on the server yet: add
+                        SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in Vercel,
+                        then reload this page.
+                      </p>
+                    )}
+                  </div>
+                  <label className={label}>
+                    Spotify playlist link
+                    <input
+                      value={draft.spotifyUrl}
+                      onChange={(e) => set({ spotifyUrl: e.target.value })}
+                      placeholder="https://open.spotify.com/playlist/…"
+                      inputMode="url"
+                      spellCheck={false}
+                      autoComplete="off"
+                      maxLength={500}
+                      className={field}
+                    />
+                  </label>
+                  <p className="text-sm text-ui-text-3">
+                    In Spotify: Share → Copy link to playlist (an album or
+                    artist link works too). Spotify plays on one device at a
+                    time: starting music on this account anywhere else stops it
+                    on the screen until you press Save here again.
+                  </p>
+                </>
+              )}
+            </div>
+          </AutoHeight>
 
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <button
               onClick={save}
               disabled={busy}
-              className="px-5 py-2 rounded-full bg-brand-primary text-white hover:bg-brand-secondary transition-colors disabled:opacity-40"
+              className={buttonClass({ variant: "primary" })}
             >
               Save
             </button>
@@ -716,7 +725,7 @@ export default function MusicPanel() {
               <p
                 role="status"
                 className={`text-sm ${
-                  message.ok ? "text-brand-primary" : "text-error"
+                  message.ok ? "text-ui-accent-text" : "text-ui-error"
                 }`}
               >
                 {message.text}
@@ -725,13 +734,13 @@ export default function MusicPanel() {
           </div>
 
           {playingSomething && (
-            <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-brand-foreground/20 pt-5">
+            <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-ui-line pt-5">
               <button
                 onClick={() =>
                   send({ paused: !saved.paused }, { keepDraft: true })
                 }
                 disabled={busy}
-                className={`${pill} flex items-center gap-2`}
+                className={pill}
               >
                 {saved.paused ? (
                   <>
@@ -743,7 +752,7 @@ export default function MusicPanel() {
                   </>
                 )}
               </button>
-              <label className="flex items-center gap-3 text-sm">
+              <label className="flex items-center gap-3 text-sm text-ui-text-2">
                 Volume
                 <input
                   type="range"
@@ -752,7 +761,7 @@ export default function MusicPanel() {
                   step={5}
                   value={draft.volume}
                   onChange={(e) => set({ volume: Number(e.target.value) })}
-                  className="w-48 accent-brand-primary"
+                  className="w-48 accent-ui-accent-fill"
                 />
                 <span className="w-10 tabular-nums">{draft.volume}%</span>
               </label>
@@ -760,6 +769,6 @@ export default function MusicPanel() {
           )}
         </>
       )}
-    </section>
+    </Panel>
   );
 }

@@ -9,6 +9,17 @@ import {
   StaffAction,
 } from "@/lib/audit-log";
 import { goToStaffLogin } from "@/lib/staff-login-redirect";
+import Banner from "../ui/Banner";
+import Button from "../ui/Button";
+import Panel from "../ui/Panel";
+import {
+  selectClass,
+  tableClass,
+  tdClass,
+  thClass,
+  trClass,
+} from "../ui/styles";
+import Tag from "../ui/Tag";
 
 interface Reply {
   entries: AuditEntryView[];
@@ -122,23 +133,14 @@ export default function AuditPanel({
     }
   };
 
-  const select =
-    "px-3 py-2 rounded-lg border border-brand-foreground bg-brand-background";
-
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-cream/60">
-        What staff did with patient information: searches, PIN resets,
-        check-ins, history views and exports, removals from the rooms board, and
-        device pairing. It cannot be edited.
-      </p>
-
-      <div className="flex flex-wrap items-center gap-2">
+      <Panel className="flex flex-wrap items-center gap-2 px-2.5 pb-[9px] pt-2">
         <select
           aria-label="Kind of activity"
           value={action}
           onChange={(e) => setAction(e.target.value as StaffAction | "")}
-          className={select}
+          className={selectClass}
         >
           <option value="">All activity</option>
           {STAFF_ACTIONS.map((a) => (
@@ -151,7 +153,7 @@ export default function AuditPanel({
           aria-label="Staff member"
           value={staffEmail}
           onChange={(e) => setStaffEmail(e.target.value)}
-          className={select}
+          className={selectClass}
         >
           <option value="">All staff</option>
           {staff.map((email) => (
@@ -160,98 +162,111 @@ export default function AuditPanel({
             </option>
           ))}
         </select>
+        {/* A rectangle, not a pill: it can be pressed away. */}
         {patient && (
-          <span className="flex items-center gap-1 rounded-full bg-brand-primary py-1 pl-4 pr-1 text-white">
+          <span className="flex items-center gap-1 rounded-md border border-ui-accent-text bg-ui-panel py-1 pl-3 pr-1 text-sm font-medium text-ui-accent-text">
             Only {patient.name}
             <button
               aria-label={`Show all patients again`}
               onClick={onClearPatient}
-              className="rounded-full p-1.5 hover:bg-white/20"
+              className="rounded p-1 hover:bg-ui-panel-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ui-accent-text"
             >
-              <X className="size-4" />
+              <X aria-hidden className="size-4" />
             </button>
           </span>
         )}
-        <button
+        <Button
+          variant="quiet"
           onClick={load}
           disabled={loading}
           aria-label="Refresh the log"
-          className="ml-auto flex items-center gap-2 px-4 py-2 rounded-full border border-brand-foreground hover:bg-brand-muted disabled:opacity-50 transition-colors"
+          className="ml-auto"
         >
-          <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
+          <RefreshCw
+            aria-hidden
+            className={`size-4 ${loading ? "animate-spin" : ""}`}
+          />
           Refresh
-        </button>
-      </div>
+        </Button>
+      </Panel>
 
       {error && (
-        <p role="alert" className="text-error">
+        <Banner tone="error" role="alert">
           {error}
-        </p>
+        </Banner>
       )}
 
-      {loading && entries.length === 0 ? (
-        <p className="py-8 text-center text-cream/50">Loading...</p>
-      ) : entries.length === 0 ? (
-        !error && (
-          <p className="py-8 text-center text-cream/50">
-            {patient || action || staffEmail
-              ? "Nothing recorded that matches."
-              : "Nothing recorded yet."}
-          </p>
-        )
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-brand-foreground">
-                <th className="py-2 pr-4">When</th>
-                <th className="py-2 pr-4">Who</th>
-                <th className="py-2 pr-4">What</th>
-                <th className="py-2 pr-4">Patients</th>
-                <th className="py-2">Detail</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((entry) => (
-                <tr
-                  key={entry.id}
-                  className="border-b border-brand-muted align-top"
-                >
-                  <td className="py-2 pr-4 whitespace-nowrap">
-                    {when(entry.at)}
-                  </td>
-                  <td className="py-2 pr-4">{entry.staffEmail}</td>
-                  <td className="py-2 pr-4 whitespace-nowrap">
-                    {ACTION_LABELS[entry.action]}
-                  </td>
-                  <td className="py-2 pr-4">
-                    {patientsSummary(entry.patientNames, entry.patientCount) ||
-                      "—"}
-                  </td>
-                  <td className="py-2 text-cream/70">
-                    {entry.action === "patient_search" && entry.detail
-                      ? `“${entry.detail}”`
-                      : (entry.detail ?? "—")}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="mt-3 flex items-center gap-3 text-sm text-cream/50">
-            {more ? (
-              <button
-                onClick={loadMore}
-                disabled={loadingMore}
-                className="px-4 py-1.5 rounded-full border border-brand-foreground text-cream hover:bg-brand-muted disabled:opacity-50 transition-colors"
-              >
-                {loadingMore ? "Loading…" : "Show older entries"}
-              </button>
-            ) : (
-              <span>That is everything recorded.</span>
-            )}
-          </div>
-        </div>
-      )}
+      <Panel className="overflow-hidden">
+        <p className="border-b border-ui-line px-[18px] py-3 text-sm text-ui-text-2">
+          What staff did with patient information: searches, PIN resets,
+          check-ins, history views and exports, removals from the rooms board,
+          and device pairing. It cannot be edited.
+        </p>
+        {loading && entries.length === 0 ? (
+          <p className="py-10 text-center text-ui-text-3">Loading...</p>
+        ) : entries.length === 0 ? (
+          !error && (
+            <p className="py-10 text-center text-ui-text-3">
+              {patient || action || staffEmail
+                ? "Nothing recorded that matches."
+                : "Nothing recorded yet."}
+            </p>
+          )
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className={tableClass}>
+                <thead>
+                  <tr>
+                    <th className={thClass}>When</th>
+                    <th className={thClass}>Who</th>
+                    <th className={thClass}>What</th>
+                    <th className={thClass}>Patients</th>
+                    <th className={thClass}>Detail</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {entries.map((entry) => (
+                    <tr key={entry.id} className={`${trClass} align-top`}>
+                      <td
+                        className={`${tdClass} whitespace-nowrap tabular-nums text-ui-text-2`}
+                      >
+                        {when(entry.at)}
+                      </td>
+                      <td className={`${tdClass} text-ui-text-2`}>
+                        {entry.staffEmail}
+                      </td>
+                      <td className={`${tdClass} whitespace-nowrap`}>
+                        <Tag>{ACTION_LABELS[entry.action]}</Tag>
+                      </td>
+                      <td className={tdClass}>
+                        {patientsSummary(
+                          entry.patientNames,
+                          entry.patientCount
+                        ) || "—"}
+                      </td>
+                      <td className={`${tdClass} text-ui-text-2`}>
+                        {entry.action === "patient_search" && entry.detail
+                          ? `“${entry.detail}”`
+                          : (entry.detail ?? "—")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center gap-3 border-t border-ui-line px-[18px] py-2.5 text-[13px] text-ui-text-3">
+              {more ? (
+                <Button size="sm" onClick={loadMore} disabled={loadingMore}>
+                  {loadingMore ? "Loading…" : "Show older entries"}
+                </Button>
+              ) : (
+                <span>That is everything recorded.</span>
+              )}
+            </div>
+          </>
+        )}
+      </Panel>
     </div>
   );
 }
