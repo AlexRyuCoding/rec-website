@@ -7,7 +7,11 @@ import { useEffect, useState } from "react";
 // Only the photo of the theme on screen is asked for at first. The other
 // one is fetched once the page has finished loading (data-all), so that a
 // later switch of theme can cross-fade into it.
-export default function Backdrop() {
+//
+// `under`: put the photo behind the page's content (the page's root must
+// be `isolate`) rather than relying on the content being raised above it.
+// For a page with layers of its own — see .staff-backdrop-under.
+export default function Backdrop({ under = false }: { under?: boolean }) {
   const [all, setAll] = useState(false);
   useEffect(() => {
     if (document.readyState === "complete") {
@@ -21,7 +25,7 @@ export default function Backdrop() {
 
   return (
     <div
-      className="staff-backdrop"
+      className={`staff-backdrop ${under ? "staff-backdrop-under" : ""}`}
       aria-hidden="true"
       data-all={all ? "" : undefined}
     >

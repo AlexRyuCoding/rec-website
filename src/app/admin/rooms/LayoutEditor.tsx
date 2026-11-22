@@ -22,6 +22,7 @@ import {
   RoomRow,
 } from "@/lib/room-status";
 import { gridStyle } from "./grid";
+import { buttonSkinClass, fieldBaseClass } from "../ui/styles";
 
 interface PanelState {
   mode: "create" | "edit";
@@ -60,8 +61,8 @@ function DraggableRoom({
             }
           : undefined
       }
-      className={`relative flex h-full w-full touch-none flex-col items-center justify-center gap-1 rounded-2xl bg-neutral-700 p-3 text-center hover:bg-neutral-600 ${
-        isDragging ? "z-10 opacity-80 ring-2 ring-sky-300" : ""
+      className={`relative flex h-full w-full touch-none flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-ui-line-strong bg-ui-panel p-3 text-center hover:bg-ui-panel-2 ${
+        isDragging ? "z-10 opacity-80 ring-2 ring-ui-accent-text" : ""
       }`}
     >
       <span className="w-full truncate font-medium">{room.name}</span>
@@ -100,8 +101,8 @@ function DroppableCell({
       aria-label={`Empty cell row ${gridRow + 1} column ${gridCol + 1}`}
       className={`h-full w-full rounded-2xl border-2 border-dashed ${
         isOver
-          ? "border-sky-400 bg-sky-950/40"
-          : "border-neutral-800 hover:border-neutral-600"
+          ? "border-ui-accent-text bg-ui-panel-2"
+          : "border-ui-line hover:border-ui-line-strong"
       }`}
     />
   );
@@ -232,18 +233,20 @@ export default function LayoutEditor({
         <button
           disabled={saving}
           onClick={() => openCreate()}
-          className="flex items-center gap-1.5 rounded-lg bg-white px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-white/90 disabled:opacity-40"
+          className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm ${buttonSkinClass("primary")}`}
         >
           <Plus className="h-4 w-4" /> Create room
         </button>
-        <p className="text-xs text-white/50">
+        {/* On a surface of its own: the page behind it is a photograph,
+            and nothing is read straight off that. */}
+        <p className="rounded-md bg-ui-panel px-2.5 py-1.5 text-xs text-ui-text-2 ring-1 ring-ui-line">
           Drag rooms into position. Click a room to edit it.
         </p>
       </div>
 
-      <section className="mb-4 rounded-2xl bg-neutral-900 p-4">
+      <section className="mb-4 rounded-2xl border border-ui-line bg-ui-panel p-4 shadow-lift-2">
         <h2 className="mb-1 text-sm font-semibold">Doctors</h2>
-        <p className="mb-3 text-xs text-white/50">
+        <p className="mb-3 text-xs text-ui-text-3">
           Assign a doctor to a room from its pull tab on the timer board.
           Removing a doctor here un-assigns them everywhere.
         </p>
@@ -280,19 +283,19 @@ export default function LayoutEditor({
                 onKeyDown={(e) => {
                   if (e.key === "Enter") submitDoctor();
                 }}
-                className="w-36 rounded-lg bg-neutral-800 px-3 py-1.5 text-sm"
+                className={`w-36 rounded-lg px-3 py-1.5 text-sm ${fieldBaseClass}`}
               />
               <button
                 aria-label="Add doctor"
                 disabled={saving || !doctorInput.trim()}
                 onClick={submitDoctor}
-                className="rounded-lg bg-white/10 p-2 hover:bg-white/20 disabled:opacity-40"
+                className={`rounded-lg p-2 ${buttonSkinClass()}`}
               >
                 <Plus className="h-4 w-4" />
               </button>
             </span>
           ) : (
-            <span className="text-xs text-white/50">
+            <span className="text-xs text-ui-text-3">
               List is full (max {MAX_DOCTORS}).
             </span>
           )}
@@ -335,7 +338,7 @@ export default function LayoutEditor({
 
       {panel && (
         <div className="fixed inset-0 z-10 flex items-end justify-center bg-black/60 p-4 sm:items-center">
-          <div className="w-full max-w-sm rounded-2xl bg-neutral-900 p-5">
+          <div className="w-full max-w-sm rounded-2xl border border-ui-line bg-ui-panel p-5 shadow-lift-2">
             <h2 className="mb-4 text-lg font-semibold">
               {panel.mode === "create" ? "New room" : "Edit room"}
             </h2>
@@ -346,7 +349,7 @@ export default function LayoutEditor({
                 value={name}
                 maxLength={40}
                 onChange={(e) => setName(e.target.value)}
-                className="mt-1 w-full rounded-lg bg-neutral-800 px-3 py-2"
+                className={`mt-1 w-full rounded-lg px-3 py-2 ${fieldBaseClass}`}
               />
             </label>
             {panel.mode === "edit" && (
@@ -358,7 +361,7 @@ export default function LayoutEditor({
                   max={60}
                   value={minutes}
                   onChange={(e) => setMinutes(Number(e.target.value))}
-                  className="mt-1 w-full rounded-lg bg-neutral-800 px-3 py-2"
+                  className={`mt-1 w-full rounded-lg px-3 py-2 ${fieldBaseClass}`}
                 />
               </label>
             )}
@@ -371,7 +374,7 @@ export default function LayoutEditor({
                     aria-label="Fewer beds"
                     disabled={beds <= 1}
                     onClick={() => setBeds((b) => Math.max(1, b - 1))}
-                    className="rounded-lg bg-neutral-800 p-2 hover:bg-neutral-700 disabled:opacity-40"
+                    className={`rounded-lg p-2 ${buttonSkinClass()}`}
                   >
                     <Minus className="h-4 w-4" />
                   </button>
@@ -385,11 +388,11 @@ export default function LayoutEditor({
                     onClick={() =>
                       setBeds((b) => Math.min(MAX_ROOM_CAPACITY, b + 1))
                     }
-                    className="rounded-lg bg-neutral-800 p-2 hover:bg-neutral-700 disabled:opacity-40"
+                    className={`rounded-lg p-2 ${buttonSkinClass()}`}
                   >
                     <Plus className="h-4 w-4" />
                   </button>
-                  <span className="text-xs text-white/50">
+                  <span className="text-xs text-ui-text-3">
                     How many patients can share this room on one timer.
                   </span>
                 </div>
@@ -399,13 +402,13 @@ export default function LayoutEditor({
               <button
                 disabled={saving || !name.trim()}
                 onClick={submitPanel}
-                className="rounded-lg bg-white px-4 py-2 font-medium text-neutral-900 disabled:opacity-40"
+                className={`rounded-lg px-4 py-2 ${buttonSkinClass("primary")}`}
               >
                 Save
               </button>
               <button
                 onClick={() => setPanel(null)}
-                className="rounded-lg bg-white/10 px-4 py-2"
+                className={`rounded-lg px-4 py-2 ${buttonSkinClass()}`}
               >
                 Cancel
               </button>
@@ -429,8 +432,8 @@ export default function LayoutEditor({
                   }}
                   className={`ml-auto flex items-center gap-1.5 rounded-lg p-2.5 text-sm font-semibold ${
                     deleteArmed
-                      ? "bg-rose-600 ring-2 ring-white"
-                      : "bg-rose-900/70"
+                      ? "bg-ui-error-fill text-ui-on-accent ring-2 ring-ui-text"
+                      : "border border-ui-error text-ui-error"
                   }`}
                 >
                   <Trash2 className="h-4 w-4" />

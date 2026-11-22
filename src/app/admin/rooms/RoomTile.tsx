@@ -40,6 +40,8 @@ const ASSIGN_LABELS: Record<AssignOutcome, string> = {
   full: "Full",
 };
 
+import { TILE_LEDGE, tileKey, tileKeySolid } from "./tile/key-styles";
+
 const STATUS_STYLES: Record<
   RoomState["status"],
   { card: string; label: string }
@@ -280,7 +282,7 @@ export default function RoomTile({
       data-room-tile={room.name}
       className={`${style.card} ${
         longWait ? "ring-4 ring-inset ring-rose-400" : ""
-      } relative flex h-full flex-col items-center justify-between overflow-hidden rounded-2xl px-2.5 pt-2 text-center text-white shadow-lg transition-colors duration-500 select-none`}
+      } ${TILE_LEDGE[state.status]} relative flex h-full flex-col items-center justify-between overflow-hidden rounded-2xl px-2.5 pt-2 text-center text-white transition-[background-color,box-shadow] duration-500 select-none`}
     >
       <div className="w-full min-w-0">
         <h2 className="truncate text-base font-semibold leading-5">
@@ -376,7 +378,7 @@ export default function RoomTile({
           <button
             disabled={busy}
             onClick={() => onAction("again")}
-            className="min-h-11 rounded-xl bg-white/20 px-1 text-sm font-medium leading-tight hover:bg-white/30 disabled:opacity-40"
+            className={`min-h-11 rounded-xl px-1 text-sm font-medium leading-tight disabled:opacity-40 ${tileKey}`}
           >
             Another
             <br />
@@ -385,7 +387,7 @@ export default function RoomTile({
           <button
             disabled={busy}
             onClick={() => onAction("ready")}
-            className="min-h-11 rounded-xl bg-white/90 px-1 text-sm font-semibold leading-tight text-slate-800 hover:bg-white disabled:opacity-40"
+            className={`min-h-11 rounded-xl px-1 text-sm font-semibold leading-tight text-slate-800 disabled:opacity-40 ${tileKeySolid}`}
           >
             Room
             <br />
@@ -398,7 +400,7 @@ export default function RoomTile({
             <button
               disabled={busy}
               onClick={onDoctorIn}
-              className={`${actionButton} bg-white/90 font-semibold text-purple-800 hover:bg-white`}
+              className={`${actionButton} ${tileKeySolid} font-semibold text-purple-800`}
             >
               Doctor in
             </button>
@@ -409,7 +411,7 @@ export default function RoomTile({
             <button
               disabled={busy}
               onClick={() => onAction("start")}
-              className={`${actionButton} bg-white/20 hover:bg-white/30`}
+              className={`${actionButton} ${tileKey}`}
             >
               <Play className="h-4 w-4" /> Start
             </button>
@@ -420,7 +422,7 @@ export default function RoomTile({
             <button
               disabled={busy}
               onClick={() => onAction(state.paused ? "resume" : "pause")}
-              className={`${actionButton} bg-white/20 px-3 hover:bg-white/30`}
+              className={`${actionButton} ${tileKey} px-3`}
             >
               {state.paused ? "Resume" : "Pause"}
             </button>
@@ -441,9 +443,7 @@ export default function RoomTile({
                   }
                 }}
                 className={`${iconButton} ${
-                  resetArmed
-                    ? "bg-rose-600 ring-2 ring-white"
-                    : "bg-white/15 hover:bg-white/25"
+                  resetArmed ? "bg-rose-600 ring-2 ring-white" : tileKey
                 }`}
               >
                 <RotateCcw className="h-5 w-5" />
@@ -456,8 +456,8 @@ export default function RoomTile({
                 onClick={() => onAction("clear")}
                 className={
                   timeUp
-                    ? `${actionButton} min-h-11 flex-1 bg-white/90 font-semibold text-emerald-800 hover:bg-white`
-                    : `${iconButton} bg-white/90 text-emerald-700 hover:bg-white`
+                    ? `${actionButton} min-h-11 flex-1 ${tileKeySolid} font-semibold text-emerald-800`
+                    : `${iconButton} ${tileKeySolid} text-emerald-700`
                 }
               >
                 <Check className="h-5 w-5" />
