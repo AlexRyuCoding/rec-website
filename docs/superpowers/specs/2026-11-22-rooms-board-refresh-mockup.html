@@ -1,0 +1,420 @@
+<title>Rooms Board Refresh</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one quiet bar on top (title, tabs, the way out), then filled panels on a
+   slightly darker page. Rectangles are things you press; pills are states you read. */
+:root {
+  --page: #e6eae9; --panel: #ffffff; --panel-2: #f4f6f5;
+  --line: #dde3e1; --line-strong: #c3cdca;
+  --text: #1b2529; --text-2: #4c5a5f; --text-3: #5a686e;
+  --accent-fill: #1c7a6e; --accent-fill-hover: #17695f; --accent-text: #17695f; --on-accent: #ffffff;
+  --error: #c22f2f; --error-fill: #c22f2f;
+  --st-waiting: #7d5200; --st-waiting-bg: #faf0d6;
+  --st-next: #5438c0; --st-next-bg: #eae7f7;
+  --st-called: #145c9f; --st-called-bg: #e3ebf3;
+  --st-doctor: #0e675b; --st-doctor-bg: #e0ebea;
+  --st-open: #ad3817;
+  /* depth: raised = you can press it or it holds work; sunken = you type or choose in it */
+  --lift-1: inset 0 1px 0 #ffffff, 0 2px 0 #a9b6b2;
+  --lift-accent: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 2px 0 #0f4b42;
+  --lift-danger: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 2px 0 #7c1c1c;
+  --lift-2: 0 3px 0 rgba(16, 28, 24, 0.32);
+  /* the photo behind the page, and the tab accent taken from it: forest green by day, the ridge's copper glow by night */
+  --photo-light: 1; --photo-dark: 0; --scrim: rgba(230, 234, 233, 0.18);
+  --tab-accent: #3b7a52;
+  --sunk: inset 0 2px 0 #dbe2df;
+  --well: #f1f4f3;
+  --btn: #ffffff;
+  --btn-primary: #1f8376;
+  --btn-primary-hover: #1a7368;
+  --font: "Inter Tight", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #101619; --panel: #1a2125; --panel-2: #232c31;
+    --line: #2b363b; --line-strong: #3d4a51;
+    --text: #e4e7e6; --text-2: #aab5b7; --text-3: #8a989b;
+    --accent-fill: #1f8376; --accent-fill-hover: #1a7368; --accent-text: #56c7b6; --on-accent: #ffffff;
+    --error: #ff7b72; --error-fill: #c53a32;
+    --st-waiting: #f2c261; --st-waiting-bg: #38382d;
+    --st-next: #bcaaf7; --st-next-bg: #343747;
+    --st-called: #7fbaf3; --st-called-bg: #293844;
+    --st-doctor: #5fd0b8; --st-doctor-bg: #243a3a;
+    --st-open: #f59a7a;
+    --lift-1: inset 0 1px 0 #3b484f, 0 2px 0 #05080a; --lift-accent: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 2px 0 #0b3a33; --lift-danger: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 2px 0 #6e1d19; --lift-2: inset 0 1px 0 #283237, 0 3px 0 rgba(0, 0, 0, 0.72); --photo-light: 0; --photo-dark: 1; --scrim: rgba(8, 12, 14, 0.18); --tab-accent: #e0895a; --sunk: inset 0 2px 0 #0a0f11; --well: #131a1d; --btn: #2a343a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #101619; --panel: #1a2125; --panel-2: #232c31;
+  --line: #2b363b; --line-strong: #3d4a51;
+  --text: #e4e7e6; --text-2: #aab5b7; --text-3: #8a989b;
+  --accent-fill: #1f8376; --accent-fill-hover: #1a7368; --accent-text: #56c7b6; --on-accent: #ffffff;
+  --error: #ff7b72; --error-fill: #c53a32;
+  --st-waiting: #f2c261; --st-waiting-bg: #38382d;
+  --st-next: #bcaaf7; --st-next-bg: #343747;
+  --st-called: #7fbaf3; --st-called-bg: #293844;
+  --st-doctor: #5fd0b8; --st-doctor-bg: #243a3a;
+  --st-open: #f59a7a;
+  --lift-1: inset 0 1px 0 #3b484f, 0 2px 0 #05080a; --lift-accent: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 2px 0 #0b3a33; --lift-danger: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 2px 0 #6e1d19; --lift-2: inset 0 1px 0 #283237, 0 3px 0 rgba(0, 0, 0, 0.72); --photo-light: 0; --photo-dark: 1; --scrim: rgba(8, 12, 14, 0.18); --tab-accent: #e0895a; --sunk: inset 0 2px 0 #0a0f11; --well: #131a1d; --btn: #2a343a;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--page); color: var(--text); font-family: var(--font); font-size: 15px; line-height: 1.45; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
+svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* ---- top bar ---- */
+.bar { background: var(--panel); border-bottom: 1px solid var(--line); box-shadow: var(--lift-2); position: relative; z-index: 1; }
+.bar-in, .main { max-width: 1280px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.bar-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding-block: 14px 6px; }
+.bar-top h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+.bar-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.who { color: var(--text-3); font-size: 13px; }
+.tabs { display: flex; gap: 6px; overflow-x: auto; padding: 6px 2px 14px; position: relative; }
+.thumb { position: absolute; left: 0; top: 0; width: 0; height: 0; border: 1px solid var(--line-strong); background: var(--btn); box-shadow: var(--lift-1); pointer-events: none; transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1), width 240ms cubic-bezier(0.22, 1, 0.36, 1), height 240ms cubic-bezier(0.22, 1, 0.36, 1); }
+.thumb.still { transition: none; }
+.tabs > .thumb { border-radius: 9px; box-shadow: inset 0 -3px 0 var(--tab-accent), var(--lift-1); }
+.tab { position: relative; display: flex; align-items: center; gap: 8px; padding: 9px 16px 11px; border: 1px solid transparent; border-radius: 9px; background: none; color: var(--text-2); font-weight: 500; white-space: nowrap; transition: color 160ms; }
+.tab:hover { color: var(--text); }
+.tab[aria-selected="true"] { color: var(--text); }
+.tab svg { transition: color 160ms; }
+.tab[aria-selected="true"] svg { color: var(--tab-accent); }
+
+/* ---- buttons: rectangles ---- */
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--btn); box-shadow: var(--lift-1); font-weight: 500; white-space: nowrap; text-decoration: none; color: var(--text); transition: transform 80ms, box-shadow 80ms, background-color 140ms, border-color 140ms; }
+.btn:hover { border-color: var(--text-3); }
+.btn:active { transform: translateY(2px); box-shadow: 0 0 0 transparent; }
+.btn.primary { background: var(--btn-primary); border-color: var(--accent-fill-hover); box-shadow: var(--lift-accent); color: var(--on-accent); font-weight: 600; }
+.btn.primary:hover { background: var(--btn-primary-hover); border-color: var(--accent-fill-hover); }
+.btn.danger { background: var(--error-fill); border-color: var(--error-fill); box-shadow: var(--lift-danger); color: #fff; font-weight: 600; }
+.btn.primary:active, .btn.danger:active { box-shadow: 0 0 0 transparent; }
+.btn.quiet { border-color: transparent; background: none; box-shadow: none; color: var(--text-2); }
+.btn.quiet:hover { background: var(--panel-2); border-color: transparent; color: var(--text); }
+@media (prefers-reduced-motion: reduce) { .btn { transition: none; } .btn:active { transform: none; } }
+.btn.sm { padding: 5px 11px; font-size: 14px; }
+.link { background: none; border: 0; padding: 4px 6px; color: var(--text-2); text-decoration: underline; text-underline-offset: 3px; }
+.link:hover { color: var(--text); }
+
+/* ---- segmented control: one choice of several ---- */
+.seg { display: inline-flex; position: relative; padding: 5px 3px 6px; border-radius: 10px; background: var(--well); border: 1px solid var(--line-strong); box-shadow: var(--sunk); flex-wrap: wrap; }
+.seg button { position: relative; border: 0; background: none; padding: 6px 13px; border-radius: 7px; color: var(--text-2); font-weight: 500; display: inline-flex; align-items: center; gap: 6px; transition: color 160ms; }
+.seg button:hover { color: var(--text); }
+.seg button[aria-pressed="true"] { color: var(--text); }
+.seg > .thumb { border-radius: 7px; }
+.card > .seg { align-self: flex-start; }
+.seg.icons button { padding: 6px 9px; }
+
+/* ---- page ---- */
+.main { padding-block: 22px 40px; display: flex; flex-direction: column; gap: 16px; position: relative; z-index: 1; }
+/* the photo: fixed behind everything, one layer per theme so a theme change cross-fades them.
+   Nothing is read straight off it: every piece of text sits on a surface. */
+.backdrop { position: fixed; inset: 0; z-index: 0; background: var(--page); }
+.backdrop i { position: absolute; inset: 0; background-size: cover; background-position: center; transition: opacity 420ms ease; }
+.backdrop .bg-light { background-image: url(bg-light.jpg); opacity: var(--photo-light); }
+.backdrop .bg-dark { background-image: url(bg-dark.jpg); opacity: var(--photo-dark); }
+.backdrop::after { content: ""; position: absolute; inset: 0; background: var(--scrim); }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px 9px; }
+.toolbar > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--lift-2); min-width: 0; }
+.panel-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; padding: 14px 18px 0; }
+.panel-head h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.panel-head p, .hint { margin: 0; color: var(--text-3); font-size: 13px; }
+.label { color: var(--text-3); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; margin: 0; }
+
+/* ---- summary: two labelled groups of raised tiles ---- */
+.summary { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 5fr); gap: 16px 24px; }
+.strip { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.cells { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 12px; flex: 1; }
+.cell { padding: 12px 14px 13px; }
+.cell .k { display: flex; align-items: center; gap: 7px; color: var(--text-2); font-size: 13px; }
+.cell .v { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; }
+.cell .v small { font-size: 15px; font-weight: 500; color: var(--text-2); letter-spacing: 0; }
+.cell .s { color: var(--text-3); font-size: 12px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+
+/* ---- tables ---- */
+.scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; text-align: left; }
+th { padding: 10px 14px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); background: var(--panel-2); border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover td { background: var(--panel-2); }
+th:first-child, td:first-child { padding-left: 18px; }
+th:last-child, td:last-child { padding-right: 18px; }
+.panel > .scroll:first-child th:first-child { border-top-left-radius: 11px; }
+.panel > .scroll:first-child th:last-child { border-top-right-radius: 11px; }
+td.name { font-weight: 600; white-space: nowrap; }
+td.dim { color: var(--text-2); }
+td.time { color: var(--text-2); white-space: nowrap; }
+.r { text-align: right; }
+.foot { padding: 10px 18px; border-top: 1px solid var(--line); color: var(--text-3); font-size: 13px; }
+
+/* ---- status: pills ---- */
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap; border: 1px solid transparent; }
+.pill svg { width: 13px; height: 13px; stroke-width: 2.6; }
+.pill .more { font-weight: 500; opacity: 0.85; }
+.pill.waiting { color: var(--st-waiting); background: var(--st-waiting-bg); }
+.pill.next { color: var(--st-next); background: var(--st-next-bg); }
+.pill.called { color: var(--st-called); background: var(--st-called-bg); }
+.pill.doctor { color: var(--st-doctor); background: var(--st-doctor-bg); }
+.pill.finished { color: var(--text-2); background: var(--panel-2); border-color: var(--line); }
+.pill.removed { color: var(--text-3); border-color: var(--line-strong); border-style: dashed; }
+.pill.open { color: var(--st-open); border-color: currentColor; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--line); font-size: 13px; color: var(--text-2); white-space: nowrap; }
+
+/* ---- fields ---- */
+.field { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--well); box-shadow: var(--sunk); min-width: 0; }
+select.field { background: var(--btn); box-shadow: var(--lift-1); }
+.field::placeholder { color: var(--text-3); }
+.search { position: relative; flex: 1 1 280px; display: flex; }
+.search svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--text-3); }
+.search input { width: 100%; padding: 12px 14px 12px 42px; font-size: 17px; border-radius: 10px; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.ok { color: var(--accent-text); font-weight: 500; }
+.setup { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 16px; align-items: start; }
+.card { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.card h2 { margin: 0; font-size: 17px; font-weight: 600; display: flex; align-items: center; gap: 9px; }
+.card h2 svg { width: 18px; height: 18px; color: var(--accent-text); }
+.card > p { margin: -8px 0 0; color: var(--text-2); font-size: 14px; }
+.row { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+.row label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--text-2); min-width: 0; }
+.list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.list li:last-child { border-bottom: 0; padding-bottom: 0; }
+.list b { font-weight: 600; }
+.note { position: relative; z-index: 1; display: table; margin: 0 auto 28px; padding: 5px 12px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line); color: var(--text-3); font-size: 13px; text-align: center; }
+.summary.range { grid-template-columns: minmax(0, 1fr) minmax(0, 4fr); }
+.field { max-width: 100%; }
+
+/* ---- motion: short, and nothing you are about to press moves ---- */
+.pill { transition: background-color 300ms, color 300ms, border-color 300ms; }
+td { transition: background-color 120ms; }
+.theming, .theming * { transition: background-color 280ms ease, color 280ms ease, border-color 280ms ease, box-shadow 280ms ease, transform 240ms cubic-bezier(0.22, 1, 0.36, 1), width 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 420ms ease !important; }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+@keyframes settle { from { opacity: 0.3; } }
+.enter { animation: rise 220ms cubic-bezier(0.22, 1, 0.36, 1); }
+.settle { animation: settle 260ms ease-out; }
+.custom-dates { display: inline-flex; align-items: center; gap: 8px; overflow: hidden; max-width: 0; opacity: 0; visibility: hidden; padding-bottom: 2px; transition: max-width 280ms cubic-bezier(0.22, 1, 0.36, 1), opacity 200ms, visibility 0s 280ms; }
+.custom-dates.open { max-width: 380px; opacity: 1; visibility: visible; transition-delay: 0s; }
+.swap { overflow: hidden; padding: 3px; margin: -3px; transition: height 260ms cubic-bezier(0.22, 1, 0.36, 1); }
+@media (prefers-reduced-motion: reduce) {
+  .thumb, .swap, .custom-dates { transition: none; }
+  .enter { animation: settle 160ms ease-out; }
+}
+@media (max-width: 860px) { .summary, .summary.range { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---- Rooms board ---- */
+/* Room tiles keep their own solid status colours in BOTH themes: they are the signal read
+   from across the room, so they are literal colours on purpose, not theme tokens. */
+.bar-top.solo { padding-block: 14px; }
+.bar-top .left { display: flex; align-items: center; gap: 10px; }
+.alert { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 12px 14px 12px 18px; border-radius: 12px; background: #c4b5fd; color: #2e1065; border: 1px solid #7c5fd6; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 3px 0 #5b3fb5; font-size: 19px; font-weight: 600; }
+.alert small { font-size: 14px; font-weight: 500; opacity: 0.8; margin-left: 8px; }
+.alert .btn { background: #2e1065; border-color: #2e1065; color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 2px 0 #12052e; font-size: 16px; padding: 10px 18px; }
+.waiting { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 10px; }
+.waiting-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.waiting-head h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.waiting-head h2 span { color: var(--text-3); font-weight: 500; }
+.waiting-head div { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 10px 8px; }
+.chip { display: inline-flex; flex-direction: column; align-items: flex-start; justify-content: center; min-height: 46px; padding: 5px 14px 6px; border-radius: 9px; border: 1px solid var(--line-strong); background: var(--btn); color: var(--text); box-shadow: var(--lift-1); text-align: left; line-height: 1.25; transition: transform 80ms, box-shadow 80ms; }
+.chip:active { transform: translateY(2px); box-shadow: 0 0 0 transparent; }
+.chip b { font-weight: 600; }
+.chip small { font-size: 12px; opacity: 0.75; }
+.chip.amber { background: #fcd34d; border-color: #b7860b; color: #451a03; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 2px 0 #8f6508; }
+.chip.red { background: #e11d48; border-color: #9f1239; color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 0 #7a0e2c; }
+.chip.picked { outline: 3px solid var(--tab-accent); outline-offset: 2px; }
+.rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); grid-auto-rows: 238px; gap: 16px 12px; }
+.tile { display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 3px; padding: 10px 10px 8px; border-radius: 14px; background: var(--face); color: #fff; text-align: center; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 4px 0 var(--edge); transition: background-color 300ms, box-shadow 300ms; min-width: 0; }
+.tile.available { --face: #047857; --edge: #034a35; }
+.tile.waiting { --face: #7e22ce; --edge: #4a1280; }
+.tile.doctor { --face: #1e1b4b; --edge: #0b0a22; }
+.tile.setup { --face: #475569; --edge: #29323f; }
+.tile.inuse { --face: #075985; --edge: #04334d; }
+.tile.complete { --face: #d97706; --edge: #8a4803; }
+.tile.overtime { --face: #be123c; --edge: #770a25; }
+.tile.target { outline: 3px dashed #fff; outline-offset: -7px; }
+.tile h2 { margin: 0; font-size: 16px; font-weight: 600; line-height: 20px; }
+.docpill { display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.docpill.violet { background: #c4b5fd; color: #2e1065; }
+.docpill.cyan { background: #67e8f9; color: #083344; }
+.docpill.none { background: rgba(255, 255, 255, 0.14); color: #fff; }
+.names { font-size: 14px; font-weight: 600; line-height: 1.2; color: #fff; }
+.svc { font-size: 11px; line-height: 14px; opacity: 0.78; }
+.clock { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.clock b { font-size: 32px; font-weight: 600; line-height: 1; min-width: 2.7em; }
+.key { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 40px; min-height: 40px; padding: 0 11px; border: 0; border-radius: 10px; background: rgba(255, 255, 255, 0.2); color: #fff; font-size: 14px; font-weight: 500; white-space: nowrap; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 2px 0 rgba(0, 0, 0, 0.38); transition: transform 80ms, box-shadow 80ms; }
+.key:active { transform: translateY(2px); box-shadow: 0 0 0 transparent; }
+.key.solid { background: #fff; color: #1e293b; font-weight: 600; }
+.key svg { width: 18px; height: 18px; }
+.keys { display: flex; justify-content: center; gap: 8px; width: 100%; }
+.keys.two { display: grid; grid-template-columns: 1fr 1fr; }
+.keys.two .key { min-height: 44px; padding: 0 4px; font-size: 13px; line-height: 1.15; white-space: normal; }
+.keys.wide .key { flex: 1; }
+.status { width: 100%; font-size: 13px; font-weight: 700; line-height: 18px; letter-spacing: 0.05em; text-transform: uppercase; }
+@media (prefers-reduced-motion: reduce) { .key, .chip { transition: none; } .key:active, .chip:active { transform: none; } }
+</style>
+
+<svg hidden>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></symbol>
+  <symbol id="i-person" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
+  <symbol id="i-log" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7M9 8h3"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></symbol>
+  <symbol id="i-out" viewBox="0 0 24 24"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.5 4.500L20 16M20 20v-4h-4"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.500 1.500M17.500 17.500 19 19M5 19l1.500-1.500M17.500 6.500 19 5"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.500A8 8 0 0 1 9.500 4 8 8 0 1 0 20 14.500z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.500l4.500 4.500L19 7.500"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4 2.500 20h19zM12 10v4M12 17h.01"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
+  <symbol id="i-tv" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M8 21h8"/></symbol>
+  <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.500" cy="18" r="2.500"/><circle cx="16.500" cy="16" r="2.500"/></symbol>
+</svg>
+
+<div class="backdrop" aria-hidden="true"><i class="bg-light"></i><i class="bg-dark"></i></div>
+
+<header class="bar">
+  <div class="bar-in">
+    <div class="bar-top solo">
+      <div class="left">
+        <button type="button" class="btn quiet" aria-label="Back to the dashboard">&larr; Dashboard</button>
+        <h1>Rooms</h1>
+      </div>
+      <div class="bar-tools">
+        <div class="seg icons" role="group" aria-label="Colour theme" id="theme">
+          <button type="button" data-theme-set="system" aria-pressed="true" aria-label="Match this tablet" title="Match this tablet"><svg><use href="#i-monitor"/></svg></button>
+          <button type="button" data-theme-set="light" aria-pressed="false" aria-label="Light" title="Light"><svg><use href="#i-sun"/></svg></button>
+          <button type="button" data-theme-set="dark" aria-pressed="false" aria-label="Dark" title="Dark"><svg><use href="#i-moon"/></svg></button>
+        </div>
+        <button type="button" class="btn">Sounds: everyone</button>
+        <button type="button" class="btn">Edit layout</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="main">
+  <div class="alert" role="status">
+    <span>Dr. Park &rarr; Room 2 <small>Priya N. is waiting &middot; 3:12</small></span>
+    <button type="button" class="btn">Doctor in</button>
+  </div>
+
+  <section class="panel waiting">
+    <div class="waiting-head">
+      <h2>Waiting <span>&middot; 3 &middot; tap a name, then a room</span></h2>
+      <div>
+        <button type="button" class="btn sm">Expected &middot; 4</button>
+        <button type="button" class="btn sm">Finished</button>
+        <button type="button" class="btn sm">Check in a patient</button>
+      </div>
+    </div>
+    <div class="chips">
+      <button type="button" class="chip picked"><b>Maria D.</b><small>4 min &middot; Acupuncture follow-up</small></button>
+      <button type="button" class="chip amber"><b>Thomas B.</b><small>12 min &middot; Fire cupping</small></button>
+      <button type="button" class="chip red"><b>Hannah L.</b><small>23 min &middot; Initial consultation</small></button>
+    </div>
+  </section>
+
+  <div class="rooms">
+    <article class="tile available target">
+      <h2>Room 1</h2>
+      <span class="docpill none">No doctor</span>
+      <span class="names">Send Maria D. here</span>
+      <div class="clock"><button class="key" type="button" aria-label="Less time">&minus;</button><b class="num">25:00</b><button class="key" type="button" aria-label="More time">+</button></div>
+      <div class="keys"><button class="key" type="button">Start</button></div>
+      <div class="status">Available</div>
+    </article>
+    <article class="tile waiting">
+      <h2>Room 2</h2>
+      <span class="docpill violet">Dr. Park</span>
+      <span><span class="names">Priya N.</span><br><span class="svc">Initial consultation</span></span>
+      <div class="clock"><button class="key" type="button" aria-label="Less time">&minus;</button><b class="num">25:00</b><button class="key" type="button" aria-label="More time">+</button></div>
+      <div class="keys"><button class="key solid" type="button">Doctor in</button><button class="key" type="button">Start</button></div>
+      <div class="status">Waiting 3:12</div>
+    </article>
+    <article class="tile doctor">
+      <h2>Room 3</h2>
+      <span class="docpill cyan">Dr. Ryu</span>
+      <span><span class="names">James O.</span><br><span class="svc">Acupuncture follow-up</span></span>
+      <div class="clock"><button class="key" type="button" aria-label="Less time">&minus;</button><b class="num">25:00</b><button class="key" type="button" aria-label="More time">+</button></div>
+      <div class="keys"><button class="key" type="button">Start</button></div>
+      <div class="status">With doctor</div>
+    </article>
+    <article class="tile inuse">
+      <h2>Room 4</h2>
+      <span class="docpill cyan">Dr. Ryu</span>
+      <span><span class="names">Lin Z.</span><br><span class="svc">Acupuncture follow-up</span></span>
+      <div class="clock"><button class="key" type="button" aria-label="Less time">&minus;</button><b class="num">18:42</b><button class="key" type="button" aria-label="More time">+</button></div>
+      <div class="keys"><button class="key" type="button">Pause</button><button class="key" type="button" aria-label="Reset"><svg><use href="#i-refresh"/></svg></button><button class="key" type="button" aria-label="Needles out"><svg><use href="#i-check"/></svg></button></div>
+      <div class="status">In use</div>
+    </article>
+    <article class="tile complete">
+      <h2>Room 5</h2>
+      <span class="docpill violet">Dr. Park</span>
+      <span><span class="names">Grace W. &middot; Sam W.</span><br><span class="svc">Fire cupping</span></span>
+      <div class="clock"><b class="num">0:00</b></div>
+      <div class="keys wide"><button class="key solid" type="button"><svg><use href="#i-check"/></svg>Needles out</button></div>
+      <div class="status">Remove needles</div>
+    </article>
+    <article class="tile setup">
+      <h2>Room 6</h2>
+      <span class="docpill cyan">Dr. Ryu</span>
+      <span><span class="names">Elena R.</span><br><span class="svc">Next up: Samuel O.</span></span>
+      <div class="clock"><b class="num">8:00</b></div>
+      <div class="keys two"><button class="key" type="button">Another session</button><button class="key solid" type="button">Room ready</button></div>
+      <div class="status">Setting up</div>
+    </article>
+    <article class="tile overtime">
+      <h2>Room 7</h2>
+      <span class="docpill violet">Dr. Park</span>
+      <span><span class="names">Robert K.</span><br><span class="svc">Acupuncture follow-up</span></span>
+      <div class="clock"><b class="num">+6:14</b></div>
+      <div class="keys wide"><button class="key solid" type="button"><svg><use href="#i-check"/></svg>Needles out</button></div>
+      <div class="status">Overtime</div>
+    </article>
+  </div>
+</main>
+
+<p class="note">Mock-up with made-up patients. Only the theme switch works; buttons press but do nothing.</p>
+
+<script>
+  var root = document.documentElement;
+  function place(group, still) {
+    var thumb = group.querySelector(".thumb");
+    var on = group.querySelector('[aria-pressed="true"]');
+    if (!thumb || !on || !on.offsetWidth) return;
+    thumb.classList.toggle("still", !!still);
+    thumb.style.width = on.offsetWidth + "px";
+    thumb.style.height = on.offsetHeight + "px";
+    thumb.style.transform = "translate(" + on.offsetLeft + "px," + on.offsetTop + "px)";
+  }
+  var seg = document.getElementById("theme");
+  var thumb = document.createElement("span");
+  thumb.className = "thumb still";
+  thumb.setAttribute("aria-hidden", "true");
+  seg.insertBefore(thumb, seg.firstChild);
+  place(seg, true);
+  window.addEventListener("resize", function () { place(seg, true); });
+  var timer;
+  seg.addEventListener("click", function (e) {
+    var pressed = e.target.closest("button");
+    if (!pressed || pressed.getAttribute("aria-pressed") === "true") return;
+    seg.querySelectorAll("button").forEach(function (b) { b.setAttribute("aria-pressed", String(b === pressed)); });
+    place(seg);
+    root.classList.add("theming");
+    clearTimeout(timer);
+    timer = setTimeout(function () { root.classList.remove("theming"); }, 460);
+    var theme = pressed.dataset.themeSet;
+    if (theme === "system") root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", theme);
+  });
+</script>
