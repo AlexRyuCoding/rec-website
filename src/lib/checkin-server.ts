@@ -95,21 +95,12 @@ export async function createCheckin(
     // a check-in must never fail because the appointment lookup did
   }
 
-  let { error } = await supabase.from("checkins").insert({
+  const { error } = await supabase.from("checkins").insert({
     patient_id: patientId,
     appointment_at,
     service_name,
     practitioner_name,
   });
-
-  // Checking in must keep working even if the room-flow migration (0011,
-  // which adds practitioner_name) has not been applied: retry with only
-  // the columns that have always existed.
-  if (error) {
-    ({ error } = await supabase
-      .from("checkins")
-      .insert({ patient_id: patientId, appointment_at, service_name }));
-  }
   if (error) return "error";
 
   // The patient is now in the staff board's waiting list — nudge open

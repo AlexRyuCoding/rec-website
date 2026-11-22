@@ -1,22 +1,18 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
-import { isAdminAuthorized } from "@/lib/admin-auth";
 import { broadcastRoomsUpdated } from "@/lib/rooms-realtime";
 import { GRID_COLS } from "@/lib/room-status";
 import { VisitView } from "@/lib/patient-flow";
 import { loadActiveVisits, toVisitViews } from "@/lib/visits-server";
+import { staffRoute } from "@/lib/staff-route";
 
 // Room timer board data. GET returns every room, the doctor roster, and
 // the server clock so devices with skewed clocks still render identical
 // countdowns. Riding the roster on this response means the existing 60 s
 // poll and focus refresh keep it synced across devices. The open visits
 // (waiting list + who is in which room) ride along for the same reason.
-export async function GET() {
-  if (!(await isAdminAuthorized())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const GET = staffRoute(async () => {
   const supabase = createServiceClient();
   const [roomsResult, doctorsResult] = await Promise.all([
     supabase.from("rooms").select("*").order("grid_row").order("grid_col"),
@@ -27,9 +23,11 @@ export async function GET() {
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
 
-  // The timer board must keep working even if the visit query fails
-  // (e.g. the flow migration is not applied yet): degrade to no visits.
-  let visits: VisitView[] = [];
+  // If the patients cannot be read the board is told so (it then keeps
+  // what it was showing and says "Reconnecting…"). Answering with an
+  // empty list instead would wipe every patient off every tile, and an
+  // occupied room would look free.
+  let visits: VisitView[];
   try {
     const nowMs = Date.now();
     visits = await toVisitViews(
@@ -38,7 +36,7 @@ export async function GET() {
       nowMs
     );
   } catch {
-    visits = [];
+    return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
 
   return NextResponse.json({
@@ -47,7 +45,7 @@ export async function GET() {
     visits,
     serverTime: new Date().toISOString(),
   });
-}
+});
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(40),
@@ -59,11 +57,7 @@ const createSchema = z.object({
     .max(GRID_COLS - 1),
 });
 
-export async function POST(req: Request) {
-  if (!(await isAdminAuthorized())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const POST = staffRoute(async (req) => {
   const body = await req.json().catch(() => null);
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
@@ -93,4 +87,4 @@ export async function POST(req: Request) {
 
   await broadcastRoomsUpdated({ room: data });
   return NextResponse.json({ room: data }, { status: 201 });
-}
+});

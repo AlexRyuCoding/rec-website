@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
-import { isAdminAuthorized } from "@/lib/admin-auth";
 import { broadcastRoomsUpdated } from "@/lib/rooms-realtime";
 import { commitFlow } from "@/lib/flow-server";
 import { timerFlowUpdates, VisitView } from "@/lib/patient-flow";
@@ -13,6 +12,7 @@ import {
   MIN_DURATION_SECONDS,
   RoomRow,
 } from "@/lib/room-status";
+import { staffRoute } from "@/lib/staff-route";
 
 const bodySchema = z.object({
   action: z.enum([
@@ -59,97 +59,84 @@ const bodySchema = z.object({
 // already in the room — nobody is finished and nobody is called. That
 // part is best effort: a timer action never fails because the patient
 // bookkeeping did.
-export async function POST(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  if (!(await isAdminAuthorized())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { id } = await params;
-  const body = await req.json().catch(() => null);
-  const parsed = bodySchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-  }
-
-  const supabase = createServiceClient();
-  const { data: room, error: readError } = await supabase
-    .from("rooms")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (readError) {
-    return NextResponse.json({ error: "Database error" }, { status: 500 });
-  }
-  if (!room) {
-    return NextResponse.json({ error: "Room not found" }, { status: 404 });
-  }
-
-  const nowMs = Date.now();
-  const result = timerActionUpdate(
-    room as RoomRow,
-    parsed.data.action,
-    nowMs,
-    parsed.data.action === "set"
-      ? parsed.data.setSeconds
-      : parsed.data.deltaSeconds
-  );
-  if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 409 });
-  }
-
-  const writeRoom = (fields: Partial<RoomRow>) =>
-    supabase
-      .from("rooms")
-      .update({ ...fields, updated_at: new Date().toISOString() })
-      .eq("id", id)
-      .select("*")
-      .single();
-
-  let { data, error } = await writeRoom(result.fields);
-  // The check button now also stamps turnover_started_at (migration
-  // 0011). If that column is not there yet, the alarm must still be
-  // silenceable: fall back to the plain clear the board always had.
-  if (error && "turnover_started_at" in result.fields) {
-    const { turnover_started_at: _turnover, ...timerOnly } = result.fields;
-    void _turnover;
-    ({ data, error } = await writeRoom(timerOnly));
-  }
-
-  if (error) {
-    return NextResponse.json({ error: "Database error" }, { status: 500 });
-  }
-
-  await broadcastRoomsUpdated({ room: data });
-
-  let latestRoom = data as RoomRow;
-  let visits: VisitView[] | undefined;
-  try {
-    const before = await loadActiveVisits(supabase, nowMs);
-    const updates = timerFlowUpdates(
-      parsed.data.action,
-      latestRoom,
-      before,
-      nowMs,
-      // Start sent while the room was setting up (an older board)
-      { wasTurningOver: Boolean((room as RoomRow).turnover_started_at) }
-    );
-    if (updates.length > 0) {
-      const flow = await commitFlow(supabase, {
-        updates,
-        visitsBefore: before,
-        nowMs,
-      });
-      visits = flow.visits;
-      // Calling the next patient may have switched this room's doctor.
-      latestRoom = flow.rooms.find((r) => r.id === id) ?? latestRoom;
+export const POST = staffRoute<{ id: string }>(
+  async (req, _staff, { params }) => {
+    const { id } = await params;
+    const body = await req.json().catch(() => null);
+    const parsed = bodySchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }
-  } catch {
-    // The timer change stands; boards reconcile visits on their next poll.
-  }
 
-  return NextResponse.json({ room: latestRoom, visits });
-}
+    const supabase = createServiceClient();
+    const { data: room, error: readError } = await supabase
+      .from("rooms")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (readError) {
+      return NextResponse.json({ error: "Database error" }, { status: 500 });
+    }
+    if (!room) {
+      return NextResponse.json({ error: "Room not found" }, { status: 404 });
+    }
+
+    const nowMs = Date.now();
+    const result = timerActionUpdate(
+      room as RoomRow,
+      parsed.data.action,
+      nowMs,
+      parsed.data.action === "set"
+        ? parsed.data.setSeconds
+        : parsed.data.deltaSeconds
+    );
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 409 });
+    }
+
+    const writeRoom = (fields: Partial<RoomRow>) =>
+      supabase
+        .from("rooms")
+        .update({ ...fields, updated_at: new Date().toISOString() })
+        .eq("id", id)
+        .select("*")
+        .single();
+
+    const { data, error } = await writeRoom(result.fields);
+
+    if (error) {
+      return NextResponse.json({ error: "Database error" }, { status: 500 });
+    }
+
+    await broadcastRoomsUpdated({ room: data });
+
+    let latestRoom = data as RoomRow;
+    let visits: VisitView[] | undefined;
+    try {
+      const before = await loadActiveVisits(supabase, nowMs);
+      const updates = timerFlowUpdates(
+        parsed.data.action,
+        latestRoom,
+        before,
+        nowMs,
+        // Start sent while the room was setting up (an older board)
+        { wasTurningOver: Boolean((room as RoomRow).turnover_started_at) }
+      );
+      if (updates.length > 0) {
+        const flow = await commitFlow(supabase, {
+          updates,
+          visitsBefore: before,
+          nowMs,
+        });
+        visits = flow.visits;
+        // Calling the next patient may have switched this room's doctor.
+        latestRoom = flow.rooms.find((r) => r.id === id) ?? latestRoom;
+      }
+    } catch {
+      // The timer change stands; boards reconcile visits on their next poll.
+    }
+
+    return NextResponse.json({ room: latestRoom, visits });
+  }
+);

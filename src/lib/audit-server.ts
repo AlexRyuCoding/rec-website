@@ -25,7 +25,7 @@ export interface StaffActionEntry {
 const MAX_DETAIL_LENGTH = 200;
 
 // Never throws and never blocks the action: if the row cannot be written
-// (migration 0015 not applied, database hiccup) the front desk must still
+// (a database hiccup) the front desk must still
 // be able to find a patient and reset a PIN. The failure is logged — with
 // the error code only, never the patient or the search text.
 export async function recordStaffAction(

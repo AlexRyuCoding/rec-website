@@ -41,13 +41,6 @@ const patient = (
         : null,
 });
 
-// Before migration 0017: the table has no pin_lookup column at all.
-const withoutColumn = (patients: Patient[]) =>
-  fakeSupabase(
-    { patients: patients.map(({ pin_lookup: _gone, ...rest }) => rest) },
-    { missingColumns: { patients: ["pin_lookup"] } }
-  );
-
 const row = (db: ReturnType<typeof fakeSupabase>, id: string) =>
   (db.tables.patients as Patient[]).find((p) => p.id === id)!;
 
@@ -113,13 +106,14 @@ describe("findPatientByPin", () => {
     expect(await findPatientByPin(db.client, "2222", opts)).toBeNull();
   });
 
-  it("works exactly as before when migration 0017 is not applied", async () => {
-    const db = withoutColumn([patient("a", "1111"), patient("b", "2222")]);
-    expect(await findPatientByPin(db.client, "2222", opts)).toMatchObject({
-      id: "b",
-    });
-    expect(await findPatientByPin(db.client, "3333", opts)).toBeNull();
-    expect(row(db, "b")).not.toHaveProperty("pin_lookup");
+  it("a database error is an error — not a slow search on a guess", async () => {
+    // the fingerprint query fails
+    const db = fakeSupabase(
+      { patients: [patient("a", "1111")] },
+      { onQuery: (_query, index) => (index === 0 ? "XX000" : undefined) }
+    );
+    await expect(findPatientByPin(db.client, "1111", opts)).rejects.toThrow();
+    expect(db.queries).toHaveLength(1);
   });
 
   it("works the old way when the server has no secret", async () => {
@@ -197,14 +191,25 @@ describe("saveNewPin", () => {
     expect(row(db, "c").pin).toBeNull();
   });
 
-  it("saves the PIN the old way when migration 0017 is not applied", async () => {
-    const db = withoutColumn([patient("c", null)]);
-    expect(await saveNewPin(db.client, "c", "3333", opts)).toMatchObject({
-      id: "c",
-    });
+  it("a write the database refuses is an error — no PIN is saved without its fingerprint", async () => {
+    const db = fakeSupabase(
+      { patients: [patient("c", null)] },
+      { onQuery: (query) => (query.kind === "update" ? "XX000" : undefined) }
+    );
+    expect(await saveNewPin(db.client, "c", "3333", opts)).toBe("error");
+    expect(row(db, "c").pin).toBeNull();
+    expect(db.queries.filter((q) => q.kind === "update")).toHaveLength(1);
+  });
+
+  it("with no server secret the PIN is saved without a fingerprint", async () => {
+    const db = fakeSupabase({ patients: [patient("c", null)] });
+    expect(
+      await saveNewPin(db.client, "c", "3333", {
+        secret: undefined,
+        hashRounds: 4,
+      })
+    ).toMatchObject({ id: "c" });
     expect(await bcrypt.compare("3333", row(db, "c").pin!)).toBe(true);
-    expect(await findPatientByPin(db.client, "3333", opts)).toMatchObject({
-      id: "c",
-    });
+    expect(row(db, "c").pin_lookup).toBeNull();
   });
 });

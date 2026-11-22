@@ -50,8 +50,8 @@ export const EMPTY_MUSIC_ROW: MusicRow = {
   spotify_connected_at: null,
 };
 
-// null = the settings could not be read (database trouble, or migration
-// 0012 not applied yet). Callers treat that as "leave the music alone",
+// null = the settings could not be read (database trouble). Callers
+// treat that as "leave the music alone",
 // never as "music off": a database blip must not stop the music.
 export async function loadMusicRow(
   supabase: SupabaseClient
@@ -79,8 +79,8 @@ export function radioDisplayName(name: string | null, url: string): string {
 export const STATIONS_TABLE = "radio_stations";
 
 // Staff's own stations, by name. null = the list could not be read
-// (database trouble, or migration 0013 not applied yet); the rest of the
-// music panel must keep working without it.
+// (database trouble); the rest of the music panel must keep working
+// without it.
 export async function loadSavedStations(
   supabase: SupabaseClient
 ): Promise<SavedStation[] | null> {

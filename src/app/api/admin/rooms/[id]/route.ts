@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
-import { isAdminAuthorized } from "@/lib/admin-auth";
 import { broadcastRoomsUpdated } from "@/lib/rooms-realtime";
 import { roomDeleteBlocker } from "@/lib/patient-flow";
 import { loadActiveVisits } from "@/lib/visits-server";
@@ -13,6 +12,7 @@ import {
   MIN_DURATION_SECONDS,
   RoomRow,
 } from "@/lib/room-status";
+import { staffRoute } from "@/lib/staff-route";
 
 const patchSchema = z.object({
   name: z.string().trim().min(1).max(40).optional(),
@@ -42,131 +42,121 @@ const patchSchema = z.object({
 
 // Edit-layout metadata updates. Timer actions live in ./timer — this route
 // never touches the timer_* columns.
-export async function PATCH(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  if (!(await isAdminAuthorized())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const PATCH = staffRoute<{ id: string }>(
+  async (req, _staff, { params }) => {
+    const { id } = await params;
+    const body = await req.json().catch(() => null);
+    const parsed = patchSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    }
 
-  const { id } = await params;
-  const body = await req.json().catch(() => null);
-  const parsed = patchSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-  }
+    const fields: Record<string, unknown> = {};
+    const d = parsed.data;
+    if (d.name !== undefined) fields.name = d.name;
+    if (d.gridRow !== undefined) fields.grid_row = d.gridRow;
+    if (d.gridCol !== undefined) fields.grid_col = d.gridCol;
+    if (d.doctorName !== undefined) fields.doctor_name = d.doctorName;
+    if (d.defaultDurationSeconds !== undefined) {
+      fields.default_duration_seconds = d.defaultDurationSeconds;
+    }
+    if (d.capacity !== undefined) fields.capacity = d.capacity;
+    if (Object.keys(fields).length === 0) {
+      return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+    }
+    fields.updated_at = new Date().toISOString();
 
-  const fields: Record<string, unknown> = {};
-  const d = parsed.data;
-  if (d.name !== undefined) fields.name = d.name;
-  if (d.gridRow !== undefined) fields.grid_row = d.gridRow;
-  if (d.gridCol !== undefined) fields.grid_col = d.gridCol;
-  if (d.doctorName !== undefined) fields.doctor_name = d.doctorName;
-  if (d.defaultDurationSeconds !== undefined) {
-    fields.default_duration_seconds = d.defaultDurationSeconds;
-  }
-  if (d.capacity !== undefined) fields.capacity = d.capacity;
-  if (Object.keys(fields).length === 0) {
-    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
-  }
-  fields.updated_at = new Date().toISOString();
+    const supabase = createServiceClient();
 
-  const supabase = createServiceClient();
-
-  // Assignment must come from the managed roster (or null to unassign).
-  if (typeof d.doctorName === "string") {
-    const { data: doctor, error: doctorError } = await supabase
-      .from("doctors")
-      .select("id")
-      .eq("name", d.doctorName)
+    // Assignment must come from the managed roster (or null to unassign).
+    if (typeof d.doctorName === "string") {
+      const { data: doctor, error: doctorError } = await supabase
+        .from("doctors")
+        .select("id")
+        .eq("name", d.doctorName)
+        .maybeSingle();
+      if (doctorError) {
+        return NextResponse.json({ error: "Database error" }, { status: 500 });
+      }
+      if (!doctor) {
+        return NextResponse.json(
+          { error: "That doctor is not on the list" },
+          { status: 400 }
+        );
+      }
+    }
+    const { data, error } = await supabase
+      .from("rooms")
+      .update(fields)
+      .eq("id", id)
+      .select("*")
       .maybeSingle();
-    if (doctorError) {
+
+    if (error) {
+      if (error.code === "23505") {
+        return NextResponse.json(
+          { error: "That cell is already occupied" },
+          { status: 409 }
+        );
+      }
       return NextResponse.json({ error: "Database error" }, { status: 500 });
     }
-    if (!doctor) {
-      return NextResponse.json(
-        { error: "That doctor is not on the list" },
-        { status: 400 }
-      );
+    if (!data) {
+      return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
-  }
-  const { data, error } = await supabase
-    .from("rooms")
-    .update(fields)
-    .eq("id", id)
-    .select("*")
-    .maybeSingle();
 
-  if (error) {
-    if (error.code === "23505") {
-      return NextResponse.json(
-        { error: "That cell is already occupied" },
-        { status: 409 }
-      );
+    await broadcastRoomsUpdated({ room: data });
+    return NextResponse.json({ room: data });
+  }
+);
+
+export const DELETE = staffRoute<{ id: string }>(
+  async (_req, _staff, { params }) => {
+    const { id } = await params;
+    const supabase = createServiceClient();
+
+    // A room in use is not deleted: its timer would be dropped and its
+    // patients sent back to the waiting list without anyone being told.
+    // If who is in it cannot be read, the answer is also no.
+    const { data: room, error: roomError } = await supabase
+      .from("rooms")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (roomError) {
+      return NextResponse.json({ error: "Database error" }, { status: 500 });
     }
-    return NextResponse.json({ error: "Database error" }, { status: 500 });
-  }
-  if (!data) {
-    return NextResponse.json({ error: "Room not found" }, { status: 404 });
-  }
+    if (!room) {
+      return NextResponse.json({ error: "Room not found" }, { status: 404 });
+    }
+    let blocker: string | null;
+    try {
+      blocker = roomDeleteBlocker(
+        room as RoomRow,
+        await loadActiveVisits(supabase, Date.now())
+      );
+    } catch {
+      return NextResponse.json({ error: "Database error" }, { status: 500 });
+    }
+    if (blocker) {
+      return NextResponse.json({ error: blocker }, { status: 409 });
+    }
 
-  await broadcastRoomsUpdated({ room: data });
-  return NextResponse.json({ room: data });
-}
+    const { data, error } = await supabase
+      .from("rooms")
+      .delete()
+      .eq("id", id)
+      .select("id")
+      .maybeSingle();
 
-export async function DELETE(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  if (!(await isAdminAuthorized())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+    if (error) {
+      return NextResponse.json({ error: "Database error" }, { status: 500 });
+    }
+    if (!data) {
+      return NextResponse.json({ error: "Room not found" }, { status: 404 });
+    }
 
-  const { id } = await params;
-  const supabase = createServiceClient();
-
-  // A room in use is not deleted: its timer would be dropped and its
-  // patients sent back to the waiting list without anyone being told.
-  // If who is in it cannot be read, the answer is also no.
-  const { data: room, error: roomError } = await supabase
-    .from("rooms")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-  if (roomError) {
-    return NextResponse.json({ error: "Database error" }, { status: 500 });
+    await broadcastRoomsUpdated({ deletedId: id });
+    return NextResponse.json({ success: true });
   }
-  if (!room) {
-    return NextResponse.json({ error: "Room not found" }, { status: 404 });
-  }
-  let blocker: string | null;
-  try {
-    blocker = roomDeleteBlocker(
-      room as RoomRow,
-      await loadActiveVisits(supabase, Date.now())
-    );
-  } catch {
-    return NextResponse.json({ error: "Database error" }, { status: 500 });
-  }
-  if (blocker) {
-    return NextResponse.json({ error: blocker }, { status: 409 });
-  }
-
-  const { data, error } = await supabase
-    .from("rooms")
-    .delete()
-    .eq("id", id)
-    .select("id")
-    .maybeSingle();
-
-  if (error) {
-    return NextResponse.json({ error: "Database error" }, { status: 500 });
-  }
-  if (!data) {
-    return NextResponse.json({ error: "Room not found" }, { status: 404 });
-  }
-
-  await broadcastRoomsUpdated({ deletedId: id });
-  return NextResponse.json({ success: true });
-}
+);

@@ -89,37 +89,12 @@ describe("searchPatients", () => {
     });
   });
 
-  it("falls back to the basic search when migration 0014 is missing", async () => {
-    const { client, calls } = fakeSupabase(
-      { data: null, error: { code: "PGRST202" } },
-      { data: [{ ...ann, pin: "$2a$hash" }], error: null }
-    );
-    const outcome = await searchPatients(client, typed("Ann Lic"));
-    expect(calls.or).toEqual([
-      "first_name.ilike.%ann%,last_name.ilike.%ann%,email.ilike.%ann%",
-      "first_name.ilike.%lic%,last_name.ilike.%lic%,email.ilike.%lic%",
-    ]);
-    expect(outcome).toEqual({
-      more: false,
-      patients: [{ ...ann, has_pin: true }],
-    });
-    expect(JSON.stringify(outcome)).not.toContain("hash");
-  });
-
-  it("does not fall back on any other database error", async () => {
-    const { client, calls } = fakeSupabase({
-      data: null,
-      error: { code: "57014" },
-    });
-    expect(await searchPatients(client, typed("Ann Lic"))).toBe("error");
-    expect(calls.or).toEqual([]);
-  });
-
-  it("reports an error from the fallback too", async () => {
-    const { client } = fakeSupabase(
-      { data: null, error: { code: "PGRST202" } },
-      { data: null, error: { code: "57014" } }
-    );
-    expect(await searchPatients(client, typed("Ann Lic"))).toBe("error");
+  it("reports an error when the database cannot answer", async () => {
+    for (const code of ["57014", "PGRST202"]) {
+      const { client, calls } = fakeSupabase({ data: null, error: { code } });
+      expect(await searchPatients(client, typed("Ann Lic"))).toBe("error");
+      // …and does not try another, simpler query instead
+      expect(calls.or).toEqual([]);
+    }
   });
 });

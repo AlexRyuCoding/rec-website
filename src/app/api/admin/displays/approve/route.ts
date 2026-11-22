@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
-import { getAdminEmail } from "@/lib/admin-auth";
 import { recordStaffAction } from "@/lib/audit-server";
 import {
   DEVICES,
@@ -9,6 +8,7 @@ import {
   normalizePairCode,
   PAIR_CODE_LENGTH,
 } from "@/lib/display-auth";
+import { staffRoute } from "@/lib/staff-route";
 
 const bodySchema = z.object({
   code: z.string().max(20),
@@ -28,12 +28,7 @@ const DEFAULT_LABELS = { tv: "Waiting room screen", kiosk: "Check-in kiosk" };
 // kiosk can do more than a screen (PIN lookup, PIN setup, check-in), so
 // it must never be approved by someone who believed they were pairing a
 // TV: a kiosk's code entered as a screen is simply "not found".
-export async function POST(req: Request) {
-  const email = await getAdminEmail();
-  if (!email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const POST = staffRoute(async (req, { email: email }) => {
   const body = await req.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
   const code = parsed.success ? normalizePairCode(parsed.data.code) : "";
@@ -93,4 +88,4 @@ export async function POST(req: Request) {
       lastSeenAt: data.last_seen_at,
     },
   });
-}
+});

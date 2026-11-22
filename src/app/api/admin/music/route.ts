@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
-import { getAdminEmail } from "@/lib/admin-auth";
 import {
   LINK_MAX_LENGTH,
   MUSIC_SOURCES,
@@ -17,6 +16,7 @@ import {
 } from "@/lib/music-server";
 import { broadcastFlowUpdated } from "@/lib/rooms-realtime";
 import { spotifyConfigured } from "@/lib/spotify-server";
+import { staffRoute } from "@/lib/staff-route";
 
 export const dynamic = "force-dynamic";
 
@@ -44,10 +44,7 @@ function settingsReply(row: MusicRow) {
   };
 }
 
-export async function GET() {
-  if (!(await getAdminEmail())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const GET = staffRoute(async () => {
   const supabase = createServiceClient();
   const [row, stations] = await Promise.all([
     loadMusicRow(supabase),
@@ -56,14 +53,14 @@ export async function GET() {
   if (!row) {
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
-  // Staff's own stations. If that list can't be read (migration 0013 not
-  // applied yet) the panel still works with the built-in ones.
+  // Staff's own stations. If that list can't be read the panel still
+  // works with the built-in ones.
   return NextResponse.json({
     ...settingsReply(row),
     stations: stations ?? [],
     stationsAvailable: stations !== null,
   });
-}
+});
 
 const patchSchema = z.object({
   source: z.enum(MUSIC_SOURCES as [string, ...string[]]).optional(),
@@ -77,12 +74,7 @@ const patchSchema = z.object({
 
 // Only the fields sent are changed, so "pause" and the volume slider do
 // not have to resend (or accidentally save) what is typed in the form.
-export async function PATCH(req: Request) {
-  const email = await getAdminEmail();
-  if (!email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const PATCH = staffRoute(async (req, { email: email }) => {
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
@@ -120,4 +112,4 @@ export async function PATCH(req: Request) {
   return NextResponse.json(
     settingsReply({ ...row, ...merged.values, updated_at: updatedAt })
   );
-}
+});

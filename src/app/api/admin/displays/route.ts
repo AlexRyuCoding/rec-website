@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase";
-import { isAdminAuthorized } from "@/lib/admin-auth";
 import { DeviceKind, DEVICES } from "@/lib/display-auth";
+import { staffRoute } from "@/lib/staff-route";
 
 async function paired(supabase: SupabaseClient, kind: DeviceKind) {
   const { data, error } = await supabase
@@ -23,24 +23,16 @@ async function paired(supabase: SupabaseClient, kind: DeviceKind) {
 
 // Paired devices, for the dashboard's Screens panel: waiting-room screens
 // and check-in kiosks.
-export async function GET() {
-  if (!(await isAdminAuthorized())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const GET = staffRoute(async () => {
   const supabase = createServiceClient();
   const [screens, kiosks] = await Promise.all([
     paired(supabase, "tv"),
     paired(supabase, "kiosk"),
   ]);
-  if (!screens) {
+  // Both lists or an error: a panel showing only the screens would look
+  // as if no kiosk were paired.
+  if (!screens || !kiosks) {
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
-
-  // If the kiosk list can't be read (migration 0018 not applied yet) the
-  // panel still manages the screens and just leaves kiosks out.
-  return NextResponse.json({
-    displays: [...(kiosks ?? []), ...screens],
-    kiosksAvailable: kiosks !== null,
-  });
-}
+  return NextResponse.json({ displays: [...kiosks, ...screens] });
+});

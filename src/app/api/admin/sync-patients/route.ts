@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
-import { isAdminAuthorized } from "@/lib/admin-auth";
 import { toPatientRow } from "@/lib/patient-record";
 import { fetchWithTimeout } from "@/lib/fetch-timeout";
 import {
@@ -9,6 +8,7 @@ import {
   getPbToken,
   type PbClientRecord,
 } from "@/lib/practice-better";
+import { staffRoute } from "@/lib/staff-route";
 
 export const maxDuration = 60;
 
@@ -27,11 +27,7 @@ interface PbRecordsPage {
   hasMore?: boolean;
 }
 
-export async function POST(req: Request) {
-  if (!(await isAdminAuthorized())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const POST = staffRoute(async (req) => {
   const body = await req.json().catch(() => ({}));
   // Quick mode: one newest-first page only — catches recently CREATED
   // patients (e.g. a missed webhook). PB orders by record id, so edits to
@@ -155,4 +151,4 @@ export async function POST(req: Request) {
     total,
     created,
   });
-}
+});

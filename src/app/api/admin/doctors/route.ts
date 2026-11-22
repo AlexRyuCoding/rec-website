@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
-import { isAdminAuthorized } from "@/lib/admin-auth";
 import { broadcastRoomsUpdated } from "@/lib/rooms-realtime";
 import {
   DOCTOR_NAME_MAX_LENGTH,
   MAX_DOCTORS,
   pickDoctorColor,
 } from "@/lib/room-status";
+import { staffRoute } from "@/lib/staff-route";
 
 // Doctor roster mutations. The roster itself is read via GET
 // /api/admin/rooms so one poll keeps rooms and doctors in sync everywhere.
@@ -16,11 +16,7 @@ const createSchema = z.object({
   name: z.string().trim().min(1).max(DOCTOR_NAME_MAX_LENGTH),
 });
 
-export async function POST(req: Request) {
-  if (!(await isAdminAuthorized())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const POST = staffRoute(async (req) => {
   const body = await req.json().catch(() => null);
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
@@ -65,4 +61,4 @@ export async function POST(req: Request) {
   // Empty payload = "something changed, refetch" on other devices.
   await broadcastRoomsUpdated();
   return NextResponse.json({ doctor: data }, { status: 201 });
-}
+});
