@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
-import { getAdminEmail } from "@/lib/admin-auth";
 import { recordStaffAction } from "@/lib/audit-server";
 import { commitAssign, commitFlow, commitRestore } from "@/lib/flow-server";
 import {
@@ -19,6 +18,7 @@ import {
   loadFinishedVisit,
   VisitDbRow,
 } from "@/lib/visits-server";
+import { staffRoute } from "@/lib/staff-route";
 
 const bodySchema = z.discriminatedUnion("action", [
   z.object({
@@ -49,184 +49,180 @@ const bodySchema = z.discriminatedUnion("action", [
 //             empty, otherwise to the waiting list — see restoreTarget
 // Whatever the action, if it empties the room the patient leaves, the
 // people lined up for that room are called.
-export async function POST(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const staffEmail = await getAdminEmail();
-  if (!staffEmail) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { id } = await params;
-  const body = await req.json().catch(() => null);
-  const parsed = bodySchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-  }
-  const input = parsed.data;
-
-  const supabase = createServiceClient();
-  const nowMs = Date.now();
-
-  let visits: VisitDbRow[];
-  try {
-    visits = await loadActiveVisits(supabase, nowMs);
-  } catch {
-    return NextResponse.json({ error: "Database error" }, { status: 500 });
-  }
-  const loadRoom = async (roomId: string): Promise<RoomRow | null> => {
-    const { data } = await supabase
-      .from("rooms")
-      .select("*")
-      .eq("id", roomId)
-      .maybeSingle();
-    return (data as RoomRow | null) ?? null;
-  };
-
-  // Restore is the one action on a visit that is NOT on the board.
-  if (input.action === "restore") {
-    if (visits.some((v) => v.id === id)) {
-      return NextResponse.json(
-        { error: "That patient is already back on the board" },
-        { status: 409 }
-      );
+export const POST = staffRoute<{ id: string }>(
+  async (req, { email: staffEmail }, { params }) => {
+    const { id } = await params;
+    const body = await req.json().catch(() => null);
+    const parsed = bodySchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }
-    let finished: VisitDbRow | null;
+    const input = parsed.data;
+
+    const supabase = createServiceClient();
+    const nowMs = Date.now();
+
+    let visits: VisitDbRow[];
     try {
-      finished = await loadFinishedVisit(supabase, id, nowMs);
+      visits = await loadActiveVisits(supabase, nowMs);
     } catch {
       return NextResponse.json({ error: "Database error" }, { status: 500 });
     }
-    if (!finished) {
-      return NextResponse.json({ error: "Visit not found" }, { status: 404 });
-    }
-    const room = finished.room_id ? await loadRoom(finished.room_id) : null;
-    const restored = await commitRestore(supabase, {
-      visit: finished,
-      room,
-      openVisits: visits,
-      nowMs,
-    });
-    if (restored.ok) {
-      await recordStaffAction(supabase, {
-        staffEmail,
-        action: "visit_restore",
-        patientIds: finished.patient_id ? [finished.patient_id] : [],
-        detail:
-          restored.restoredTo === "room" && room
-            ? `to ${room.name}`
-            : "to the waiting list",
-      });
-      return NextResponse.json({
-        visits: restored.visits,
-        rooms: restored.rooms,
-        restoredTo: restored.restoredTo,
-      });
-    }
-    return restored.reason === "gone"
-      ? NextResponse.json(
+    const loadRoom = async (roomId: string): Promise<RoomRow | null> => {
+      const { data } = await supabase
+        .from("rooms")
+        .select("*")
+        .eq("id", roomId)
+        .maybeSingle();
+      return (data as RoomRow | null) ?? null;
+    };
+
+    // Restore is the one action on a visit that is NOT on the board.
+    if (input.action === "restore") {
+      if (visits.some((v) => v.id === id)) {
+        return NextResponse.json(
           { error: "That patient is already back on the board" },
           { status: 409 }
-        )
-      : NextResponse.json({ error: "Database error" }, { status: 500 });
-  }
-
-  const visit = visits.find((v) => v.id === id);
-  if (!visit) {
-    return NextResponse.json({ error: "Visit not found" }, { status: 404 });
-  }
-
-  const updates: VisitUpdate[] = [];
-  if (input.action === "assign") {
-    const room = await loadRoom(input.roomId);
-    if (!room) {
-      return NextResponse.json({ error: "Room not found" }, { status: 404 });
-    }
-    const result = assignUpdate(room, visits, id, nowMs, input.togetherWith);
-    if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: 409 });
-    }
-    // An assign goes through its own guarded write: the rules above were
-    // right about what this request read, but another board may be
-    // assigning at the same instant (see commitAssign).
-    const assigned = await commitAssign(supabase, {
-      room,
-      update: result.updates[0],
-      togetherWith: input.togetherWith ?? [],
-      visitsBefore: visits,
-      nowMs,
-    });
-    if (assigned.ok) {
-      return NextResponse.json({
-        visits: assigned.visits,
-        rooms: assigned.rooms,
+        );
+      }
+      let finished: VisitDbRow | null;
+      try {
+        finished = await loadFinishedVisit(supabase, id, nowMs);
+      } catch {
+        return NextResponse.json({ error: "Database error" }, { status: 500 });
+      }
+      if (!finished) {
+        return NextResponse.json({ error: "Visit not found" }, { status: 404 });
+      }
+      const room = finished.room_id ? await loadRoom(finished.room_id) : null;
+      const restored = await commitRestore(supabase, {
+        visit: finished,
+        room,
+        openVisits: visits,
+        nowMs,
       });
+      if (restored.ok) {
+        await recordStaffAction(supabase, {
+          staffEmail,
+          action: "visit_restore",
+          patientIds: finished.patient_id ? [finished.patient_id] : [],
+          detail:
+            restored.restoredTo === "room" && room
+              ? `to ${room.name}`
+              : "to the waiting list",
+        });
+        return NextResponse.json({
+          visits: restored.visits,
+          rooms: restored.rooms,
+          restoredTo: restored.restoredTo,
+        });
+      }
+      return restored.reason === "gone"
+        ? NextResponse.json(
+            { error: "That patient is already back on the board" },
+            { status: 409 }
+          )
+        : NextResponse.json({ error: "Database error" }, { status: 500 });
     }
-    if (assigned.reason === "error") {
-      return NextResponse.json({ error: "Database error" }, { status: 500 });
+
+    const visit = visits.find((v) => v.id === id);
+    if (!visit) {
+      return NextResponse.json({ error: "Visit not found" }, { status: 404 });
     }
-    return NextResponse.json(
-      {
-        error:
-          assigned.reason === "taken"
-            ? "That patient already has a room — please choose again"
-            : `${room.name} changed — please choose again`,
-      },
-      { status: 409 }
-    );
-  } else if (input.action === "unassign") {
-    updates.push(unassignUpdate(id));
-  } else if (input.action === "mark_waiting") {
-    // Only meaningful for a patient who is in a room and was marked seen.
-    if (!visit.room_id || !visit.called_at) {
+
+    const updates: VisitUpdate[] = [];
+    if (input.action === "assign") {
+      const room = await loadRoom(input.roomId);
+      if (!room) {
+        return NextResponse.json({ error: "Room not found" }, { status: 404 });
+      }
+      const result = assignUpdate(room, visits, id, nowMs, input.togetherWith);
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error }, { status: 409 });
+      }
+      // An assign goes through its own guarded write: the rules above were
+      // right about what this request read, but another board may be
+      // assigning at the same instant (see commitAssign).
+      const assigned = await commitAssign(supabase, {
+        room,
+        update: result.updates[0],
+        togetherWith: input.togetherWith ?? [],
+        visitsBefore: visits,
+        nowMs,
+      });
+      if (assigned.ok) {
+        return NextResponse.json({
+          visits: assigned.visits,
+          rooms: assigned.rooms,
+        });
+      }
+      if (assigned.reason === "error") {
+        return NextResponse.json({ error: "Database error" }, { status: 500 });
+      }
       return NextResponse.json(
-        { error: "That patient is not in a room" },
+        {
+          error:
+            assigned.reason === "taken"
+              ? "That patient already has a room — please choose again"
+              : `${room.name} changed — please choose again`,
+        },
         { status: 409 }
       );
+    } else if (input.action === "unassign") {
+      updates.push(unassignUpdate(id));
+    } else if (input.action === "mark_waiting") {
+      // Only meaningful for a patient who is in a room and was marked seen.
+      if (!visit.room_id || !visit.called_at) {
+        return NextResponse.json(
+          { error: "That patient is not in a room" },
+          { status: 409 }
+        );
+      }
+      updates.push(markWaitingUpdate(id));
+    } else {
+      updates.push(removeUpdate(id, nowMs));
     }
-    updates.push(markWaitingUpdate(id));
-  } else {
-    updates.push(removeUpdate(id, nowMs));
-  }
 
-  // The room the patient is leaving may now be empty. (Only unassign and
-  // remove leave a room: assign is refused for a patient who has one.)
-  const leftRoomId =
-    input.action === "unassign" || input.action === "remove"
-      ? visit.room_id
-      : null;
-  let leftRoomName: string | null = null;
-  if (leftRoomId) {
-    const leftRoom = await loadRoom(leftRoomId);
-    if (leftRoom) {
-      leftRoomName = leftRoom.name;
-      const after = applyVisitUpdates(visits, updates).filter(
-        (v) => v.done_at === null
-      );
-      updates.push(...promotionUpdates(leftRoom, after, nowMs));
+    // The room the patient is leaving may now be empty. (Only unassign and
+    // remove leave a room: assign is refused for a patient who has one.)
+    const leftRoomId =
+      input.action === "unassign" || input.action === "remove"
+        ? visit.room_id
+        : null;
+    let leftRoomName: string | null = null;
+    if (leftRoomId) {
+      const leftRoom = await loadRoom(leftRoomId);
+      if (leftRoom) {
+        leftRoomName = leftRoom.name;
+        const after = applyVisitUpdates(visits, updates).filter(
+          (v) => v.done_at === null
+        );
+        updates.push(...promotionUpdates(leftRoom, after, nowMs));
+      }
     }
-  }
 
-  try {
-    const result = await commitFlow(supabase, {
-      updates,
-      visitsBefore: visits,
-      nowMs,
-    });
-    // Taking a patient off the board ends their visit: who did it, and
-    // from where, is kept. (Sending patients to rooms is not — that is
-    // the board's ordinary work, dozens of times a day.)
-    if (input.action === "remove") {
-      await recordStaffAction(supabase, {
-        staffEmail,
-        action: "visit_remove",
-        patientIds: visit.patient_id ? [visit.patient_id] : [],
-        detail: leftRoomName ? `from ${leftRoomName}` : "from the waiting list",
+    try {
+      const result = await commitFlow(supabase, {
+        updates,
+        visitsBefore: visits,
+        nowMs,
       });
+      // Taking a patient off the board ends their visit: who did it, and
+      // from where, is kept. (Sending patients to rooms is not — that is
+      // the board's ordinary work, dozens of times a day.)
+      if (input.action === "remove") {
+        await recordStaffAction(supabase, {
+          staffEmail,
+          action: "visit_remove",
+          patientIds: visit.patient_id ? [visit.patient_id] : [],
+          detail: leftRoomName
+            ? `from ${leftRoomName}`
+            : "from the waiting list",
+        });
+      }
+      return NextResponse.json(result);
+    } catch {
+      return NextResponse.json({ error: "Database error" }, { status: 500 });
     }
-    return NextResponse.json(result);
-  } catch {
-    return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
-}
+);

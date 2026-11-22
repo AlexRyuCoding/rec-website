@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
-import { getAdminEmail } from "@/lib/admin-auth";
 import { recordStaffAction } from "@/lib/audit-server";
 import { parsePatientSearch } from "@/lib/patient-search";
 import { searchPatients } from "@/lib/patient-search-server";
+import { staffRoute } from "@/lib/staff-route";
 
 const MAX_QUERY_LENGTH = 200;
 
@@ -23,10 +23,7 @@ function reply(body: unknown, status = 200) {
 // POST with the text in the body, {q}: a name in the address
 // (?q=Ann+Licater) ends up in request logs. Every search is written to
 // the staff audit log with the patients it listed.
-export async function POST(req: Request) {
-  const staffEmail = await getAdminEmail();
-  if (!staffEmail) return reply({ error: "Unauthorized" }, 401);
-
+export const POST = staffRoute(async (req, { email: staffEmail }) => {
   const body = await req.json().catch(() => null);
   const text =
     typeof body?.q === "string" ? body.q.slice(0, MAX_QUERY_LENGTH).trim() : "";
@@ -46,10 +43,12 @@ export async function POST(req: Request) {
     detail: text,
   });
   return reply(outcome);
-}
+});
 
 // The search used to be a GET. A dashboard tab left open from before the
 // change still asks that way; it shows this message in place of results.
+// Not behind staffRoute on purpose (listed in staff-route.test.ts): it
+// reads nothing and says the same thing to everyone.
 export async function GET() {
   return NextResponse.json(
     { error: "This page is out of date. Please reload it." },

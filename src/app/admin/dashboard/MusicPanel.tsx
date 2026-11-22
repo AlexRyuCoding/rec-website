@@ -121,7 +121,8 @@ export default function MusicPanel() {
   const [spotify, setSpotify] = useState<SpotifyStatus | null>(null);
   const [presets, setPresets] = useState<RadioPreset[]>([]);
   const [stations, setStations] = useState<SavedStation[]>([]);
-  // false = the list couldn't be read (migration 0013 not applied yet).
+  // false = the list couldn't be read just now; the rest of the panel
+  // works without it.
   const [stationsAvailable, setStationsAvailable] = useState(true);
   const [removingId, setRemovingId] = useState<string | null>(null);
   // "Other station…" was picked by hand: keep its fields open even if what
@@ -299,7 +300,7 @@ export default function MusicPanel() {
           text:
             res.status === 400 && data.error
               ? data.error
-              : "Couldn't add the station. If this is a new install, migration 0013 may not be applied yet.",
+              : "Couldn't add the station. Try again.",
         });
         return;
       }
@@ -419,7 +420,7 @@ export default function MusicPanel() {
       {!draft || !saved ? (
         <p className="text-sm opacity-60">
           {failed
-            ? "Music settings couldn't be loaded. If this is a new install, migration 0012 may not be applied yet."
+            ? "Music settings couldn't be loaded. Reload the page to try again."
             : "Loading…"}
         </p>
       ) : (

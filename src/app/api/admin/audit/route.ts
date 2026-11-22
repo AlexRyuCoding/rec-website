@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
-import { isAdminAuthorized } from "@/lib/admin-auth";
 import { allowedAdminEmails } from "@/lib/admin-allowlist";
 import { STAFF_ACTIONS } from "@/lib/audit-log";
 import { loadAuditPage } from "@/lib/audit-server";
+import { staffRoute } from "@/lib/staff-route";
 
 const noStore = { "Cache-Control": "no-store" };
 
@@ -21,14 +21,7 @@ const querySchema = z.object({
 //
 // The patient is given by id, never by name: a name in the address would
 // end up in request logs. Replies name patients, so no cache keeps them.
-export async function GET(req: Request) {
-  if (!(await isAdminAuthorized())) {
-    return NextResponse.json(
-      { error: "Unauthorized" },
-      { status: 401, headers: noStore }
-    );
-  }
-
+export const GET = staffRoute(async (req) => {
   const { searchParams } = new URL(req.url);
   const parsed = querySchema.safeParse(
     Object.fromEntries(
@@ -61,9 +54,8 @@ export async function GET(req: Request) {
     );
   } catch {
     return NextResponse.json(
-      // Most likely migration 0015 has not been applied: there is no log.
       { error: "The log could not be read." },
       { status: 500, headers: noStore }
     );
   }
-}
+});

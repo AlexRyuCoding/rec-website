@@ -7,8 +7,7 @@ type DeviceKind = "tv" | "kiosk";
 
 interface Display {
   id: string;
-  // Absent in a reply from before kiosks could be paired: a screen.
-  kind?: DeviceKind;
+  kind: DeviceKind;
   label: string | null;
   approvedAt: string | null;
   lastSeenAt: string | null;
@@ -62,8 +61,6 @@ export default function ScreensPanel() {
   const [code, setCode] = useState("");
   const [label, setLabel] = useState("");
   const [kind, setKind] = useState<DeviceKind>("tv");
-  // false = kiosks can't be listed (migration 0018 not applied yet).
-  const [kiosksAvailable, setKiosksAvailable] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(
     null
@@ -80,10 +77,8 @@ export default function ScreensPanel() {
       if (!res.ok) return;
       const data = (await res.json()) as {
         displays: Display[];
-        kiosksAvailable?: boolean;
       };
       setDisplays(data.displays);
-      setKiosksAvailable(data.kiosksAvailable !== false);
     } catch {
       // Keep the last list; the next action or reload retries.
     } finally {
@@ -190,7 +185,7 @@ export default function ScreensPanel() {
         <fieldset className="flex flex-col gap-1 text-sm">
           <legend className="mb-1">What is it?</legend>
           <div className="flex gap-2">
-            {KINDS.filter((k) => k.id === "tv" || kiosksAvailable).map((k) => (
+            {KINDS.map((k) => (
               <button
                 key={k.id}
                 type="button"

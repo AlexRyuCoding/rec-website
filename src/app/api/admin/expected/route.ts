@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
-import { isAdminAuthorized } from "@/lib/admin-auth";
 import { loadExpected, ScheduleUnavailable } from "@/lib/expected-server";
+import { staffRoute } from "@/lib/staff-route";
 
 const noStore = { "Cache-Control": "no-store" };
 
@@ -13,13 +13,7 @@ const noStore = { "Cache-Control": "no-store" };
 // expected-server.ts); ?refresh=1 asks Practice Better again, at most
 // every thirty seconds. Checking a patient in from the list is the
 // ordinary staff check-in (POST /api/admin/checkins).
-export async function GET(req: Request) {
-  if (!(await isAdminAuthorized())) {
-    return NextResponse.json(
-      { error: "Unauthorized" },
-      { status: 401, headers: noStore }
-    );
-  }
+export const GET = staffRoute(async (req) => {
   const forced = new URL(req.url).searchParams.get("refresh") === "1";
   try {
     const list = await loadExpected(createServiceClient(), Date.now(), forced);
@@ -37,4 +31,4 @@ export async function GET(req: Request) {
       { status: reason === "practice-better" ? 502 : 503, headers: noStore }
     );
   }
-}
+});

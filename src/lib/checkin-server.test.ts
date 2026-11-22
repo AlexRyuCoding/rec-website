@@ -185,30 +185,13 @@ describe("createCheckin", () => {
     expect(calls.announced).toBe(0);
   });
 
-  it("falls back to the original columns if the full row is refused", async () => {
-    const db = fakeDb({
-      inserts: [{ error: { code: "42703" } }, { error: null }],
-    });
-    const { deps, calls } = fakeDeps();
-    expect(await createCheckin(db.client, "p1", "kiosk", NOW, deps)).toBe(
-      "created"
-    );
-    expect(db.inserted()[1]).toEqual({
-      patient_id: "p1",
-      appointment_at: null,
-      service_name: null,
-    });
-    expect(calls.announced).toBe(1);
-  });
-
-  it("reports an error when the row cannot be written at all", async () => {
-    const db = fakeDb({
-      inserts: [{ error: { code: "23503" } }, { error: { code: "23503" } }],
-    });
+  it("reports an error when the row is refused, and does not try a second, thinner row", async () => {
+    const db = fakeDb({ inserts: [{ error: { code: "23503" } }] });
     const { deps, calls } = fakeDeps();
     expect(await createCheckin(db.client, "nobody", "staff", NOW, deps)).toBe(
       "error"
     );
+    expect(db.inserted()).toHaveLength(1);
     expect(calls.announced).toBe(0);
   });
 });

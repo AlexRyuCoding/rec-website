@@ -152,9 +152,27 @@ patients use it unassisted; it needs no staff sign-in.
   day, mid-clinic. The end is stamped into the token at sign-in (`dayEnd`)
   and checked wherever the allowlist is. Staff still sign in once at the
   start of each day. (24 h maxAge remains as the cookie's outer limit.)
-- Every staff API route must get its session through getAdminEmail() /
-  isAdminAuthorized() (src/lib/admin-auth.ts). A route that calls
-  getServerSession itself skips the day's-end check.
+- Every staff API route (/api/admin/*) is written as
+  `export const POST = staffRoute(async (req, staff, { params }) => …)`
+  (src/lib/staff-route.ts). The wrapper is the sign-in check — Google
+  session, allowlist, day's end, not a kiosk (getAdminEmail) — and
+  answers 401 no-store otherwise; the handler gets `staff.email` for the
+  audit log. staff-route.test.ts fails if a file under /api/admin exports
+  a handler that is not wrapped, or checks the session by itself. Two
+  routes a browser navigates to (the Spotify connect flow) redirect to
+  the login page instead (`whenNotStaff`); one handler is open on
+  purpose and listed in that test (the stale-tab notice, GET
+  /api/admin/patients).
+- Migrations 0001–0020 are all applied (2026-11-22). The code no longer
+  carries "this migration may not be applied yet" fallbacks: a missing
+  column or function is a database error, shown as one. Do not add such
+  fallbacks back for a new migration unless a deploy genuinely has to
+  run before it — they hid real errors (a check-in silently saved
+  without its practitioner; a board that showed no patients instead of
+  an error). What remains on purpose is resilience to a database hiccup,
+  not to a missing migration: the audit log fails open, the music keeps
+  playing if its setting cannot be read, the "First visit" badge is left
+  off if history cannot be read.
 - The login page returns staff to the page they came from (?next=, only
   /admin/* paths are accepted; default = the kiosk). Pages that get a 401
   use goToStaffLogin() (src/lib/staff-login-redirect.ts).
@@ -256,9 +274,9 @@ src/lib/patient-search-server.ts calls it.
   say "type more of the name".
 - The function is SECURITY INVOKER on purpose: RLS (no policies) is what
   keeps it empty for the anon key. Never make it security definer.
-- Without 0014 the route falls back to a plain word-by-word query (no
-  accents, no typos) and logs a warning — search must not go down because
-  a migration was not applied yet.
+- The database function is the only search: if it cannot answer, the
+  dashboard says "Database error". (There was a plain word-by-word
+  fallback while 0014 was being rolled out; it is gone.)
 - Database tests: supabase/tests/*.sql, run with `npm run test:db` (a
   throwaway local Postgres with every migration applied; needs Postgres
   installed, touches nothing on Supabase).
@@ -303,8 +321,11 @@ tested).
   fingerprint would block another patient from choosing that PIN.
 - The unique index also closes the race where two patients choose the
   same PIN at the same moment (saveNewPin answers "taken").
-- Without 0017, or without NEXTAUTH_SECRET, everything works as before
-  (compare against everyone) — the kiosk must never depend on it.
+- Without NEXTAUTH_SECRET there are no fingerprints and every PIN holder
+  is compared, as before fingerprints existed. A database error during a
+  lookup is an error (the kiosk says "Something went wrong. Please try again…"), not a silent switch
+  to the slow way; a new PIN's hash and fingerprint are written together
+  or not at all.
 - Why an HMAC and not a plain hash: with only 10,000 possible PINs any
   unkeyed hash is reversed by trying them all; the key lives only on the
   server.
@@ -439,8 +460,8 @@ src/lib/audit-server.ts. The staff email comes from getAdminEmail().
   0019). A row shows its first three patients by name and counts the
   rest. Read-only: no route edits or deletes a row. Reading the log is
   not itself logged.
-- It fails OPEN, by decision: if the row cannot be written (migration not
-  applied, database hiccup) the action still happens and the app logs
+- It fails OPEN, by decision: if the row cannot be written (a database
+  hiccup) the action still happens and the app logs
   "audit log write failed" with the error code only. The front desk must
   not be locked out of finding a patient by the logbook.
 - Searching while typing writes a row per request, so one lookup is
@@ -683,8 +704,9 @@ src/app/waiting-room/music/ (useRadio, useYouTube, useSpotify, MusicBar).
   (radio_stations table, migration 0013, max 30) are added from the
   "Other station…" form and removed from the list under it; adding or
   removing never changes what is playing — the setting stores the
-  stream's address and name, not a link to the row. Without 0013 the
-  panel still works with the presets and just hides "Add to My stations". A dropped or stalled stream reconnects by
+  stream's address and name, not a link to the row. If the saved list
+  cannot be read the panel still works with the presets and hides "Add
+  to My stations". A dropped or stalled stream reconnects by
   itself. The track name is read server-side from the stream's ICY
   metadata (browsers hide it from the page); the server only ever reads
   the station saved by staff, never an address from the request.
@@ -795,8 +817,8 @@ src/lib/pairing-server.ts), with its own table (kiosk_devices) and cookie
   check-in), so a kiosk code typed as a TV is "not found". Separate
   tables also mean a TV cookie can never open the kiosk's routes.
 - A staff session still opens the kiosk's routes, so an unpaired tablet
-  keeps working the old way ("Sign in as staff instead") and nothing
-  breaks before 0018 is applied.
+  keeps working the old way ("Sign in as staff instead"), and staff can
+  try the kiosk on their own computer.
 - The gate re-checks every 60 s while the PIN pad is up (notices a
   revoke, keeps the cookie and "last seen" fresh). "error" (the pairing
   could not be checked) never takes a working PIN pad away; on load it

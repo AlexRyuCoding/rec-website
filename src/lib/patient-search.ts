@@ -19,9 +19,6 @@ export type PatientSearch =
 
 export const MAX_SEARCH_WORDS = 6;
 export const SEARCH_RESULT_LIMIT = 20;
-// Rows read before ranking, so the closest names are not cut off by a
-// word that also happens to sit inside many emails ("l" is in "gmail").
-export const SEARCH_FETCH_LIMIT = 200;
 
 export function parsePatientSearch(raw: string): PatientSearch {
   const digits = raw.replace(/[\s\-().+]/g, "");
@@ -48,66 +45,4 @@ export function parsePatientSearch(raw: string): PatientSearch {
   }
   if (words.join("").length < 2) return { kind: "too-short" };
   return { kind: "words", words: words.slice(0, MAX_SEARCH_WORDS) };
-}
-
-// PostgREST says this when it does not know the function (PGRST202), and
-// Postgres when the function or an extension it needs is missing (42883).
-export function isMissingSearchFunction(code: string | undefined): boolean {
-  return code === "PGRST202" || code === "42883";
-}
-
-// --- Fallback (no migration 0014) ---
-
-// One or() filter per word; the route adds one per word and PostgREST
-// ANDs them together.
-export function wordFilter(word: string): string {
-  return ["first_name", "last_name", "email"]
-    .map((column) => `${column}.ilike.%${word}%`)
-    .join(",");
-}
-
-export function phoneFilter(digits: string[]): string {
-  return digits.map((d) => `phone_digits.like.%${d}%`).join(",");
-}
-
-interface Searchable {
-  first_name: string | null;
-  last_name: string | null;
-  email: string | null;
-}
-
-// How well one word fits a patient: a whole name, the start of a name,
-// somewhere inside a name, only in the email.
-function wordScore(word: string, names: string[], email: string): number {
-  if (names.includes(word)) return 4;
-  if (names.some((n) => n.startsWith(word))) return 3;
-  if (names.some((n) => n.includes(word))) return 2;
-  return email.includes(word) ? 1 : 0;
-}
-
-export function rankPatients<T extends Searchable>(
-  rows: T[],
-  words: string[]
-): T[] {
-  const scored = rows.map((row) => {
-    const first = (row.first_name ?? "").trim().toLowerCase();
-    const last = (row.last_name ?? "").trim().toLowerCase();
-    const email = (row.email ?? "").toLowerCase();
-    // The full names, plus each part of "Mary Ann" / "Jones-Smith".
-    const names = [first, last, ...`${first} ${last}`.split(/[\s\-']+/)].filter(
-      Boolean
-    );
-    const score = words.reduce(
-      (sum, word) => sum + wordScore(word, names, email),
-      0
-    );
-    return { row, score, last, first };
-  });
-  scored.sort(
-    (a, b) =>
-      b.score - a.score ||
-      a.last.localeCompare(b.last) ||
-      a.first.localeCompare(b.first)
-  );
-  return scored.map((s) => s.row);
 }

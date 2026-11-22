@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
-import { getAdminEmail } from "@/lib/admin-auth";
 import { recordStaffAction, recordStaffActionOnce } from "@/lib/audit-server";
 import { checkinRangeDetail } from "@/lib/audit-log";
 import { createCheckin } from "@/lib/checkin-server";
 import { loadCheckinPage, loadCheckinTimings } from "@/lib/checkins-server";
 import { summarizeVisits } from "@/lib/visit-stats";
+import { staffRoute } from "@/lib/staff-route";
 
 const noStore = { "Cache-Control": "no-store" };
 
@@ -20,15 +20,7 @@ const noStore = { "Cache-Control": "no-store" };
 // - a view, at most once per 15 minutes for the same person and dates
 //   (the list refreshes itself every minute)
 // - an export (&export=1, sent by "Export CSV"), every page of it
-export async function GET(req: Request) {
-  const staffEmail = await getAdminEmail();
-  if (!staffEmail) {
-    return NextResponse.json(
-      { error: "Unauthorized" },
-      { status: 401, headers: noStore }
-    );
-  }
-
+export const GET = staffRoute(async (req, { email: staffEmail }) => {
   const { searchParams } = new URL(req.url);
   const from = searchParams.get("from");
   const to = searchParams.get("to");
@@ -98,7 +90,7 @@ export async function GET(req: Request) {
     },
     { headers: noStore }
   );
-}
+});
 
 const checkInSchema = z.object({ patient_id: z.string().uuid() });
 
@@ -108,12 +100,7 @@ const checkInSchema = z.object({ patient_id: z.string().uuid() });
 // kiosk check-in. Only a visit that is still open counts as "already
 // checked in" (see repeatRule in src/lib/checkin-server.ts). Written to
 // the staff audit log.
-export async function POST(req: Request) {
-  const staffEmail = await getAdminEmail();
-  if (!staffEmail) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const POST = staffRoute(async (req, { email: staffEmail }) => {
   const parsed = checkInSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
@@ -139,4 +126,4 @@ export async function POST(req: Request) {
     success: true,
     duplicate: outcome === "duplicate",
   });
-}
+});

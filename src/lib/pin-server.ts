@@ -1,7 +1,6 @@
 // Finding a patient by PIN, and saving a new PIN. Rules and the reason
-// for the fingerprint: pin-lookup.ts. Migration 0017 adds the column
-// (patients.pin_lookup); until it is applied everything here works the
-// way it did before — by comparing against every stored hash.
+// for the fingerprint: pin-lookup.ts. The fingerprint lives in
+// patients.pin_lookup (migration 0017).
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import bcrypt from "bcryptjs";
@@ -26,8 +25,8 @@ interface PinOptions {
 
 const liveSecret = () => process.env.NEXTAUTH_SECRET || undefined;
 
-// Every patient with a PIN, with their fingerprint. Throws if the column
-// is not there (or the database cannot be read) — the caller falls back.
+// Every patient with a PIN, with their fingerprint. Throws if the
+// database cannot be read.
 async function fetchHoldersWithLookup(
   supabase: SupabaseClient
 ): Promise<PinHolder[]> {
@@ -68,7 +67,9 @@ async function matchPin(
   const secret = "secret" in options ? options.secret : liveSecret();
   const fingerprint = secret ? pinFingerprint(pin, secret) : null;
 
-  let indexed = false;
+  // Without a server secret there are no fingerprints: every PIN holder
+  // is compared (how it worked before fingerprints).
+  const indexed = fingerprint !== null;
   if (fingerprint) {
     const { data, error } = await supabase
       .from("patients")
@@ -76,24 +77,16 @@ async function matchPin(
       .eq("pin_lookup", fingerprint)
       .not("pin", "is", null)
       .limit(2);
-    if (!error) {
-      indexed = true;
-      for (const row of (data ?? []) as PinRow[]) {
-        if (row.id === skipPatientId) continue;
-        if (await bcrypt.compare(pin, row.pin)) return row;
-      }
+    if (error) throw new Error("pin lookup failed");
+    for (const row of (data ?? []) as PinRow[]) {
+      if (row.id === skipPatientId) continue;
+      if (await bcrypt.compare(pin, row.pin)) return row;
     }
   }
 
-  let holders: PinHolder[] | null = null;
-  if (indexed) {
-    try {
-      holders = await fetchHoldersWithLookup(supabase);
-    } catch {
-      indexed = false;
-    }
-  }
-  if (!holders) holders = await fetchAllPatientsWithPins(supabase);
+  const holders: PinHolder[] = indexed
+    ? await fetchHoldersWithLookup(supabase)
+    : await fetchAllPatientsWithPins(supabase);
 
   for (const row of holders) {
     if (row.id === skipPatientId) continue;
@@ -169,17 +162,14 @@ export async function saveNewPin(
       .select("id, first_name, last_name, pb_client_id")
       .single();
 
-  if (secret) {
-    const { data, error } = await write({
-      pin: hashed,
-      pin_lookup: pinFingerprint(pin, secret),
-    });
-    if (!error && data) return savedPatient(data);
-    if (error?.code === "23505") return "taken";
-    // Anything else — most likely the column is not there yet (migration
-    // 0017 not applied): save the PIN the way it always was.
-  }
-  const { data, error } = await write({ pin: hashed });
+  // One write: the hash and its fingerprint land together or not at all.
+  // (Without a server secret there is no fingerprint to write.)
+  const { data, error } = await write(
+    secret
+      ? { pin: hashed, pin_lookup: pinFingerprint(pin, secret) }
+      : { pin: hashed }
+  );
+  if (error?.code === "23505") return "taken";
   if (error || !data) return "error";
   return savedPatient(data);
 }
