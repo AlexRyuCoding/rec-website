@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { createServiceClient } from "@/lib/supabase";
 import { fetchClientRecord } from "@/lib/practice-better";
 import { toPatientRow } from "@/lib/patient-record";
+import { errorLabel } from "@/lib/error-label";
 
 // One-time endpoint verification handshake from Practice Better
 export async function GET(req: Request) {
@@ -119,7 +120,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ received: true });
   } catch (err) {
     // 500 → Practice Better retries delivery
-    console.error("Webhook processing error:", err);
+    console.error("Webhook processing error:", errorLabel(err));
     return NextResponse.json({ error: "Processing failed" }, { status: 500 });
   }
 }

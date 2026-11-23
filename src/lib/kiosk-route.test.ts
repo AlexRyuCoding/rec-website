@@ -36,6 +36,9 @@ describe("kioskRoute", () => {
       request()
     );
     expect(res.status).toBe(200);
+    // A patient's name and appointment must never be kept by the tablet's
+    // browser, whichever route answered.
+    expect(res.headers.get("cache-control")).toBe("no-store");
   });
 
   it("asks again on every request — a revoked kiosk is refused at once", async () => {

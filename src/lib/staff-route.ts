@@ -11,7 +11,7 @@
 // session, still on the allowlist, sign-in not from an earlier day, and
 // not a kiosk tablet (all of that is getAdminEmail, admin-auth.ts).
 // staff-route.test.ts fails if a file under /api/admin exports a handler
-// that is not wrapped.
+// that is not wrapped. The wrapper also marks every answer "no-store".
 
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminEmail } from "./admin-auth";
@@ -40,6 +40,27 @@ export function unauthorized(): Response {
   );
 }
 
+// Every answer of a staff or kiosk route is marked never to be cached: it
+// is about patients, or about who may see them, and must not be kept by a
+// browser or by anything between it and the server. The wrappers do this
+// so that no single route can forget. (A redirect's headers are fixed
+// once it is made, hence the copy.)
+export function neverCached(res: Response): Response {
+  if (res.headers.get("cache-control") === "no-store") return res;
+  try {
+    res.headers.set("Cache-Control", "no-store");
+    return res;
+  } catch {
+    const headers = new Headers(res.headers);
+    headers.set("Cache-Control", "no-store");
+    return new Response(res.body, {
+      status: res.status,
+      statusText: res.statusText,
+      headers,
+    });
+  }
+}
+
 export function staffRoute<Params = Record<string, never>>(
   handler: StaffHandler<Params>,
   options: {
@@ -54,6 +75,6 @@ export function staffRoute<Params = Record<string, never>>(
   ): Promise<Response> => {
     const email = await getAdminEmail();
     if (!email) return options.whenNotStaff?.(req) ?? unauthorized();
-    return handler(req, { email }, context);
+    return neverCached(await handler(req, { email }, context));
   };
 }

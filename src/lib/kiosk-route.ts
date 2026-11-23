@@ -10,13 +10,13 @@
 
 import { NextRequest } from "next/server";
 import { isKioskAuthorized } from "./kiosk-auth-server";
-import { unauthorized } from "./staff-route";
+import { neverCached, unauthorized } from "./staff-route";
 
 type KioskHandler = (req: NextRequest) => Promise<Response> | Response;
 
 export function kioskRoute(handler: KioskHandler) {
   return async (req: NextRequest): Promise<Response> => {
     if (!(await isKioskAuthorized())) return unauthorized();
-    return handler(req);
+    return neverCached(await handler(req));
   };
 }

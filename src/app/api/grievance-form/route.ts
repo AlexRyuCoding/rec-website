@@ -5,6 +5,7 @@ import {
   formSubmissionsExhausted,
   recordFormSubmission,
 } from "@/lib/form-rate-limit";
+import { errorLabel } from "@/lib/error-label";
 
 // Sender must be on a Resend-verified domain in production.
 // onboarding@resend.dev only delivers to the Resend account owner's inbox.
@@ -78,7 +79,7 @@ ${phone ? `Phone: ${phone}` : "Phone: Not provided"}
     });
 
     if (error) {
-      console.error("Grievance email failed:", error.message);
+      console.error("Grievance email failed:", errorLabel(error));
       return NextResponse.json(
         { error: "Failed to process grievance" },
         { status: 500 }
@@ -90,7 +91,7 @@ ${phone ? `Phone: ${phone}` : "Phone: Not provided"}
       message: "Grievance submitted successfully",
     });
   } catch (error) {
-    console.error("Error processing grievance:", error);
+    console.error("Error processing grievance:", errorLabel(error));
     return NextResponse.json(
       { error: "Failed to process grievance" },
       { status: 500 }
