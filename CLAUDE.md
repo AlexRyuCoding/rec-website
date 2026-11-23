@@ -515,13 +515,26 @@ Gives every existing PIN holder their fingerprint at once, instead of
 one sign-in at a time. Introduced because no library or CPU got the slow
 way under 2 seconds (measured). Run by the owner as the Cloud Run job
 `rac-stamp-pins` (deploy/RUNBOOK.md, "Stamp the PIN fingerprints"):
-once, and AGAIN after NEXTAUTH_SECRET is ever replaced. The job is
-deleted after use; the code stays.
+once, and AGAIN after NEXTAUTH_SECRET is ever replaced (then as
+`stamp-after-new-secret`). It runs while the clinic is closed. The job
+is deleted after use; the code stays.
 
 - `count` changes nothing: how many holders have no current fingerprint
   and roughly how long stamping takes. `stamp` does it. "Current" is the
   app's rule (isCurrentFingerprint); a fingerprint from an older secret
-  counts as missing and is replaced.
+  counts as missing.
+- The job cannot check that the NEXTAUTH_SECRET it was given is the
+  site's, and with a wrong one it would replace the app's fingerprints
+  with ones the kiosk cannot use (nobody locked out; everyone on the
+  slow way until a run with the right secret). So `stamp` first looks
+  for the app's own work and REFUSES, writing nothing, (a) while no
+  holder has a fingerprint under its key — one sign-in at the kiosk
+  makes the first — and (b) while any holder has one under another key
+  (stampRefusal in lib.mjs, tested). After the secret really was
+  replaced nearly every fingerprint is under another key: the mode
+  `stamp-after-new-secret` drops (b), and only (b) — it too wants one
+  holder the app has stamped under the new secret. Do not make plain
+  `stamp` replace other-key fingerprints again.
 - How: a PIN has only 10,000 values, so for each holder the job tries
   them against the stored bcrypt hash until one matches — the check the
   kiosk makes — and stores that PIN's fingerprint. Up to 10,000 compares
@@ -543,20 +556,35 @@ deleted after use; the code stays.
   check-parity.mjs finds them equal against the pin-lookup.ts of the
   same commit; stamp-pins.integration.test.ts signs in through the app
   as a patient the job stamped. So pin-lookup.ts has to stay one file on
-  Node's own modules — the image build reads it as it stands — and a
-  change to how a fingerprint is made goes into lib.mjs in the same
-  commit (a failing ops image stops the deploy).
+  Node's own modules — the image build reads it as it stands, with Node
+  leaving the types out and nothing more: no relative or `@/lib` import,
+  no enum — and a change to how a fingerprint is made goes into lib.mjs
+  in the same commit. A failing ops image stops the deploy, so `npm
+  test` runs that same check first (stamp-pins.test.ts; it needs Node
+  22.18 or newer — the image has 22.23, this repository's computers 24 —
+  and is skipped on an older one).
 - A write lands only if the patient's hash is still the one that was
-  read and they still have no current fingerprint; the row is locked
-  while that is decided. A PIN reset, a new PIN or a sign-in while the
-  job runs always wins. One patient is one transaction: the job can be
-  stopped at any moment and run again.
+  read and they still have no current fingerprint. The row is locked
+  BEFORE that is looked at (`for update` — do not remove it): a PIN
+  change still in flight is waited for and seen; without the lock the
+  old PIN's fingerprint would land on the new PIN. A PIN reset, a new
+  PIN or a sign-in while the job runs always wins. One patient is one
+  transaction: the job can be stopped at any moment and run again.
 - Two patients with the same PIN (possible in data from before the
-  unique index): the fingerprint goes to the first by id — the one the
-  kiosk already finds for that PIN, since pin-server.ts reads holders in
-  id order — even if another task stamped the later one first
-  (`took_over`). The other is left without (`same_pin`), on the slow way
-  as today; they can only be helped by a staff Reset PIN.
+  unique index). The app looks for the fingerprint FIRST and only then
+  compares the unstamped holders in id order (pin-server.ts), so a
+  shared PIN signs in whoever holds its fingerprint — else the first by
+  id. For a pair from old data, both unstamped, that is the earlier
+  patient today, and the job keeps it so: the fingerprint goes to the
+  first by id, taken over from the later one if a task stamped that one
+  first (`took_over`). The other is left without (`same_pin`), unable to
+  sign in with that PIN as today; only a staff Reset PIN helps them.
+  What the rule cannot avoid: between a task stamping the LATER patient
+  and another task taking the fingerprint over for the earlier one, the
+  PIN signs the later patient in — and it stays so if the run is
+  cancelled or that task fails, until `stamp` is run again. Hence the
+  runbook: `stamp` runs while the clinic is CLOSED, and a cancelled or
+  failed run is repeated before the clinic opens.
 - A hash no PIN matches (`no_match`) and a value that is not a bcrypt
   hash of cost 4–10 (`unusable`) are counted, left alone, passed over
   once per run (each read continues after the last id seen) and looked
@@ -571,6 +599,11 @@ deleted after use; the code stays.
   neither = everyone). bcryptjs — not a faster native library — on
   purpose: exactly the code, at exactly the version, the app compares
   PINs with (the two lock files are compared by stamp-pins.test.ts).
+  Draft pull request #79 (a native bcrypt for the app's slow way) is
+  expected to be CLOSED, not merged, once the stamping is done: with
+  every holder stamped the slow way is hardly ever taken, and "the same
+  library as the app" stays true. If the app's library is ever changed
+  all the same, change the job's with it.
 
 ## Expected arrivals (migration 0020 — must be applied to use it)
 
@@ -1275,9 +1308,10 @@ from a laptop, which a database on Google Cloud does not offer. Dashboard
   `rac-migrate`); see "Hosting"
 - copy-data.sh copy | empty — the nine tables from the old database into
   the new one, or out again (job `rac-copy-data`)
-- stamp-pins.sh count | stamp — gives every PIN holder the fingerprint
-  the kiosk looks them up by (job `rac-stamp-pins`, made when needed);
-  its Node half is deploy/ops/stamp-pins/. See "PIN lookup"
+- stamp-pins.sh count | stamp | stamp-after-new-secret — gives every PIN
+  holder the fingerprint the kiosk looks them up by (job
+  `rac-stamp-pins`, made when needed); its Node half is
+  deploy/ops/stamp-pins/. See "PIN lookup"
 - set-secret.sh random | ask | stdin NAME — a value into Secret Manager
   without showing it
 - deploy/render-service.sh — fills in the Cloud Run service definition

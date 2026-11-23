@@ -92,9 +92,10 @@ switch (Part 4) was done that night, not on the Tuesday first planned.
   Until then the OLD Supabase project still holds a copy of every
   patient, and the Vercel project still exists (no longer connected to
   the repository, no longer serving any address).
-- **Still to do: stamp the PIN fingerprints** ("Everyday"). Until that
-  is done a wrong PIN keeps the kiosk on "Checking…" for about ten
-  seconds. When it is done, write the date here.
+- **Still to do: stamp the PIN fingerprints** ("Everyday"), on an
+  evening after the clinic has closed. Until that is done a wrong PIN
+  keeps the kiosk on "Checking…" for about ten seconds. When it is done,
+  write the date here.
 
 Each finished step below says "done" and keeps the command that was used.
 
@@ -947,7 +948,8 @@ permissions and tells the database layer to look again).
 
 ### Stamp the PIN fingerprints
 
-Done once — and again, all of it, if `nextauth-secret` is ever replaced.
+Done once. If `nextauth-secret` is ever replaced it is done again, all
+of it, with one word different in step 4 (see the end of this section).
 
 **What it is.** The kiosk finds a patient by a fingerprint of their PIN,
 stored beside it. A patient only gets that fingerprint the next time
@@ -958,10 +960,26 @@ checked against all the others one by one — about ten seconds of
 **What it does not do.** Nobody gets a new PIN and no PIN changes. No
 PIN is written or shown anywhere: the job prints numbers of patients and
 nothing else. A PIN that staff reset, or a patient who signs in, while
-it runs is left exactly as the kiosk made it. It can run while the
-clinic is open, and it can be stopped at any moment (Cloud Run → Jobs →
-`rac-stamp-pins` → the execution → Cancel) and started again: it goes on
-with whoever is left.
+it runs is left exactly as the kiosk made it.
+
+**When.** Steps 2 and 3 (make the job, count) at any time: they change
+nothing. **Step 4 (stamp) after the clinic has closed for the day, or
+before it opens — early enough to be finished, checked and, if need be,
+repeated before the next patient arrives.** Allow two hours. The reason
+is old data in which two patients may have the very same PIN:
+
+- Today such a PIN signs in one of the two, always the same one (the
+  other is asked "Is this you?" with the wrong name, and says no).
+- While the job is working it can, for a while, sign in the OTHER one
+  instead, until the job puts it right. When the run has finished it is
+  the same patient as before.
+- A run that is cancelled, or that ends with failed tasks, can leave it
+  the wrong way round. Nothing is damaged, and doing step 4 again puts
+  it right — but it has to be done before the clinic opens.
+
+It can be stopped at any moment (Cloud Run → Jobs → `rac-stamp-pins` →
+the execution → Cancel) and started again: it goes on with whoever is
+left.
 
 **What it costs.** About a minute of one computer per patient with a PIN
 — around twenty hours of computing for a thousand, shared between
@@ -983,7 +1001,7 @@ twenty that run side by side: roughly a dollar or two.
      --set-secrets "PGPASSWORD=db-postgres-password:latest,NEXTAUTH_SECRET=nextauth-secret:latest" \
      --command /app/deploy/ops/stamp-pins.sh --args=count \
      --tasks 20 --parallelism 20 --cpu 1 --memory 512Mi \
-     --max-retries 1 --task-timeout 4h
+     --max-retries 1 --task-timeout 240m
    ```
 
    - Made this way the job only **counts** when started. Stamping has
@@ -993,7 +1011,7 @@ twenty that run side by side: roughly a dollar or two.
      with `--tasks 10 --parallelism 10`. Everything below then takes
      twice as long and says 10 where it says 20.
 
-3. Count first. This changes nothing:
+3. Count. This changes nothing:
 
    ```sh
    gcloud run jobs execute rac-stamp-pins --region "${REGION}" --wait
@@ -1004,20 +1022,28 @@ twenty that run side by side: roughly a dollar or two.
      The one to look at:
      `stamp-pins count: pin_holders=… current=… without=… never_stamped=… other_key=… unusable=…`
      - `pin_holders` — patients who have a PIN. Several hundred.
-     - `current` — those who already have their fingerprint (they have
-       signed in since 2026-11-22).
+     - `current` — those who already have their fingerprint, from the
+       site itself (they have signed in since 2026-11-22).
      - `without` — those this job is for.
-   - Another says how long it will take:
+   - **`current` must be at least 1.** The job cannot tell by itself
+     whether it was given the site's own secret; a patient whom the
+     site has given a fingerprint is its proof. If `current=0`: sign in
+     once at the kiosk with a PIN you know (the site then gives that
+     patient their fingerprint, with the real secret), and do this step
+     again.
+   - **`other_key` must be 0.** If it is not, stop and tell Claude: the
+     job was probably not given the site's secret.
+   - In both cases a line `stamp would refuse:` says so in words, and
+     step 4 refuses by itself, changing nothing.
+   - Stop, too, and show Claude the lines, if `pin_holders=0` (the job is
+     not looking at the clinic's database) or a line says `stopped:`
+     (see "When something is wrong").
+   - Another line says how long it will take:
      `as 20 task(s) side by side about … minutes (at most …)`.
      More than about 90 minutes: tell Claude before step 4 (the job can
      be given more tasks).
-   - **Stop, and show Claude the lines, if:** `pin_holders=0` (the job is
-     not looking at the clinic's database); or `other_key` is not 0 and
-     `nextauth-secret` was not just replaced (the job was not given the
-     site's secret — a line says so in words); or a line says
-     `stopped:` (see "When something is wrong").
 
-4. Stamp:
+4. Stamp — **with the clinic closed** (see "When" above):
 
    ```sh
    gcloud run jobs execute rac-stamp-pins --region "${REGION}" --args=stamp
@@ -1028,39 +1054,54 @@ twenty that run side by side: roughly a dollar or two.
 
 5. Is it finished? Cloud Run → Jobs → `rac-stamp-pins` → the newest
    execution: it is finished when it shows a green tick and
-   **20 / 20 tasks** succeeded. Then read what each task did:
+   **20 / 20 tasks** succeeded. Then read what the tasks did:
 
    ```sh
    gcloud run jobs executions list --job rac-stamp-pins --region "${REGION}" --limit 3
-   gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="rac-stamp-pins" AND (textPayload:"done:" OR textPayload:"stopped:")' --freshness=6h --format="value(textPayload)"
+   gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="rac-stamp-pins" AND textPayload:"done:"' --freshness=6h --limit=20 --format="value(timestamp,textPayload)"
+   gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="rac-stamp-pins" AND textPayload:"stopped:"' --freshness=6h --format="value(timestamp,textPayload)"
    ```
 
-   - Twenty lines, one per task:
+   - The second command gives the **newest twenty** `done:` lines, the
+     newest at the top, each with its time in front (Google's clock,
+     UTC, not the clinic's). They are this run's if every time is
+     after you started step 4 and each of `task 1/20` to `task 20/20`
+     is there once:
      `stamp-pins task 7/20 done: seen=… stamped=… took_over=… same_pin=… no_match=… unusable=… changed=… minutes=…`
      - `seen` — patients this task looked at; `stamped` — fingerprints
        it stored. For most tasks the two are equal and the rest are 0.
      - `changed` — left alone: reset, replaced or signed in meanwhile.
      - `same_pin` — left without: another patient has the very same
        PIN, and a fingerprint can belong to one patient only. It went
-       to the one the kiosk already signs in for that PIN
-       (`took_over` = it was moved to that patient). The other could
-       not sign in with that PIN before either; they need "Reset PIN".
+       to the one the kiosk signed in for that PIN before the job
+       (`took_over` = a task had first given it to the other, and it
+       was moved). The patient left without could not sign in with
+       that PIN before either; they need "Reset PIN".
      - `no_match` and `unusable` — left without: what is stored for
        them is not a 4-digit PIN the kiosk could have made.
-   - A line with `stopped:` is a task that failed. Google starts a
-     failed task once more by itself, and it goes on with whoever is
-     left, so a `stopped:` line followed by twenty `done:` lines is a
-     finished run. The line holds an error code and no patient data:
-     show Claude all the same.
-   - The execution ended with failed tasks, or was cancelled: nothing
-     is half-done. Do step 4 again; only who is left is worked on.
+   - The third command gives the tasks that failed in the last six
+     hours, newest at the top; none is the usual answer. A `stopped:`
+     line holds a reason or an error code and no patient data: show
+     Claude. Its time says which run it belongs to — one from before
+     you started step 4 is an earlier run's.
+     - `stopped: refusing to stamp, nothing was written: …` on every
+       task: step 3's two rules were not met. Nothing was changed.
+     - A `stopped:` line from this run, and the execution still shows
+       20 / 20 succeeded: Google started that task once more by itself
+       and the second try finished. Its `done:` line is among the
+       twenty.
+   - To see one run's lines and no other's: in the console, open the
+     execution and its **Logs** tab.
+   - The execution ended with failed tasks, or was cancelled: do step 4
+     again **before the clinic opens** — only who is left is worked on,
+     and a PIN that two patients share is put back to the right one.
 
 6. Check. Step 3 again:
    - `without=0`: every patient with a PIN has their fingerprint.
    - Otherwise `without` is the patients the tasks reported as
      `same_pin`, `no_match` or `unusable` (and anyone who made a PIN
-     in the last minutes). They are exactly as they were before the
-     job. Tell Claude the numbers; the job never says who they are.
+     in the last minutes). Tell Claude the numbers; the job never says
+     who they are.
    - At the kiosk: type a PIN that is nobody's. "We don't recognize
      that PIN" should now come in about a second.
 
@@ -1072,6 +1113,28 @@ twenty that run side by side: roughly a dollar or two.
    ```
 
    - Then write the date under "Where things stand".
+
+**After `nextauth-secret` was replaced** ("Changing a secret", below).
+Every fingerprint is then one made with the old secret, which is
+exactly what makes step 4 refuse. Do steps 1 to 7 again, with these
+differences:
+
+- First deploy the site with the new secret ("Changing a secret", step
+  2), then sign in once at the kiosk with a PIN you know.
+- Step 3: `current` must still be at least 1 — that one sign-in. It
+  shows that the job has the NEW secret. `other_key` will be large
+  (everyone else) and the line `stamp would refuse:` will be there:
+  both are expected this one time.
+- Step 4, with the clinic closed:
+
+  ```sh
+  gcloud run jobs execute rac-stamp-pins --region "${REGION}" --args=stamp-after-new-secret
+  ```
+
+  It differs from `stamp` in one thing only: it accepts that
+  fingerprints made with another secret are there, and replaces them.
+  Never use it for any other reason — if `other_key` is not 0 and the
+  secret was not replaced, the job has the wrong secret.
 
 ### Read the logs
 
@@ -1110,7 +1173,9 @@ clinic hours, and deploy straight away.**
    date at once — the rehearsal measured 7 to 8 seconds per PIN entry
    until each patient has signed in once more. If it has to change:
    after the deploy of step 2, do "Stamp the PIN fingerprints" (above)
-   again, all of it. Nobody is locked out in between; PINs are slow.
+   again, all of it, the way its last paragraph says (step 4 is then
+   `stamp-after-new-secret`). Nobody is locked out in between; PINs are
+   slow.
 
 ### The header the load balancer removes
 
@@ -1181,6 +1246,9 @@ not the only one:
   1.7.3 exactly as written, braces included, and check step 1.5.2 was done.
 - **`rac-stamp-pins` logs `stopped:`.** What follows says why, and never
   holds patient data.
+  - `refusing to stamp, nothing was written`: the job found no proof
+    that it has the site's secret. The line says which of the two rules
+    of "Stamp the PIN fingerprints", step 3, was not met, and what to do.
   - `the database could not be reached`: the job was made without the
     database attached, or with a wrong name — make it again with the
     command of "Stamp the PIN fingerprints", step 2, exactly as written.
@@ -1224,9 +1292,11 @@ settled, and each has a check above:
   from Google's documentation and not run;
 - "Stamp the PIN fingerprints": the job itself was run from the built
   image against a made-up database, and the app then signed in the
-  patients it stamped. Its `gcloud` commands were written from Google's
-  documentation and not run; whether the project may run twenty tasks at
-  once, and how fast Cloud Run's computers are at this work, show in
-  steps 2 and 3;
+  patients it stamped. Its `gcloud` commands were not run; every option
+  in them was looked up on Google's reference pages on 2026-11-23.
+  Whether the project may run twenty tasks at once, and how fast Cloud
+  Run's computers are at this work, show in steps 2 and 3. Google's
+  pages did not settle how to narrow a log search to one run, so step 5
+  reads the newest lines with their times instead;
 - that the Realtime project's secret key is accepted by the daily ping
   (1.9), and that the ping is enough to keep a free project awake.
