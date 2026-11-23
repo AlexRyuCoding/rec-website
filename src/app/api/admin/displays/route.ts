@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase";
 import { DeviceKind, DEVICES } from "@/lib/display-auth";
-import { staffRoute } from "@/lib/staff-route";
+import { dashboardRoute } from "@/lib/staff-route";
 
 async function paired(supabase: SupabaseClient, kind: DeviceKind) {
   const { data, error } = await supabase
@@ -23,7 +23,7 @@ async function paired(supabase: SupabaseClient, kind: DeviceKind) {
 
 // Paired devices, for the dashboard's Screens panel: waiting-room screens
 // and check-in kiosks.
-export const GET = staffRoute(async () => {
+export const GET = dashboardRoute(async () => {
   const supabase = createServiceClient();
   const [screens, kiosks] = await Promise.all([
     paired(supabase, "tv"),

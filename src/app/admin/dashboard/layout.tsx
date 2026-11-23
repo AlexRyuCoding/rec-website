@@ -1,4 +1,5 @@
 import { themeBootScript } from "@/lib/staff-theme";
+import DashboardLock from "./DashboardLock";
 import "../staff-theme.css";
 
 // The dashboard is themed (light / dark / match this computer). The
@@ -16,7 +17,8 @@ export default function DashboardLayout({
   return (
     <>
       <script dangerouslySetInnerHTML={{ __html: themeBootScript() }} />
-      {children}
+      {/* Locks after 30 minutes without activity (DashboardLock.tsx). */}
+      <DashboardLock>{children}</DashboardLock>
     </>
   );
 }

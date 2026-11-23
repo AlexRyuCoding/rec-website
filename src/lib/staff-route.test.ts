@@ -3,19 +3,27 @@ import { join } from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-const signedIn = vi.hoisted(() => ({ email: null as string | null }));
+const signedIn = vi.hoisted(() => ({
+  email: null as string | null,
+  // When the dashboard was last used (epoch ms), as the sign-in carries it.
+  dashAt: undefined as number | undefined,
+}));
 vi.mock("./admin-auth", () => ({
   getAdminEmail: async () => signedIn.email,
+  getStaffSession: async () =>
+    signedIn.email ? { email: signedIn.email, dashAt: signedIn.dashAt } : null,
   isAdminAuthorized: async () => signedIn.email !== null,
 }));
 
-import { neverCached, staffRoute } from "./staff-route";
+import { DASHBOARD_IDLE_MS } from "./dashboard-lock";
+import { dashboardRoute, neverCached, staffRoute } from "./staff-route";
 
 const request = () => new NextRequest("https://example.test/api/admin/thing");
 const context = <P>(params: P) => ({ params: Promise.resolve(params) });
 
 beforeEach(() => {
   signedIn.email = null;
+  signedIn.dashAt = undefined;
 });
 
 describe("staffRoute", () => {
@@ -91,6 +99,57 @@ describe("staffRoute", () => {
   });
 });
 
+describe("dashboardRoute", () => {
+  it("does not run the handler unless a staff member is signed in", async () => {
+    const handler = vi.fn(async () => new Response("secret"));
+    const res = await dashboardRoute(handler)(request(), context({}));
+    expect(handler).not.toHaveBeenCalled();
+    expect(res.status).toBe(401);
+  });
+
+  it("runs it while the dashboard was used in the last 30 minutes", async () => {
+    signedIn.email = "desk@example.com";
+    signedIn.dashAt = Date.now() - 5 * 60_000;
+    const route = dashboardRoute<{ id: string }>(
+      async (_req, staff, { params }) =>
+        Response.json({ by: staff.email, id: (await params).id })
+    );
+    const res = await route(request(), context({ id: "p-1" }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ by: "desk@example.com", id: "p-1" });
+    expect(res.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("answers 423 Locked, without running it, once that is 30 minutes ago", async () => {
+    signedIn.email = "desk@example.com";
+    signedIn.dashAt = Date.now() - DASHBOARD_IDLE_MS - 1000;
+    const handler = vi.fn(async () => new Response("a patient's name"));
+    const res = await dashboardRoute(handler)(request(), context({}));
+    expect(handler).not.toHaveBeenCalled();
+    expect(res.status).toBe(423);
+    expect(await res.json()).toEqual({ error: "Locked" });
+    expect(res.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("is locked for a sign-in that carries no such moment at all", async () => {
+    signedIn.email = "desk@example.com";
+    const handler = vi.fn(async () => new Response("x"));
+    const res = await dashboardRoute(handler)(request(), context({}));
+    expect(handler).not.toHaveBeenCalled();
+    expect(res.status).toBe(423);
+  });
+
+  it("leaves a plain staff route alone: the rooms board never locks", async () => {
+    signedIn.email = "desk@example.com";
+    signedIn.dashAt = Date.now() - 5 * 60 * 60_000;
+    const res = await staffRoute(async () => Response.json({ rooms: [] }))(
+      request(),
+      context({})
+    );
+    expect(res.status).toBe(200);
+  });
+});
+
 describe("neverCached", () => {
   it("keeps the status, the body and the other headers", async () => {
     const res = neverCached(
@@ -122,6 +181,30 @@ const OPEN_ON_PURPOSE: Record<string, string> = {
   "patients/route.ts GET": "stale-tab notice",
 };
 
+// Staff routes that do NOT lock with the dashboard, each for a stated
+// reason. Every other handler must be a dashboardRoute: a new route locks
+// unless someone decides here that it must not.
+const NEVER_LOCKED: Record<string, string> = {
+  "rooms/route.ts GET": "the rooms board",
+  "rooms/route.ts POST": "the rooms board (edit layout)",
+  "rooms/[id]/route.ts PATCH": "the rooms board",
+  "rooms/[id]/route.ts DELETE": "the rooms board (edit layout)",
+  "rooms/[id]/timer/route.ts POST": "the rooms board",
+  "rooms/[id]/doctor-in/route.ts POST": "the rooms board",
+  "doctors/route.ts POST": "the rooms board (doctor roster)",
+  "doctors/[id]/route.ts DELETE": "the rooms board (doctor roster)",
+  "visits/[id]/route.ts POST": "the rooms board",
+  "visits/finished/route.ts GET": "the rooms board's Finished list",
+  "expected/route.ts GET": "the rooms board's Expected list",
+  // By id, from the board's Expected list as well as from the dashboard's
+  // search; it answers with no more than the board already shows.
+  "checkins/route.ts POST": "staff check-in, also from the rooms board",
+  // A browser travels through these two while connecting Spotify; they
+  // hold no patient information.
+  "spotify/login/route.ts GET": "browser step of connecting Spotify",
+  "spotify/callback/route.ts GET": "browser step of connecting Spotify",
+};
+
 describe("every route under /api/admin", () => {
   const files = routeFiles(ADMIN_API);
 
@@ -130,7 +213,7 @@ describe("every route under /api/admin", () => {
   });
 
   it.each(files.map((f) => [f.slice(ADMIN_API.length + 1), f]))(
-    "%s exports only handlers wrapped in staffRoute",
+    "%s exports only handlers wrapped in staffRoute or dashboardRoute",
     (relative, path) => {
       const source = readFileSync(path, "utf8");
       const exported = [
@@ -141,11 +224,15 @@ describe("every route under /api/admin", () => {
       expect(exported.length).toBeGreaterThan(0);
       for (const method of exported) {
         if (OPEN_ON_PURPOSE[`${relative} ${method}`]) continue;
+        const wrapper = NEVER_LOCKED[`${relative} ${method}`]
+          ? "staffRoute"
+          : "dashboardRoute";
         expect(
-          new RegExp(`export const ${method} = staffRoute(?:<[^>]*>)?\\(`).test(
+          new RegExp(`export const ${method} = ${wrapper}(?:<[^>]*>)?\\(`).test(
             source
           ),
-          `${relative}: ${method} must be \`export const ${method} = staffRoute(…)\``
+          `${relative}: ${method} must be \`export const ${method} = ${wrapper}(…)\` — ` +
+            "a staff route locks with the dashboard unless it is listed in NEVER_LOCKED"
         ).toBe(true);
       }
       // …and none of them checks the session by itself any more.
@@ -154,6 +241,16 @@ describe("every route under /api/admin", () => {
       );
     }
   );
+
+  it("the routes that never lock are still the ones listed", () => {
+    for (const key of Object.keys(NEVER_LOCKED)) {
+      const [relative, method] = key.split(" ");
+      const source = readFileSync(join(ADMIN_API, relative), "utf8");
+      expect(source, key).toMatch(
+        new RegExp(`export const ${method} = staffRoute(?:<[^>]*>)?\\(`)
+      );
+    }
+  });
 
   it("the handlers left open are still the ones listed", () => {
     for (const key of Object.keys(OPEN_ON_PURPOSE)) {

@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/supabase";
 import { recordStaffAction } from "@/lib/audit-server";
 import { parsePatientSearch } from "@/lib/patient-search";
 import { searchPatients } from "@/lib/patient-search-server";
-import { staffRoute } from "@/lib/staff-route";
+import { dashboardRoute } from "@/lib/staff-route";
 
 const MAX_QUERY_LENGTH = 200;
 
@@ -23,7 +23,7 @@ function reply(body: unknown, status = 200) {
 // POST with the text in the body, {q}: a name in the address
 // (?q=Ann+Licater) ends up in request logs. Every search is written to
 // the staff audit log with the patients it listed.
-export const POST = staffRoute(async (req, { email: staffEmail }) => {
+export const POST = dashboardRoute(async (req, { email: staffEmail }) => {
   const body = await req.json().catch(() => null);
   const text =
     typeof body?.q === "string" ? body.q.slice(0, MAX_QUERY_LENGTH).trim() : "";

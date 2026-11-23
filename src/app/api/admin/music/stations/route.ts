@@ -7,7 +7,7 @@ import {
   STATION_NAME_MAX_LENGTH,
 } from "@/lib/music";
 import { loadSavedStations, STATIONS_TABLE } from "@/lib/music-server";
-import { staffRoute } from "@/lib/staff-route";
+import { dashboardRoute } from "@/lib/staff-route";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,7 @@ const bodySchema = z.object({
 // Keep a radio station for later (staff). The list itself is read with
 // GET /api/admin/music, so the panel loads everything in one request.
 // Adding a station does not change what is playing.
-export const POST = staffRoute(async (req, { email: email }) => {
+export const POST = dashboardRoute(async (req, { email: email }) => {
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });

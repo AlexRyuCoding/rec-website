@@ -16,7 +16,7 @@ import {
 } from "@/lib/music-server";
 import { broadcastFlowUpdated } from "@/lib/rooms-realtime";
 import { spotifyConfigured } from "@/lib/spotify-server";
-import { staffRoute } from "@/lib/staff-route";
+import { dashboardRoute } from "@/lib/staff-route";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +44,7 @@ function settingsReply(row: MusicRow) {
   };
 }
 
-export const GET = staffRoute(async () => {
+export const GET = dashboardRoute(async () => {
   const supabase = createServiceClient();
   const [row, stations] = await Promise.all([
     loadMusicRow(supabase),
@@ -74,7 +74,7 @@ const patchSchema = z.object({
 
 // Only the fields sent are changed, so "pause" and the volume slider do
 // not have to resend (or accidentally save) what is typed in the form.
-export const PATCH = staffRoute(async (req, { email: email }) => {
+export const PATCH = dashboardRoute(async (req, { email: email }) => {
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });

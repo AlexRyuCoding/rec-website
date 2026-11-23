@@ -6,7 +6,7 @@ import { checkinRangeDetail } from "@/lib/audit-log";
 import { createCheckin } from "@/lib/checkin-server";
 import { loadCheckinPage, loadCheckinTimings } from "@/lib/checkins-server";
 import { summarizeVisits } from "@/lib/visit-stats";
-import { staffRoute } from "@/lib/staff-route";
+import { dashboardRoute, staffRoute } from "@/lib/staff-route";
 
 const noStore = { "Cache-Control": "no-store" };
 
@@ -20,7 +20,7 @@ const noStore = { "Cache-Control": "no-store" };
 // - a view, at most once per 15 minutes for the same person and dates
 //   (the list refreshes itself every minute)
 // - an export (&export=1, sent by "Export CSV"), every page of it
-export const GET = staffRoute(async (req, { email: staffEmail }) => {
+export const GET = dashboardRoute(async (req, { email: staffEmail }) => {
   const { searchParams } = new URL(req.url);
   const from = searchParams.get("from");
   const to = searchParams.get("to");

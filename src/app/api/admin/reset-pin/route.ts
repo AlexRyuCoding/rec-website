@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
 import { recordStaffAction } from "@/lib/audit-server";
-import { staffRoute } from "@/lib/staff-route";
+import { dashboardRoute } from "@/lib/staff-route";
 
 // Staff PIN reset: clears the hash so the patient re-runs self-serve setup
 // at the kiosk. Staff never see or choose a PIN, and the setup-pin
 // overwrite guard stays intact — reset is clear-then-recreate, not
 // overwrite. Each reset is written to the staff audit log.
-export const POST = staffRoute(async (req, { email: staffEmail }) => {
+export const POST = dashboardRoute(async (req, { email: staffEmail }) => {
   const body = await req.json().catch(() => null);
   const patient_id = body?.patient_id;
   if (typeof patient_id !== "string" || !patient_id) {

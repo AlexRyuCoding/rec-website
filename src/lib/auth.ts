@@ -1,6 +1,7 @@
 import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { isAllowedAdminEmail } from "@/lib/admin-allowlist";
+import { renewDashboardActivity } from "@/lib/dashboard-lock";
 import {
   recordSignIn,
   recordSignInRefused,
@@ -33,12 +34,29 @@ export const authOptions: NextAuthOptions = {
     // `account` is only present at the moment of signing in: that is when
     // the day's end is stamped into the token. It is checked wherever the
     // allowlist is — middleware.ts and admin-auth.ts.
-    async jwt({ token, account }) {
-      if (account) token.dayEnd = sessionDayEnd(Date.now());
+    //
+    // The same moment opens the dashboard (dashAt, dashboard-lock.ts).
+    // After that only the dashboard page moves it forward, by asking for
+    // a session update while a person is using it — and a moment that
+    // has already run out is left as it is: a locked dashboard cannot
+    // unlock itself, only signing in again does.
+    async jwt({ token, account, trigger, session }) {
+      const now = Date.now();
+      if (account) {
+        token.dayEnd = sessionDayEnd(now);
+        token.dashAt = now;
+      } else if (
+        trigger === "update" &&
+        (session as { dashboardActive?: unknown } | undefined)
+          ?.dashboardActive === true
+      ) {
+        token.dashAt = renewDashboardActivity(token.dashAt, now);
+      }
       return token;
     },
     async session({ session, token }) {
       if (typeof token.dayEnd === "number") session.dayEnd = token.dayEnd;
+      if (typeof token.dashAt === "number") session.dashAt = token.dashAt;
       return session;
     },
   },

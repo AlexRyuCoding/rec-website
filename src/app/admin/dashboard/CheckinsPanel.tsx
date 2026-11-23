@@ -10,7 +10,7 @@ import {
   RangePreset,
 } from "@/lib/checkin-range";
 import { FLOW_EVENT, ROOMS_CHANNEL, ROOMS_EVENT } from "@/lib/rooms-realtime";
-import { goToStaffLogin } from "@/lib/staff-login-redirect";
+import { leaveDashboard } from "@/lib/staff-login-redirect";
 import { createBrowserClient } from "@/lib/supabase-browser";
 import Banner from "../ui/Banner";
 import Button from "../ui/Button";
@@ -189,8 +189,8 @@ export default function CheckinsPanel({ active }: { active: boolean }) {
       }`,
       { cache: "no-store" }
     );
-    if (res.status === 401) {
-      goToStaffLogin();
+    if (res.status === 401 || res.status === 423) {
+      leaveDashboard(res.status);
       return null;
     }
     const data = (await res.json().catch(() => ({}))) as Partial<Reply>;

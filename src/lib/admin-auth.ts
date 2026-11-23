@@ -20,13 +20,25 @@ import { sessionDayOver } from "@/lib/staff-session";
 // must not turn it back into a staff browser. Revoking the kiosk in
 // Dashboard → Screens is what frees the tablet again.
 export async function getAdminEmail(): Promise<string | null> {
+  return (await getStaffSession())?.email ?? null;
+}
+
+// The same, with the moment the dashboard was last used (dashAt), for the
+// routes that lock with it (dashboardRoute, staff-route.ts).
+export interface StaffSession {
+  email: string;
+  dashAt?: number;
+}
+
+export async function getStaffSession(): Promise<StaffSession | null> {
   if (carriesKioskCookie((await cookies()).get(KIOSK_COOKIE)?.value)) {
     return null;
   }
   const session = await getServerSession(authOptions);
   if (!session || sessionDayOver(session.dayEnd, Date.now())) return null;
   const email = session.user?.email;
-  return email && isAllowedAdminEmail(email) ? email.toLowerCase() : null;
+  if (!email || !isAllowedAdminEmail(email)) return null;
+  return { email: email.toLowerCase(), dashAt: session.dashAt };
 }
 
 // Guard for the kiosk API routes: valid Google session AND the email is

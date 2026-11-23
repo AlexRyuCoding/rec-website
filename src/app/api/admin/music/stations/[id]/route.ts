@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
 import { STATIONS_TABLE } from "@/lib/music-server";
-import { staffRoute } from "@/lib/staff-route";
+import { dashboardRoute } from "@/lib/staff-route";
 
 // Remove a station from staff's list. If it is the one playing it keeps
 // playing: the music setting holds the stream's address, not a link to
 // this row.
-export const DELETE = staffRoute<{ id: string }>(
+export const DELETE = dashboardRoute<{ id: string }>(
   async (_req, _staff, { params }) => {
     const { id } = await params;
     if (!z.string().uuid().safeParse(id).success) {
