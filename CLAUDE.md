@@ -11,11 +11,11 @@ patients use it unassisted; it needs no staff sign-in.
 
 - Framework: Next.js (App Router)
 - Database: PostgreSQL through PostgREST, via @supabase/supabase-js
-  (service-role client, server-side only). Two hosts run the SAME build
-  until the switch to Google Cloud — see "Hosting":
-  - Vercel + Supabase (Supabase's own PostgREST);
-  - Google Cloud: Cloud Run + Cloud SQL (Postgres 17), with a PostgREST
-    container beside the app
+  (service-role client, server-side only). The site runs on Google
+  Cloud since 2026-11-22 — Cloud Run + Cloud SQL (Postgres 17), with a
+  PostgREST container beside the app — see "Hosting". The same build
+  still runs on Vercel + Supabase (Supabase's own PostgREST) until the
+  clean-up removes that side
 - Live updates: Supabase Realtime (broadcast only, never patient data),
   in a Supabase project of its own once the Realtime settings are set
 - EHR: Practice Better API (REST, OAuth2)
@@ -62,12 +62,15 @@ patients use it unassisted; it needs no staff sign-in.
 - SPOTIFY_CLIENT_ID= / SPOTIFY_CLIENT_SECRET= (optional; a Spotify developer app, only needed for Spotify as the waiting-room music source. Its Redirect URI must be https://www.ryuacupuncture.com/api/admin/spotify/callback)
 - SPOTIFY_REDIRECT_URI= (optional; local dev only — Spotify refuses "localhost", so use http://127.0.0.1:3000/api/admin/spotify/callback)
 
-## Hosting (two hosts until the switch to Google Cloud)
+## Hosting (Google Cloud; Vercel + Supabase until the clean-up)
 
-The owner's step-by-step: deploy/RUNBOOK.md. The switch is planned for
-2026-11-24; until the clean-up after it, BOTH hosts must keep working
-from the same build, chosen only by environment variables. With none of
-the Google-side variables set, behaviour is exactly Vercel + Supabase.
+The owner's step-by-step: deploy/RUNBOOK.md. The switch to Google Cloud
+was made on 2026-11-22. A merge to `main` is built and deployed to the
+LIVE site by Cloud Build (trigger `rac-deploy-main`) in about six
+minutes: merge on a day the clinic is closed, or after hours. Until the
+clean-up, the build must still work on both hosts, chosen only by
+environment variables: with none of the Google-side variables set,
+behaviour is exactly Vercel + Supabase.
 
 - No query was rewritten. `createServiceClient()` (src/lib/supabase.ts)
   asks `dbTarget(process.env)` (src/lib/db-rest.ts, pure, tested) where
