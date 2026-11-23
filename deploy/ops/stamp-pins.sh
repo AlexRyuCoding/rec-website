@@ -61,6 +61,7 @@
 #   no_match   left without: none of the 10,000 PINs gives this hash
 #   unusable   left without: not a bcrypt hash of the app's kind
 #   changed    left alone: reset, replaced or stamped by the app meanwhile
+# A task that fails says "stopped:" and why — an error code, never a row.
 #
 # The work is deploy/ops/stamp-pins/stamp-pins.mjs (Node, with bcryptjs —
 # the library the app hashes PINs with, at the same version).
@@ -82,7 +83,7 @@ esac
 
 # An empty secret would count and stamp under a key nobody uses.
 if [ -z "${NEXTAUTH_SECRET:-}" ]; then
-  echo "stamp-pins: NEXTAUTH_SECRET is not set" >&2
+  echo "stamp-pins $1: stopped: NEXTAUTH_SECRET is not set" >&2
   exit 1
 fi
 export NEXTAUTH_SECRET

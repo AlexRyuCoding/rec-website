@@ -234,7 +234,10 @@ const cpuTime = (seconds) =>
 function count(say, secret, share) {
   // Run as several tasks, the answer would be printed once per task.
   if (share.index !== 0) {
-    say("count: left to the first task");
+    console.log(
+      `stamp-pins task ${share.index + 1}/${share.count}:` +
+        " the counting is left to the first task"
+    );
     return;
   }
   const counts = parseCounts(psql(COUNT_SQL(`${keyId(secret)}\n`)));
@@ -243,34 +246,34 @@ function count(say, secret, share) {
   const ms = compareMs();
   const time = estimate(counts.costs, ms, share.count);
   say(
-    `count: pin_holders=${counts.holders} current=${counts.current}` +
+    `pin_holders=${counts.holders} current=${counts.current}` +
       ` without=${without} never_stamped=${counts.never}` +
       ` other_key=${otherKey} unusable=${time.unusable}`
   );
   if (counts.holders === 0) {
-    say("count: no patient has a PIN here. is this the right database?");
+    say("no patient has a PIN here. is this the right database?");
   }
   if (otherKey > 0) {
     say(
-      "count: other_key is not 0: those fingerprints were made with another" +
+      "other_key is not 0: those fingerprints were made with another" +
         " NEXTAUTH_SECRET than this job has. that is expected after the" +
         " secret was replaced; otherwise this job has the wrong secret, and" +
         " stamping would undo the app's own work."
     );
   }
   say(
-    `count: one compare takes ${ms.toFixed(1)} ms here: a holder is about` +
+    `one compare takes ${ms.toFixed(1)} ms here: a holder is about` +
       ` ${Math.round(ms * 5)} s of one CPU, at most ${Math.round(ms * 10)} s`
   );
   say(
-    `count: stamping ${time.usable} of them needs about` +
+    `stamping ${time.usable} of them needs about` +
       ` ${cpuTime(time.averageCpuSeconds)} (at most` +
       ` ${cpuTime(time.maxCpuSeconds)}); as ${share.count} task(s) side by` +
       ` side about ${wholeMinutes(time.averageMinutes)} minutes (at most` +
       ` ${wholeMinutes(time.maxMinutes)}), the task with the most holders a` +
       " little longer"
   );
-  say("count: nothing was changed");
+  say("nothing was changed");
 }
 
 // ------------------------------------------------------------------- stamp
@@ -352,7 +355,9 @@ function main() {
     console.error("usage: stamp-pins.mjs count | stamp");
     return 2;
   }
-  let who = "stamp-pins";
+  // Every line says which part of the job wrote it, and a line about a
+  // failure has "stopped:" in it — what the runbook's log searches use.
+  let who = mode === "count" ? "stamp-pins count:" : "stamp-pins stamp";
   const say = (text) => console.log(`${who} ${text}`);
   try {
     // An empty secret would count and stamp under a key nobody uses.
@@ -375,8 +380,8 @@ function main() {
     const said =
       error instanceof Stop
         ? error.message
-        : `stopped by an unexpected error (${error instanceof Error ? error.constructor.name : "not an Error"})`;
-    console.error(`${who}: ${said}`);
+        : `an unexpected error (${error instanceof Error ? error.constructor.name : "not an Error"})`;
+    console.error(`${who} stopped: ${said}`);
     return 1;
   }
 }

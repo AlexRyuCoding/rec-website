@@ -596,7 +596,7 @@ sql loud "create trigger stamp_test_loud before update on public.patients for ea
 if out="$(stamp loud stamp 2>&1)"; then
   fail "stamp-pins.sh must fail when the database refuses a write"
 fi
-echo "$out" | grep -q "database error P0001" || fail "the error must be shown as its code: $out"
+echo "$out" | grep -q "^stamp-pins task 1/1 stopped: database error P0001" || fail "the error must be shown as its code, on a line that says 'stopped:': $out"
 no_patient_data "a failed stamp" "$out" loud 7777
 case "$out" in *refused* | *"$HLOUD"*) fail "a failed stamp printed Postgres's own words: $out" ;; esac
 same "nothing was written" "$(lookup_of loud 51)" ""
@@ -605,7 +605,7 @@ ok "a database error stops the task and is shown as its code alone"
 if out="$(stamp bare count 2>&1)"; then
   fail "stamp-pins.sh count must fail on a database without the patients table"
 fi
-echo "$out" | grep -q "database error 42P01" || fail "a missing table must be shown as its code: $out"
+echo "$out" | grep -q "^stamp-pins count: stopped: database error 42P01" || fail "a missing table must be shown as its code, on a line that says 'stopped:': $out"
 if out="$(PGPORT=1 stamp pins count 2>&1)"; then
   fail "stamp-pins.sh must fail when the database cannot be reached"
 fi
@@ -672,6 +672,7 @@ for mode in count stamp; do
   if out="$(PGDATABASE=odd bash "$STAMP_PINS" "$mode" 2>&1)"; then
     fail "stamp-pins.sh $mode must refuse to run without NEXTAUTH_SECRET"
   fi
+  echo "$out" | grep -q "stopped: NEXTAUTH_SECRET is not set" || fail "the refusal must say why, on a line that says 'stopped:': $out"
   if out="$(PGDATABASE=odd NEXTAUTH_SECRET="" bash "$STAMP_PINS" "$mode" 2>&1)"; then
     fail "stamp-pins.sh $mode must refuse to run with an empty NEXTAUTH_SECRET"
   fi
