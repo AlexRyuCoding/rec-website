@@ -52,18 +52,35 @@ if [[ ! "$name" =~ ^[a-z][a-z0-9-]{0,254}$ ]]; then
   exit 2
 fi
 
-has_value() {
-  [ -n "$(gcloud secrets versions list "$name" --filter="state:ENABLED" \
-    --limit=1 --format="value(name)" 2>/dev/null)" ]
-}
+# Does the secret exist? Asked as the list of names: a list without it is
+# an answer, whereas asking for the one secret fails the same way for "no
+# such secret" and for "could not ask" (not signed in, no network) — and
+# "could not ask" must never be taken for "nothing there yet".
+if ! names="$(gcloud secrets list --format="value(name)")"; then
+  echo "set-secret: could not ask Secret Manager (its message is above); nothing was stored" >&2
+  exit 1
+fi
+exists=no
+while IFS= read -r listed; do
+  # Listed as projects/<number>/secrets/<name>.
+  if [ "${listed##*/}" = "$name" ]; then
+    exists=yes
+  fi
+done <<<"$names"
 
 value=""
 case "$mode" in
   random)
-    if [ "$replace" != "--replace" ] && has_value; then
-      echo "set-secret: $name already has a value; it was left alone." >&2
-      echo "  To replace it on purpose: set-secret.sh random $name --replace" >&2
-      exit 1
+    if [ "$replace" != "--replace" ] && [ "$exists" = yes ]; then
+      if ! held="$(gcloud secrets versions list "$name" --limit=1 --format="value(name)")"; then
+        echo "set-secret: could not find out whether $name already has a value; nothing was stored" >&2
+        exit 1
+      fi
+      if [ -n "$held" ]; then
+        echo "set-secret: $name already has a value; it was left alone." >&2
+        echo "  To replace it on purpose: set-secret.sh random $name --replace" >&2
+        exit 1
+      fi
     fi
     # 32 random bytes as 64 letters and digits (0-9, a-f): safe inside a
     # connection address, long enough for PostgREST's signing secret.
@@ -98,7 +115,7 @@ if [ "$mode" != "random" ]; then
   fi
 fi
 
-if ! gcloud secrets describe "$name" >/dev/null 2>&1; then
+if [ "$exists" = no ]; then
   gcloud secrets create "$name" --replication-policy=automatic >/dev/null
 fi
 # printf is part of the shell itself: the value goes down the pipe and is

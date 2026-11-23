@@ -288,12 +288,21 @@ STORE="$DIR/secrets"
 mkdir -p "$DIR/bin" "$STORE"
 cat > "$DIR/bin/gcloud" <<'GCLOUD'
 #!/usr/bin/env bash
-# Stand-in gcloud: secrets describe | create | versions add | versions list.
+# Stand-in gcloud: secrets list | create | versions add | versions list.
+# A file named "refuse" makes it refuse a new value; "cannot-list" makes
+# both list commands fail, as when not signed in; "cannot-list-versions"
+# only the second.
 set -euo pipefail
 printf '%s\n' "$*" >> "$STORE/calls"
 [ "$1" = "secrets" ] || exit 64
 case "$2" in
-  describe) [ -d "$STORE/$3" ] ;;
+  list)
+    [ ! -e "$STORE/cannot-list" ] || exit 1
+    for secret in "$STORE"/*/; do
+      [ -d "$secret" ] && echo "projects/123456/secrets/$(basename "$secret")"
+    done
+    exit 0
+    ;;
   create) mkdir "$STORE/$3" ;;
   versions)
     case "$3" in
@@ -304,7 +313,11 @@ case "$2" in
         n=$(($(ls "$STORE/$4" | wc -l) + 1))
         cat > "$STORE/$4/$n"
         ;;
-      list) [ -d "$STORE/$4" ] && [ -n "$(ls "$STORE/$4")" ] && echo 1 || true ;;
+      list)
+        [ ! -e "$STORE/cannot-list" ] || exit 1
+        [ ! -e "$STORE/cannot-list-versions" ] || exit 1
+        [ -d "$STORE/$4" ] && [ -n "$(ls "$STORE/$4")" ] && echo 1 || true
+        ;;
       *) exit 64 ;;
     esac
     ;;
@@ -375,6 +388,29 @@ for bad in "" "random" "sideways made-up" "random Made_Up" "random made-up --for
 done
 same "a refused command reaches nothing" "$(wc -l < "$STORE/calls" | tr -d ' ')" "$calls_before"
 ok "set-secret refuses arguments it does not know"
+
+# "Could not ask" is never taken for "nothing there yet": a failed
+# question must not let `random` replace a value, or anything be stored.
+touch "$STORE/cannot-list"
+if out="$(set_secret random made-up-one 2>&1)"; then
+  fail "set-secret random must refuse when it cannot ask what is there"
+fi
+case "$out" in *"could not ask"*) ;; *) fail "set-secret random failed for another reason: $out" ;; esac
+same "the value was left alone when gcloud could not answer" "$(versions made-up-one)" "2"
+if out="$(printf 'x-made-up\n' | set_secret ask made-up-six 2>&1)"; then
+  fail "set-secret ask must refuse when it cannot ask what is there"
+fi
+same "nothing was created when gcloud could not answer" "$(versions made-up-six)" "0"
+rm "$STORE/cannot-list"
+# The same, when only the question about the secret's values fails.
+touch "$STORE/cannot-list-versions"
+if out="$(set_secret random made-up-one 2>&1)"; then
+  fail "set-secret random must refuse when it cannot see the secret's values"
+fi
+case "$out" in *"could not find out"*) ;; *) fail "set-secret random failed for another reason: $out" ;; esac
+rm "$STORE/cannot-list-versions"
+same "the value was left alone when its versions could not be listed" "$(versions made-up-one)" "2"
+ok "set-secret stores nothing when gcloud cannot say what is already there"
 
 touch "$STORE/refuse"
 if out="$(set_secret random made-up-five 2>&1)"; then
