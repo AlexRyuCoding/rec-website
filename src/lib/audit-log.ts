@@ -15,6 +15,10 @@ export const STAFF_ACTIONS = [
   "visit_restore",
   "device_pair",
   "device_revoke",
+  // Sign-ins (migration 0022). These three name no patient.
+  "staff_signin",
+  "staff_signout",
+  "signin_refused",
 ] as const;
 
 export type StaffAction = (typeof STAFF_ACTIONS)[number];
@@ -30,6 +34,9 @@ export const ACTION_LABELS: Record<StaffAction, string> = {
   visit_restore: "Restored to the rooms board",
   device_pair: "Paired a device",
   device_revoke: "Revoked a device",
+  staff_signin: "Signed in",
+  staff_signout: "Signed out",
+  signin_refused: "Sign-in refused",
 };
 
 export function isStaffAction(value: unknown): value is StaffAction {
@@ -37,6 +44,68 @@ export function isStaffAction(value: unknown): value is StaffAction {
     typeof value === "string" &&
     (STAFF_ACTIONS as readonly string[]).includes(value)
   );
+}
+
+// ---- sign-ins -------------------------------------------------------------
+//
+// A row when a staff member signs in, a row when they press Sign out, and
+// a row when a Google account that is not on the staff list tries to sign
+// in and is refused. The first two can only be caused by staff. The third
+// can be caused by anyone on the internet who has a Google account, so
+// what it writes and how often is decided here.
+
+// What a refused row says in the Detail column.
+export const REFUSED_DETAIL = "Not on the staff list";
+
+// The longest an email address can be. A refused address was chosen by a
+// stranger: it is cut to this before it is stored.
+export const SIGNIN_ADDRESS_MAX = 254;
+// What is stored when the account gave no address at all.
+export const NO_ADDRESS = "(no address)";
+
+// The address of the account that signed in or tried to, as it is stored
+// and shown: lowercase (as the allowlist compares it), with blanks, line
+// breaks, invisible and direction-changing characters and halves of
+// characters taken out, and cut to SIGNIN_ADDRESS_MAX whole characters.
+// It is only ever data: compared, stored and shown as text.
+export function signInAddress(value: unknown): string {
+  if (typeof value !== "string") return NO_ADDRESS;
+  const cleaned = [...value.replace(/[\p{C}\p{Z}]/gu, "").toLowerCase()]
+    .slice(0, SIGNIN_ADDRESS_MAX)
+    .join("");
+  return cleaned || NO_ADDRESS;
+}
+
+// The same address is written at most once per this long: someone who
+// tries three times in a minute is one row, as one lookup is.
+export const REFUSED_REPEAT_MS = 15 * 60 * 1000;
+// And however many addresses try, at most this many refused rows are
+// written per hour. The clinic's own refusals — a staff member on their
+// personal account, someone taken off the list — are a few a week; the
+// limit is what a stranger with many accounts runs into. Past it the
+// attempt is still refused, it is only not written down.
+export const REFUSED_WINDOW_MS = 60 * 60 * 1000;
+export const REFUSED_PER_HOUR = 20;
+
+// Whether a refused sign-in gets a row, given the refused rows of the
+// last hour: "write"; "repeat" (this address already has one in the last
+// fifteen minutes); "full" (the hour's limit is reached). A row whose
+// time cannot be read counts as recent — in doubt, fewer rows.
+export function refusedRowVerdict(
+  recent: { staff_email: string; at: string }[],
+  address: string,
+  nowMs: number
+): "write" | "repeat" | "full" {
+  const within = (at: string, ms: number) => !(Date.parse(at) < nowMs - ms);
+  const lastHour = recent.filter((row) => within(row.at, REFUSED_WINDOW_MS));
+  if (
+    lastHour.some(
+      (row) => row.staff_email === address && within(row.at, REFUSED_REPEAT_MS)
+    )
+  ) {
+    return "repeat";
+  }
+  return lastHour.length >= REFUSED_PER_HOUR ? "full" : "write";
 }
 
 // A check-in history view or export is recorded with the dates it

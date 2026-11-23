@@ -73,3 +73,143 @@ describe("patientsSummary", () => {
     expect(patientsSummary([], 0)).toBe("");
   });
 });
+
+// ---- sign-ins (migration 0022) -------------------------------------------
+
+import {
+  NO_ADDRESS,
+  REFUSED_DETAIL,
+  REFUSED_PER_HOUR,
+  REFUSED_REPEAT_MS,
+  REFUSED_WINDOW_MS,
+  refusedRowVerdict,
+  signInAddress,
+  SIGNIN_ADDRESS_MAX,
+} from "./audit-log";
+
+describe("sign-in actions", () => {
+  it("are known actions, worded like the rest of the logbook", () => {
+    expect(ACTION_LABELS.staff_signin).toBe("Signed in");
+    expect(ACTION_LABELS.staff_signout).toBe("Signed out");
+    expect(ACTION_LABELS.signin_refused).toBe("Sign-in refused");
+    expect(REFUSED_DETAIL).toBe("Not on the staff list");
+    expect(isStaffAction("staff_signin")).toBe(true);
+    expect(isStaffAction("staff_signout")).toBe(true);
+    expect(isStaffAction("signin_refused")).toBe(true);
+  });
+});
+
+describe("signInAddress — an address a stranger chose", () => {
+  it("is stored lowercase, as the allowlist compares it", () => {
+    expect(signInAddress("Someone.Else@Example.com")).toBe(
+      "someone.else@example.com"
+    );
+  });
+
+  it("is cut to the longest an email address can be", () => {
+    const long = `${"a".repeat(400)}@example.com`;
+    expect(signInAddress(long)).toHaveLength(SIGNIN_ADDRESS_MAX);
+    expect(SIGNIN_ADDRESS_MAX).toBe(254);
+  });
+
+  it("never cuts a character in half", () => {
+    // Each of these is two UTF-16 units; a cut between them would leave
+    // half a character, which the database refuses.
+    const cut = signInAddress("😀".repeat(300));
+    expect([...cut]).toHaveLength(SIGNIN_ADDRESS_MAX);
+    expect(() => encodeURIComponent(cut)).not.toThrow();
+    // …and half a character that arrives is dropped.
+    expect(signInAddress("a\uD83Db@example.com")).toBe("ab@example.com");
+  });
+
+  it("loses line breaks, blanks and invisible characters", () => {
+    expect(signInAddress(" a\n b\t@\u0000ex​ample‮.com\r\n")).toBe(
+      "ab@example.com"
+    );
+  });
+
+  it("stays text: markup and SQL are kept as the characters they are", () => {
+    expect(signInAddress("<script>alert(1)</script>@x.com")).toBe(
+      "<script>alert(1)</script>@x.com"
+    );
+    expect(signInAddress("x';drop--@x.com")).toBe("x';drop--@x.com");
+  });
+
+  it("says so when there is no address at all", () => {
+    expect(signInAddress(null)).toBe(NO_ADDRESS);
+    expect(signInAddress(undefined)).toBe(NO_ADDRESS);
+    expect(signInAddress("")).toBe(NO_ADDRESS);
+    expect(signInAddress(" \n\t")).toBe(NO_ADDRESS);
+    expect(signInAddress({ toString: () => "a@b.c" })).toBe(NO_ADDRESS);
+    expect(signInAddress(42)).toBe(NO_ADDRESS);
+  });
+});
+
+describe("refusedRowVerdict — how many refused sign-ins are written", () => {
+  const NOW = Date.parse("2026-11-23T20:00:00.000Z");
+  const row = (staff_email: string, msAgo: number) => ({
+    staff_email,
+    at: new Date(NOW - msAgo).toISOString(),
+  });
+
+  it("writes the first refusal of an address", () => {
+    expect(refusedRowVerdict([], "x@example.com", NOW)).toBe("write");
+    expect(
+      refusedRowVerdict([row("other@example.com", 1000)], "x@example.com", NOW)
+    ).toBe("write");
+  });
+
+  it("does not repeat the same address within fifteen minutes", () => {
+    expect(REFUSED_REPEAT_MS).toBe(15 * 60 * 1000);
+    expect(
+      refusedRowVerdict([row("x@example.com", 1000)], "x@example.com", NOW)
+    ).toBe("repeat");
+    expect(
+      refusedRowVerdict(
+        [row("x@example.com", REFUSED_REPEAT_MS - 1)],
+        "x@example.com",
+        NOW
+      )
+    ).toBe("repeat");
+  });
+
+  it("writes the address again once fifteen minutes have passed", () => {
+    expect(
+      refusedRowVerdict(
+        [row("x@example.com", REFUSED_REPEAT_MS + 1)],
+        "x@example.com",
+        NOW
+      )
+    ).toBe("write");
+  });
+
+  it("stops at twenty refused rows an hour, whoever they are", () => {
+    expect(REFUSED_PER_HOUR).toBe(20);
+    expect(REFUSED_WINDOW_MS).toBe(60 * 60 * 1000);
+    const many = (n: number) =>
+      Array.from({ length: n }, (_, i) =>
+        row(`stranger${i}@example.com`, 20 * 60 * 1000 + i)
+      );
+    expect(
+      refusedRowVerdict(many(REFUSED_PER_HOUR - 1), "x@example.com", NOW)
+    ).toBe("write");
+    expect(
+      refusedRowVerdict(many(REFUSED_PER_HOUR), "x@example.com", NOW)
+    ).toBe("full");
+  });
+
+  it("rows older than the hour do not count", () => {
+    const old = Array.from({ length: 50 }, (_, i) =>
+      row(`stranger${i}@example.com`, REFUSED_WINDOW_MS + 1000 + i)
+    );
+    expect(refusedRowVerdict(old, "x@example.com", NOW)).toBe("write");
+  });
+
+  it("a row whose time cannot be read counts against the limit", () => {
+    const odd = Array.from({ length: REFUSED_PER_HOUR }, () => ({
+      staff_email: "s@example.com",
+      at: "not a time",
+    }));
+    expect(refusedRowVerdict(odd, "x@example.com", NOW)).toBe("full");
+  });
+});
