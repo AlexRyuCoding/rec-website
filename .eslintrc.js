@@ -61,5 +61,13 @@ module.exports = {
         "no-constant-condition": ["error", { checkLoops: false }],
       },
     },
+    {
+      // The same kind of script written as an ES module
+      // (scripts/bench-pin-slow-path.mjs): its output is what it is for.
+      files: ["scripts/**/*.mjs"],
+      rules: {
+        "no-console": "off",
+      },
+    },
   ],
 };
