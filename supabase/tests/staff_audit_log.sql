@@ -1,4 +1,4 @@
--- Tests for public.staff_audit_log (migrations 0015, 0016, 0019). Run with: npm run test:db
+-- Tests for public.staff_audit_log (migrations 0015, 0016, 0019, 0022). Run with: npm run test:db
 -- One transaction, rolled back.
 
 begin;
@@ -70,6 +70,55 @@ begin
   delete from public.staff_audit_log where action = 'checkins_view' and detail is null;
 end $$;
 
+-- 0022: sign-ins. Three more known actions, which name no patient.
+insert into public.staff_audit_log (staff_email, action)
+values ('desk@example.com', 'staff_signin'),
+       ('desk@example.com', 'staff_signout');
+insert into public.staff_audit_log (staff_email, action, detail)
+values ('stranger@example.com', 'signin_refused', 'Not on the staff list');
+
+do $$
+declare n int; odd text; back text;
+begin
+  select count(*) into n from public.staff_audit_log
+  where action in ('staff_signin', 'staff_signout', 'signin_refused')
+    and patient_ids = '{}';
+  assert n = 3, format('three sign-in rows, naming no patient: got %s', n);
+
+  -- The address of a refused account was chosen by a stranger. It is
+  -- stored and handed back as the text it is, whatever it looks like.
+  odd := repeat('a', 200) || '''); drop table public.patients;--<b>@example.com';
+  insert into public.staff_audit_log (staff_email, action, detail)
+  values (odd, 'signin_refused', 'Not on the staff list');
+  select staff_email into back from public.staff_audit_log
+  where action = 'signin_refused' and staff_email like 'aaaa%';
+  assert back = odd, 'an odd address is stored as it came';
+  assert to_regclass('public.patients') is not null, 'and did nothing';
+  delete from public.staff_audit_log where staff_email = odd;
+
+  -- What the app asks before writing a refused row (signin-log.ts): the
+  -- refused rows of the last hour.
+  select count(*) into n from public.staff_audit_log
+  where action = 'signin_refused' and at >= now() - interval '1 hour';
+  assert n = 1, format('one refused row in the last hour: got %s', n);
+end $$;
+
+-- 0022 can be run again with rows of every action already in the table
+-- (rac-migrate never does, the Supabase SQL editor might).
+\i supabase/migrations/0022_audit_signins.sql
+do $$
+declare n int; ok boolean := false;
+begin
+  select count(*) into n from pg_constraint
+  where conrelid = 'public.staff_audit_log'::regclass and contype = 'c';
+  assert n = 1, format('one check on the table after a second run: got %s', n);
+  begin
+    insert into public.staff_audit_log (staff_email, action) values ('x@y.z', 'something_else');
+  exception when check_violation then ok := true;
+  end;
+  assert ok, 'an unknown action is still refused';
+end $$;
+
 -- Privacy: row-level security with no policies. Another role sees nothing
 -- and cannot add or change rows, even with every grant.
 create role audit_test_outsider;
@@ -92,7 +141,7 @@ end $$;
 reset role;
 do $$
 begin
-  assert (select count(*) from public.staff_audit_log) = 10, 'rows untouched by the other role';
+  assert (select count(*) from public.staff_audit_log) = 13, 'rows untouched by the other role';
   assert not exists (select 1 from public.staff_audit_log where staff_email = 'changed'), 'rows unchanged';
 end $$;
 
