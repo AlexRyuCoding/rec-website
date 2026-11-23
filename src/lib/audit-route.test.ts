@@ -11,6 +11,12 @@ vi.mock("@/lib/supabase", () => ({
 }));
 vi.mock("@/lib/admin-auth", () => ({
   getAdminEmail: async () => "desk@example.com",
+  // The audit log is a dashboard route: signed in, and the dashboard in
+  // use a moment ago (not locked).
+  getStaffSession: async () => ({
+    email: "desk@example.com",
+    dashAt: Date.now(),
+  }),
   isAdminAuthorized: async () => true,
 }));
 

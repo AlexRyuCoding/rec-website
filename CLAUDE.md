@@ -720,6 +720,51 @@ ThemeSwitch, Backdrop, styles.ts); the theme rule: src/lib/staff-theme.ts
   must not get a display class (`flex` would beat its `hidden`
   attribute and show every tab at once).
 
+## Dashboard lock (30 minutes)
+
+The dashboard locks itself when nobody is using it — HIPAA's "automatic
+logoff", for the page where full names, contact details, the check-in
+history and the audit log are. Design:
+docs/superpowers/specs/2026-11-23-dashboard-lock-design.md. Rules:
+src/lib/dashboard-lock.ts (pure, tested); the server's check:
+dashboardRoute in src/lib/staff-route.ts; the sign-in side: the jwt
+callback in src/lib/auth.ts (auth-dashboard.test.ts); the page:
+src/app/admin/dashboard/DashboardLock.tsx.
+
+- The sign-in cookie carries the moment the dashboard was last really
+  used (`dashAt`). It is set at sign-in. The page renews it, at most once
+  a minute, while a person is using the dashboard — a press, a key, a
+  touch, the wheel; never mouse movement, never the page's own refreshes.
+- The server never renews a moment that has already run out (do not
+  weaken this): otherwise a locked dashboard could unlock itself with one
+  request. Only signing in again starts a new one. An update can set
+  nothing else — not the moment itself, not the day's end.
+- A route that only the dashboard uses is a `dashboardRoute`: staffRoute
+  that also answers 423 `{error: "Locked"}` once the moment is 30 minutes
+  old — or missing (a sign-in from before the lock existed is locked).
+  staff-route.test.ts makes this the default: every handler under
+  /api/admin must be a dashboardRoute unless it is listed there
+  (NEVER_LOCKED) as one the rooms board needs.
+- The rooms board, the kiosk and the TV never lock (owner's decision):
+  the board runs on the wall all day on the same sign-in and shows only
+  "First L.". Signing the whole browser out was rejected for that
+  reason — never "fix" the lock by calling signOut.
+- The page: a notice one minute before ("The dashboard will lock in a
+  minute…", fixed to the bottom so it moves nothing); then the panels are
+  UNMOUNTED — their data leaves the page — and the lock screen shows.
+  Opening the dashboard on a moment that has run out shows the lock
+  screen without asking for anything. A panel that gets a 423 calls
+  leaveDashboard() (staff-login-redirect.ts), which locks the page; a 401
+  still goes to the login page.
+- Unlocking is "Sign in with Google to continue": Google's account
+  chooser (`prompt=select_account`), back to the same tab. Google gives a
+  site no way to ask for the password again, so this is not a barrier
+  against someone at an unlocked computer; the computers' own screen lock
+  is the other half (owner's decision, 2026-11-23). An unlock is a
+  sign-in, so it shows in the Log as "Signed in".
+- Opening the dashboard after 30 minutes on the rooms board meets the
+  lock screen too: the rule is "since the dashboard was last used".
+
 ## Staff check-in
 
 Dashboard → Patients → "Check in" on a search result (the rooms board
@@ -1336,6 +1381,9 @@ Input rules (do not regress these — each fixes a way presses were lost):
   a status — never its message or the object, which often quote the row
   or the address being handled. error-label.test.ts fails if a file under
   src/ hands a caught error to console.* directly.
+- The dashboard locks after 30 minutes without activity; its routes
+  answer 423 until staff sign in again (see "Dashboard lock"). The rooms
+  board, the kiosk and the TV do not lock
 - Every answer of a staff route and of a kiosk route is `Cache-Control:
   no-store`: staffRoute and kioskRoute set it themselves (neverCached,
   staff-route.ts), so a route cannot forget.
