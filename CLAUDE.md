@@ -189,7 +189,9 @@ behaviour is exactly Vercel + Supabase.
 - /api/admin/audit — GET the staff audit log, newest first, 100 a page
   (&before=<id>), optionally &action=, &staff=<email>, &patient=<uuid>
   (never a name — it would sit in request logs). no-store
-- /api/auth/[...nextauth] — NextAuth (Google sign-in, session, callbacks)
+- /api/auth/[...nextauth] — NextAuth (Google sign-in, session, callbacks).
+  A sign-in, a pressed Sign out and a refused account each write a row
+  of the staff audit log (see "Staff audit log", "Sign-in rows")
 - /api/admin/checkins — GET check-ins in a from/to range, newest first,
   500 a page (&offset= for more), each with names, practitioner, room and
   the visit's timestamps; the first page also carries the wait-time
@@ -316,6 +318,14 @@ behaviour is exactly Vercel + Supabase.
   (src/lib/admin-allowlist.ts). The allowlist is enforced in the signIn
   callback AND re-checked on every request (middleware + API guard), so
   removing an email revokes access immediately.
+- Sign-ins are recorded in the staff audit log (migration 0022): a row
+  when a staff member signs in, when Sign out is pressed, and when an
+  account that is not on the list is refused (the address that tried,
+  bounded). Written from auth.ts through src/lib/signin-log.ts, which can
+  neither fail nor hold up a sign-in — see "Staff audit log", "Sign-in
+  rows". A sign-in that ends by itself at 3 am writes nothing. A
+  kiosk-paired browser is still never staff: these rows change nothing
+  about who gets in.
 - src/middleware.ts protects /admin/\* via getToken() from next-auth/jwt;
   the decision itself is adminPageGate (src/lib/admin-gate.ts, pure,
   tested). /admin/login and the kiosk page shell are open.
@@ -726,13 +736,15 @@ patient lands in the board's waiting list like any check-in.
 - The search stays on the dashboard, not on the rooms board: it shows
   full names and contact details, and the board is "First L." only.
 
-## Staff audit log (migrations 0015, 0016, 0019 — should be applied)
+## Staff audit log (migrations 0015, 0016, 0019, 0022 — should be applied)
 
-staff_audit_log: who did what with patient information, when, and to
-which patients — id, at, staff_email, action, patient_ids uuid[], detail.
-Actions, their names on the page and the wording of a range are in
-src/lib/audit-log.ts (pure, tested); writing and reading is
-src/lib/audit-server.ts. The staff email comes from getAdminEmail().
+staff_audit_log: who signed in, and who did what with patient
+information, when, and to which patients — id, at, staff_email, action,
+patient_ids uuid[], detail. Actions, their names on the page and the
+wording of a range are in src/lib/audit-log.ts (pure, tested); writing
+and reading is src/lib/audit-server.ts. The staff email comes from
+getAdminEmail(). The three sign-in rows are written from the NextAuth
+configuration through src/lib/signin-log.ts (see "Sign-in rows" below).
 
 | action | written when | detail |
 | --- | --- | --- |
@@ -745,6 +757,13 @@ src/lib/audit-server.ts. The staff email comes from getAdminEmail().
 | visit_restore (0019) | a finished patient was put back | to where |
 | device_pair (0019) | a screen or kiosk was paired | kind and name |
 | device_revoke (0019) | one was revoked | kind and name |
+| staff_signin (0022) | a staff member signed in with Google | — |
+| staff_signout (0022) | Sign out was pressed on the dashboard | — |
+| signin_refused (0022) | a Google account not on the staff list tried to sign in | "Not on the staff list" |
+
+On the Log page these three read "Signed in", "Signed out" and "Sign-in
+refused". They name no patient (patient_ids is empty). For a refused
+row, staff_email holds the address that TRIED — not a staff member's.
 
 - Read on Dashboard → Log (AuditPanel.tsx): newest first, filter by kind
   of activity or staff member, "Show older entries". "Log" on a patient
@@ -755,8 +774,9 @@ src/lib/audit-server.ts. The staff email comes from getAdminEmail().
   not itself logged.
 - It fails OPEN, by decision: if the row cannot be written (a database
   hiccup) the action still happens and the app logs
-  "audit log write failed" with the error code only. The front desk must
-  not be locked out of finding a patient by the logbook.
+  "audit log write failed" with the kind of error only (errorLabel: its
+  class and code). The front desk must not be locked out of finding a
+  patient — or of signing in — by the logbook.
 - Searching while typing writes a row per request, so one lookup is
   often 2–4 rows ("an", "ann", "ann lic"). Each one did list patients.
 - A check-in history VIEW is written at most once per 15 minutes for the
@@ -768,8 +788,47 @@ src/lib/audit-server.ts. The staff email comes from getAdminEmail().
   "Export CSV" always asks the server again (&export=1) even when the
   list on screen is complete: the file is what leaves the building.
 - Not logged, on purpose: sending patients to rooms, "Doctor in", timers
-  (the board's ordinary work, dozens of times a day) and anything the
-  kiosk does (a patient acting for themselves).
+  (the board's ordinary work, dozens of times a day), anything the
+  kiosk does (a patient acting for themselves), and a sign-in that
+  simply ends at 3 am or whose cookie runs out (nobody did anything; only
+  a pressed Sign out is a row). Also not stored, in this first version:
+  the IP address, browser or device a sign-in came from.
+- Sign-in rows (src/lib/signin-log.ts, tested; auth.test.ts runs
+  NextAuth's own callback and sign-out handling with the real
+  configuration):
+  - "Signed in" is written by NextAuth's `signIn` EVENT (after an allowed
+    account's session is made), "Sign-in refused" by the `signIn`
+    CALLBACK when it refuses, "Signed out" by the `signOut` event —
+    which NextAuth runs on the server when its sign-out route is called
+    with the page's own token, i.e. the dashboard's Sign out button.
+  - A sign-in must never wait on, or fail because of, the logbook
+    (signing in touched no database before this). Each of the three
+    always resolves, never throws, and gives up after 3 s
+    (SIGNIN_LOG_TIMEOUT_MS). Do not let one throw: NextAuth turns an
+    event that throws into "sign-in failed".
+  - Anyone with a Google account can cause a refused row, so it is
+    bounded (refusedRowVerdict, audit-log.ts): the same address at most
+    once per 15 minutes, and at most 20 refused rows an hour in all.
+    Past that the attempt is still refused, only not written; the server
+    log gets a line without the address. Unlike a staff view
+    (recordStaffActionOnce, which writes when in doubt), if the look-back
+    cannot be made NOTHING is written — the bound must hold. The check
+    is read-then-write: several refusals landing in the same instant can
+    each be written. Staff sign-ins and sign-outs are never limited.
+  - The refused address was chosen by a stranger. signInAddress() makes
+    it lowercase, takes out blanks, line breaks and invisible or
+    direction-changing characters, and cuts it to 254 characters; it is
+    only ever compared, stored and shown as text.
+  - "Signed out" is written only if the token was still a working staff
+    sign-in (on the staff list, the day not over).
+  - The "Staff member" filter is the staff list (ALLOWED_ADMIN_EMAILS),
+    never the addresses found in the rows: a refused address cannot
+    appear in it (audit-route.test.ts). Refused rows are found with the
+    kind of activity, "Sign-in refused".
+  - Until 0022 is applied the table's check refuses the three actions
+    (23514): signing in and out work as before and each writes one
+    "audit log write failed" line. That is the fail-open rule above, not
+    a migration fallback — there is none in the code.
 - Nothing prunes the table.
 - RLS on, no policies; patient_ids is deliberately not a foreign key
   (the record outlives the patient — the page then shows "1 patient").
@@ -1258,6 +1317,12 @@ Input rules (do not regress these — each fixes a way presses were lost):
   that opens only the kiosk's own routes; a browser carrying one is never
   treated as staff
 - Staff sign-ins end at 3 am clinic time; the dashboard has Sign out
+- Staff sign-ins, sign-outs and refused sign-in attempts (a Google
+  account that is not on the staff list — the address that tried) are
+  recorded in staff_audit_log: who and when. No IP address, browser or
+  device is stored. Refused rows are bounded so a stranger cannot fill
+  the table (one per address per 15 minutes, 20 an hour in all), and the
+  refused address is cut to 254 characters and only ever handled as text
 - Dashboard patient searches, PIN resets, staff check-ins, check-in
   history views and exports, removals from the rooms board and device
   pairing are recorded

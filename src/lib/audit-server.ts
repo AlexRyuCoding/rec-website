@@ -1,7 +1,8 @@
 // The record of what staff did with patient data: who, when, what, and
 // which patients (staff_audit_log — migration 0015; later actions need
-// 0016 and 0019). Read on the dashboard's Log tab (loadAuditPage). What
-// the actions are and what they are called: audit-log.ts.
+// 0016, 0019 and 0022). Read on the dashboard's Log tab (loadAuditPage).
+// What the actions are and what they are called: audit-log.ts. The rows
+// about signing in are written through signin-log.ts.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -10,6 +11,7 @@ import {
   StaffAction,
   VIEW_REPEAT_MS,
 } from "./audit-log";
+import { errorLabel } from "./error-label";
 
 export type { StaffAction };
 
@@ -26,8 +28,9 @@ const MAX_DETAIL_LENGTH = 200;
 
 // Never throws and never blocks the action: if the row cannot be written
 // (a database hiccup) the front desk must still
-// be able to find a patient and reset a PIN. The failure is logged — with
-// the error code only, never the patient or the search text.
+// be able to find a patient and reset a PIN. The failure is logged — as
+// the kind of error only (errorLabel), never the patient, the person or
+// the search text.
 export async function recordStaffAction(
   supabase: SupabaseClient,
   entry: StaffActionEntry
@@ -40,10 +43,10 @@ export async function recordStaffAction(
       detail: entry.detail?.slice(0, MAX_DETAIL_LENGTH) ?? null,
     });
     if (error) {
-      console.error("audit log write failed:", entry.action, error.code);
+      console.error("audit log write failed:", entry.action, errorLabel(error));
     }
-  } catch {
-    console.error("audit log write failed:", entry.action, "exception");
+  } catch (error) {
+    console.error("audit log write failed:", entry.action, errorLabel(error));
   }
 }
 
