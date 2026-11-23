@@ -337,6 +337,34 @@ add_holder() {
   [ -z "${5:-}" ] || lookup="'$5'"
   sql "$1" "insert into public.patients (id, first_name, last_name, pb_client_id, pin, pin_lookup) values ('$(pin_id "$2")', '$3', 'Madeupson', 'stamp-test-$2', $pin, $lookup)"
 }
+# Somebody has signed in at the kiosk since fingerprints exist: one holder
+# the app stamped itself, with the site's secret. It is the evidence
+# `stamp` asks for before it writes anything (scene 2) — on the live
+# database such patients exist; every scene that stamps has one.
+SIGNED_IN=90
+add_signed_in() { # add_signed_in <database>
+  add_holder "$1" "$SIGNED_IN" Regular "$(hash_of 0909)" "$(app_fingerprint 0909)"
+}
+# stand_in <name> <call number> <command…> — a psql that notes how it was
+# called and, before the job's Nth call, runs the command: what happens
+# at the kiosk in the middle of the job. Prints the folder to put first
+# in PATH; the calls are noted in <folder>/calls.
+REAL_PSQL="$(command -v psql)"
+stand_in() {
+  local dir="$DIR/stand-in-$1" at="$2"
+  shift 2
+  mkdir -p "$dir"
+  {
+    echo '#!/usr/bin/env bash'
+    echo "printf '%s\\n' \"\$*\" >> \"$dir/calls\""
+    echo "if [ \"\$(wc -l < \"$dir/calls\" | tr -d ' ')\" = \"$at\" ]; then"
+    echo "  $*"
+    echo 'fi'
+    echo "exec \"$REAL_PSQL\" \"\$@\""
+  } > "$dir/psql"
+  chmod +x "$dir/psql"
+  echo "$dir"
+}
 lookup_of() { # lookup_of <database> <n> — the stored fingerprint, or ''
   sql "$1" "select coalesce(pin_lookup, '') from public.patients where id = '$(pin_id "$2")'"
 }
@@ -404,27 +432,25 @@ new_pins_db() { # new_pins_db <name>
 new_pins_db pins
 H1="$(hash_of 1234 8)" # as the app makes them: cost 8
 H2="$(hash_of 0000)"
-H3="$(hash_of 1975)"
 H4="$(hash_of 0704)"
 H6="$(hash_of 8351)" # nothing likely about it: found late
 H7="$(hash_of 2580)"
 H7="\$2a${H7#\$2b}" # the same hash as an older library wrote it
 add_holder pins 1 Opal "$H1"
 add_holder pins 2 Quill "$H2"
-add_holder pins 3 Wren "$H3" "$(app_fingerprint 1975 "$OLD_SECRET")"
+# Has signed in since fingerprints exist: stamped by the app itself.
 add_holder pins 4 Ada "$H4" "$(app_fingerprint 0704)"
 add_holder pins 5 Nopin ""
 add_holder pins 6 Late "$H6"
 add_holder pins 7 Older "$H7"
-PINS="1234 0000 1975 0704 8351 2580"
+PINS="1234 0000 0704 8351 2580"
 
 before="$(pins_state pins)"
 out="$(stamp pins count 2>&1)" || fail "stamp-pins.sh count: $out"
-echo "$out" | grep -qx "stamp-pins count: pin_holders=6 current=1 without=5 never_stamped=4 other_key=1 unusable=0" \
-  || fail "count must say 6 holders, 1 current, 5 without (4 never stamped, 1 under another key); it said: $out"
+echo "$out" | grep -qx "stamp-pins count: pin_holders=5 current=1 without=4 never_stamped=4 other_key=0 unusable=0" \
+  || fail "count must say 5 holders, 1 current, 4 without; it said: $out"
 echo "$out" | grep -q "^stamp-pins count: .*minute" || fail "count must give a rough time: $out"
-echo "$out" | grep -q "^stamp-pins count: other_key is not 0" \
-  || fail "count must point out fingerprints made with another secret (this job may have the wrong one): $out"
+case "$out" in *"would refuse"*) fail "count said stamp would refuse when nothing stands in its way: $out" ;; esac
 echo "$out" | grep -qx "stamp-pins count: nothing was changed" || fail "count must say it changed nothing: $out"
 same "count changes nothing" "$(pins_state pins)" "$before"
 # shellcheck disable=SC2086
@@ -432,22 +458,19 @@ no_patient_data "count" "$out" pins $PINS
 ok "count: how many PIN holders have no current fingerprint, a rough time, and no change"
 
 out="$(stamp pins stamp 2>&1)" || fail "stamp-pins.sh stamp: $out"
-same "five were looked at" "$(says "$out" seen)" "5"
-same "five were stamped" "$(says "$out" stamped)" "5"
+same "four were looked at" "$(says "$out" seen)" "4"
+same "four were stamped" "$(says "$out" stamped)" "4"
 same "the app's fingerprint for a PIN hashed at cost 8" "$(lookup_of pins 1)" "$(app_fingerprint 1234)"
 same "the app's fingerprint for 0000" "$(lookup_of pins 2)" "$(app_fingerprint 0000)"
 same "a PIN found late is found all the same" "$(lookup_of pins 6)" "$(app_fingerprint 8351)"
 same "a \$2a\$ hash is read like a \$2b\$ one" "$(lookup_of pins 7)" "$(app_fingerprint 2580)"
-ok "stamp: each holder gets exactly the fingerprint the app makes for their PIN"
-
-same "a fingerprint made under an older secret is replaced" "$(lookup_of pins 3)" "$(app_fingerprint 1975)"
-ok "stamp: a fingerprint from before a secret rotation is replaced"
+ok "stamp, with a patient the app has stamped as its evidence: each holder gets exactly the fingerprint the app makes for their PIN"
 
 same "a patient with a current fingerprint is left alone" "$(lookup_of pins 4)" "$(app_fingerprint 0704)"
 same "a patient without a PIN gets nothing" "$(lookup_of pins 5)" ""
 same "no hash was touched" \
-  "$(pin_of pins 1)|$(pin_of pins 2)|$(pin_of pins 3)|$(pin_of pins 4)|$(pin_of pins 5)|$(pin_of pins 6)|$(pin_of pins 7)" \
-  "$H1|$H2|$H3|$H4||$H6|$H7"
+  "$(pin_of pins 1)|$(pin_of pins 2)|$(pin_of pins 4)|$(pin_of pins 5)|$(pin_of pins 6)|$(pin_of pins 7)" \
+  "$H1|$H2|$H4||$H6|$H7"
 ok "stamp: current fingerprints, patients without a PIN and every hash are left as they were"
 
 # shellcheck disable=SC2086
@@ -465,16 +488,87 @@ out="$(stamp pins stamp 2>&1)" || fail "stamp-pins.sh stamp, second run: $out"
 same "a second run finds nobody to look at" "$(says "$out" seen)" "0"
 same "a second run changes nothing" "$(pins_state pins)" "$after_first"
 out="$(stamp pins count 2>&1)" || fail "stamp-pins.sh count, afterwards: $out"
-echo "$out" | grep -qx "stamp-pins count: pin_holders=6 current=6 without=0 never_stamped=0 other_key=0 unusable=0" \
+echo "$out" | grep -qx "stamp-pins count: pin_holders=5 current=5 without=0 never_stamped=0 other_key=0 unusable=0" \
   || fail "count must say nobody is left; it said: $out"
-case "$out" in *"other_key is not 0"*) fail "count warned about another secret when there is none: $out" ;; esac
+case "$out" in *"would refuse"*) fail "count said stamp would refuse when nobody is left: $out" ;; esac
 ok "a second run changes nothing, and count then says nobody is left"
 
-# 2. Two patients with one PIN (possible in data from before the unique
+# 2. Is the job's secret the site's? A fingerprint made with another
+#    secret is useless to the kiosk, and stamping with one would replace
+#    the app's own. The only evidence the job can have is a patient the
+#    APP has stamped (they signed in since fingerprints exist): their
+#    fingerprint starts with this secret's key id. So `stamp` refuses,
+#    and writes nothing, (a) while nobody has a current fingerprint, and
+#    (b) while anybody has one made with another secret.
+new_pins_db nobody_yet
+add_holder nobody_yet 81 Opal "$(hash_of 1234)"
+add_holder nobody_yet 82 Quill "$(hash_of 0000)"
+before="$(pins_state nobody_yet)"
+if out="$(stamp nobody_yet stamp 2>&1)"; then
+  fail "stamp must refuse while no patient has a fingerprint made with its secret: $out"
+fi
+echo "$out" | grep -q "^stamp-pins task 1/1 stopped: refusing to stamp, nothing was written: no patient" \
+  || fail "the refusal must say why, in one line: $out"
+same "the refusal is one line" "$(printf '%s\n' "$out" | wc -l | tr -d ' ')" "1"
+same "a refused stamp wrote nothing" "$(pins_state nobody_yet)" "$before"
+no_patient_data "a refused stamp" "$out" nobody_yet 1234 0000
+out="$(stamp nobody_yet count 2>&1)" || fail "stamp-pins.sh count, with nobody stamped yet: $out"
+echo "$out" | grep -qx "stamp-pins count: pin_holders=2 current=0 without=2 never_stamped=2 other_key=0 unusable=0" \
+  || fail "count must say 2 holders, none current; it said: $out"
+echo "$out" | grep -q "^stamp-pins count: stamp would refuse: no patient" \
+  || fail "count must say that stamp would refuse, and why: $out"
+ok "stamp refuses, and writes nothing, while no patient has a fingerprint made with its secret"
+
+# One of them signs in at the kiosk: the app stamps them. Now it runs.
+sql nobody_yet "update public.patients set pin_lookup = '$(app_fingerprint 1234)' where id = '$(pin_id 81)'"
+out="$(stamp nobody_yet stamp 2>&1)" || fail "stamp-pins.sh stamp, once a patient has signed in: $out"
+same "the other one is stamped" "$(says "$out" stamped)" "1"
+same "with the app's fingerprint" "$(lookup_of nobody_yet 82)" "$(app_fingerprint 0000)"
+ok "once one patient has signed in at the kiosk, stamp runs"
+
+# After NEXTAUTH_SECRET really was replaced every fingerprint is from the
+# old secret. That is the one case with its own way in.
+new_pins_db rotated
+H3="$(hash_of 1975)"
+add_holder rotated 1 Opal "$(hash_of 1234)"
+add_holder rotated 3 Wren "$H3" "$(app_fingerprint 1975 "$OLD_SECRET")"
+before="$(pins_state rotated)"
+out="$(stamp rotated count 2>&1)" || fail "stamp-pins.sh count, after a new secret: $out"
+echo "$out" | grep -qx "stamp-pins count: pin_holders=2 current=0 without=2 never_stamped=1 other_key=1 unusable=0" \
+  || fail "count must say 2 holders, 1 never stamped, 1 under another key; it said: $out"
+echo "$out" | grep -q "^stamp-pins count: stamp would refuse: 1 fingerprint.* another NEXTAUTH_SECRET" \
+  || fail "count must point out fingerprints made with another secret: $out"
+if out="$(stamp rotated stamp 2>&1)"; then
+  fail "stamp must refuse while a fingerprint made with another secret exists: $out"
+fi
+echo "$out" | grep -q "^stamp-pins task 1/1 stopped: refusing to stamp, nothing was written: 1 fingerprint.* another NEXTAUTH_SECRET.*stamp-after-new-secret" \
+  || fail "the refusal must say why, and name the way in after a new secret: $out"
+same "a refused stamp wrote nothing" "$(pins_state rotated)" "$before"
+# Also with a patient who has signed in since: other-key ones still refuse.
+add_signed_in rotated
+if out="$(stamp rotated stamp 2>&1)"; then
+  fail "stamp must refuse fingerprints of another secret even when some are current: $out"
+fi
+ok "stamp refuses, and writes nothing, while a fingerprint made with another secret exists"
+
+out="$(stamp rotated stamp-after-new-secret 2>&1)" || fail "stamp-pins.sh stamp-after-new-secret: $out"
+same "both were looked at" "$(says "$out" seen)" "2"
+same "both were stamped" "$(says "$out" stamped)" "2"
+same "a fingerprint made under an older secret is replaced" "$(lookup_of rotated 3)" "$(app_fingerprint 1975)"
+same "its hash was not touched" "$(pin_of rotated 3)" "$H3"
+same "the never-stamped one is stamped too" "$(lookup_of rotated 1)" "$(app_fingerprint 1234)"
+no_patient_data "stamp-after-new-secret" "$out" rotated 1234 1975 0909
+out="$(stamp rotated stamp 2>&1)" || fail "plain stamp, once no fingerprint of another secret is left: $out"
+same "and finds nobody" "$(says "$out" seen)" "0"
+ok "stamp-after-new-secret replaces fingerprints from before a secret rotation"
+
+# 3. Two patients with one PIN (possible in data from before the unique
 #    index), a hash no PIN matches, and values that are not hashes at all.
-#    The fingerprint goes to the patient the kiosk itself would find for
-#    that PIN — the first by id, as pin-server.ts reads them — and the
-#    other is left without one: counted, never fatal.
+#    Of two unstamped patients on one PIN the kiosk signs in the first by
+#    id (pin-server.ts reads them in id order), so that is who the
+#    fingerprint goes to; the other is left without one: counted, never
+#    fatal. (Patient 22 below, already stamped, is also this scene's
+#    evidence that the secret is the site's.)
 new_pins_db odd
 add_holder odd 11 First "$(hash_of 4321)"
 add_holder odd 12 Second "$(hash_of 4321)"
@@ -523,12 +617,13 @@ echo "$out" | grep -qx "stamp-pins count: pin_holders=10 current=4 without=6 nev
   || fail "count must say six are left, three of them unusable; it said: $out"
 ok "a later run tries them again and settles the same way"
 
-# 3. The kiosk in use while the job runs. A stand-in psql lets the test
+# 4. The kiosk in use while the job runs. A stand-in psql lets the test
 #    act between the job's read and its first write: by then one patient
 #    has had their PIN reset by staff, one has chosen a new PIN, one was
 #    stamped by the app, one got a new PIN from code that knows nothing
 #    of fingerprints. None of the four writes may land.
 new_pins_db race
+add_signed_in race
 add_holder race 41 Reset "$(hash_of 1010)"
 add_holder race 42 Newpin "$(hash_of 2020)"
 add_holder race 43 Signedin "$(hash_of 3030)"
@@ -541,20 +636,10 @@ update public.patients set pin = '$NEW42', pin_lookup = '$(app_fingerprint 9090)
 update public.patients set pin_lookup = '$(app_fingerprint 3030)' where id = '$(pin_id 43)';
 update public.patients set pin = '$NEW44' where id = '$(pin_id 44)';
 SQL
-REAL_PSQL="$(command -v psql)"
-mkdir -p "$DIR/stand-in"
-cat > "$DIR/stand-in/psql" <<STANDIN
-#!/usr/bin/env bash
-# Stand-in psql: notes how it was called, and before the job's SECOND
-# call (its first write) does what happened at the kiosk meanwhile.
-printf '%s\n' "\$*" >> "$DIR/psql-calls"
-if [ "\$(wc -l < "$DIR/psql-calls" | tr -d ' ')" = "2" ]; then
-  "$REAL_PSQL" -U postgres -X -q -v ON_ERROR_STOP=1 -d race -f "$DIR/meanwhile.sql" >/dev/null
-fi
-exec "$REAL_PSQL" "\$@"
-STANDIN
-chmod +x "$DIR/stand-in/psql"
-out="$(PATH="$DIR/stand-in:$PATH" stamp race stamp 2>&1)" || fail "stamp-pins.sh while the kiosk is in use: $out"
+# The job's calls: 1 its look at the secret's evidence, 2 the read, 3 the
+# first write.
+RACE="$(stand_in race 3 "\"$REAL_PSQL\" -U postgres -X -q -v ON_ERROR_STOP=1 -d race -f \"$DIR/meanwhile.sql\" >/dev/null")"
+out="$(PATH="$RACE:$PATH" stamp race stamp 2>&1)" || fail "stamp-pins.sh while the kiosk is in use: $out"
 same "all four were looked at" "$(says "$out" seen)" "4"
 same "none was stamped by the job" "$(says "$out" stamped)" "0"
 same "all four had changed meanwhile" "$(says "$out" changed)" "4"
@@ -567,7 +652,7 @@ ok "a PIN reset, a new PIN or a sign-in between the job's read and its write is 
 # Hashes and ids travel through pipes: nothing of a patient's is ever an
 # argument of a program (where other programs could read it).
 while read -r secret; do
-  if grep -qF -- "$secret" "$DIR/psql-calls"; then
+  if grep -qF -- "$secret" "$RACE/calls"; then
     fail "the job put something of a patient's on psql's command line"
   fi
 done < <(
@@ -576,8 +661,8 @@ done < <(
   sql race "select pin_lookup from public.patients where pin_lookup is not null"
   echo "$SECRET"
 )
-same "psql was called for the read, each write and the last look" \
-  "$(wc -l < "$DIR/psql-calls" | tr -d ' ')" "6"
+same "psql was called for the evidence, the read, each write and the last look" \
+  "$(wc -l < "$RACE/calls" | tr -d ' ')" "7"
 ok "nothing of a patient's, and not the secret, is ever on a command line"
 
 # The next run finds 44's new PIN, which nobody has stamped.
@@ -585,10 +670,44 @@ out="$(stamp race stamp 2>&1)" || fail "stamp-pins.sh after the kiosk scene: $ou
 same "a new PIN written without a fingerprint is stamped by the next run" \
   "$(lookup_of race 44)" "$(app_fingerprint 6060)"
 
+# The same, with the change still IN FLIGHT when the job writes: a
+# transaction has replaced the PIN and not yet committed. The job's write
+# must wait for it and then see the new PIN — which is why it locks the
+# row before deciding (`for update`). Looking without the lock, it would
+# see the old PIN, wait only at the write, and put the OLD PIN's
+# fingerprint on the NEW PIN: a patient the kiosk can never find.
+new_pins_db inflight
+add_signed_in inflight
+add_holder inflight 45 Midway "$(hash_of 1010)"
+NEW45="$(hash_of 7070)"
+cat > "$DIR/inflight.sql" <<SQL
+begin;
+update public.patients set pin = '$NEW45' where id = '$(pin_id 45)';
+select pg_sleep(2);
+commit;
+SQL
+cat > "$DIR/inflight.sh" <<INFLIGHT
+"$REAL_PSQL" -U postgres -X -q -v ON_ERROR_STOP=1 -d inflight -f "$DIR/inflight.sql" >/dev/null 2>&1 &
+# Go on only once that transaction holds the row.
+for _ in \$(seq 1 100); do
+  [ "\$("$REAL_PSQL" -U postgres -X -q -At -d inflight -c "select count(*) from pg_stat_activity where datname = 'inflight' and query like '%pg_sleep%' and pid <> pg_backend_pid()")" = "1" ] && break
+  sleep 0.05
+done
+INFLIGHT
+INFLIGHT="$(stand_in inflight 3 "bash \"$DIR/inflight.sh\"")"
+out="$(PATH="$INFLIGHT:$PATH" stamp inflight stamp 2>&1)" || fail "stamp-pins.sh while a PIN change is in flight: $out"
+same "the one holder was looked at" "$(says "$out" seen)" "1"
+same "and found changed" "$(says "$out" changed)" "1"
+same "nothing was stamped" "$(says "$out" stamped)" "0"
+same "the new PIN is in place, with no fingerprint from the old one" \
+  "$(pin_of inflight 45)|$(lookup_of inflight 45)" "$NEW45|"
+ok "a PIN change still in flight when the job writes: the job waits, sees the new PIN and stores nothing"
+
 # A database error is shown as its code alone. Here Postgres's own text
 # would quote the row (a made-up trigger that fails with the hash in its
 # message).
 new_pins_db loud
+add_signed_in loud
 HLOUD="$(hash_of 7777)"
 add_holder loud 51 Loud "$HLOUD"
 sql loud "create function public.stamp_test_loud() returns trigger language plpgsql as \$f\$ begin raise exception 'refused % %', new.pin, new.first_name using detail = new.pin_lookup; end \$f\$"
@@ -613,9 +732,10 @@ echo "$out" | grep -q "the database could not be reached" || fail "an unreachabl
 case "$out" in *127.0.0.1* | *ops_admin*) fail "an unreachable database printed psql's own words: $out" ;; esac
 ok "a missing table and an unreachable database are errors, said without psql's own words"
 
-# 4. Shares. Three tasks, each on its own copy of the same twelve
+# 5. Shares. Three tasks, each on its own copy of the same twelve
 #    holders: every holder is in exactly one task's share.
 new_pins_db shares_seed
+add_signed_in shares_seed
 n=60
 for pin in 1111 2222 3333 4444 5555 6666 7777 8888 9999 1212 1313 1414; do
   n=$((n + 1))
@@ -628,7 +748,7 @@ for index in 0 1 2; do
   out="$(CLOUD_RUN_TASK_INDEX="$index" CLOUD_RUN_TASK_COUNT=3 STAMP_CHUNK=2 stamp "shares_$index" stamp 2>&1)" \
     || fail "stamp-pins.sh as task $index of 3: $out"
   echo "$out" | grep -q "^stamp-pins task $((index + 1))/3 done: " || fail "task $index of 3 must say which task it is: $out"
-  mine="$(sql "shares_$index" "select id from public.patients where pin_lookup is not null order by id")"
+  mine="$(sql "shares_$index" "select id from public.patients where pin_lookup is not null and id <> '$(pin_id "$SIGNED_IN")' order by id")"
   same "task $index of 3 stamped everyone it looked at" "$(says "$out" stamped)" "$(says "$out" seen)"
   same "task $index of 3 looked at its share and nobody else" "$(says "$out" seen)" "$(printf '%s\n' "$mine" | grep -c . || true)"
   total=$((total + $(says "$out" seen)))
@@ -638,19 +758,51 @@ done
 same "the three shares hold all twelve holders" "$total" "12"
 same "no holder is in two shares" "$(printf '%s' "$taken" | grep . | sort | uniq -d | wc -l | tr -d ' ')" "0"
 same "every holder is in one" "$(printf '%s' "$taken" | grep . | sort -u | wc -l | tr -d ' ')" "12"
-# The same three tasks on ONE database, as Cloud Run runs them.
-for index in 0 1 2; do
-  out="$(CLOUD_RUN_TASK_INDEX="$index" CLOUD_RUN_TASK_COUNT=3 stamp shares_seed stamp 2>&1)" \
-    || fail "stamp-pins.sh as task $index of 3, together: $out"
-done
-same "three tasks together stamp all twelve" \
-  "$(sql shares_seed "select count(*) from public.patients where pin_lookup is not null")" "12"
 ok "three tasks: every holder is in exactly one task's share"
+
+# Three tasks AT THE SAME TIME on one database, as Cloud Run runs them —
+# and every PIN is held by two patients (61–66, and again 71–76), most
+# pairs split between two tasks. Each holder takes a couple of seconds
+# to work out, so the tasks are in each other's way for real: some later
+# patients are reached first and lose the fingerprint again. Whatever the
+# order, the end is the same: the first by id of each pair holds it.
+new_pins_db together
+add_signed_in together
+n=60
+TOGETHER_PINS="1358 1462 1573 1687 1746 1839"
+for pin in $TOGETHER_PINS; do
+  n=$((n + 1))
+  add_holder together "$n" "First$n" "$(hash_of "$pin")"
+  add_holder together "$((n + 10))" "Second$n" "$(hash_of "$pin")"
+done
+pids=""
+for index in 0 1 2; do
+  CLOUD_RUN_TASK_INDEX="$index" CLOUD_RUN_TASK_COUNT=3 STAMP_CHUNK=2 \
+    stamp together stamp > "$DIR/together.$index" 2>&1 &
+  pids="$pids $!"
+done
+for pid in $pids; do
+  wait "$pid" || fail "a task failed when three ran at the same time: $(cat "$DIR"/together.*)"
+done
+working=0
+for index in 0 1 2; do
+  [ "$(says "$(cat "$DIR/together.$index")" seen)" = "0" ] || working=$((working + 1))
+done
+same "at least two of the three tasks had holders to work on" "$([ "$working" -ge 2 ] && echo yes)" "yes"
+n=60
+for pin in $TOGETHER_PINS; do
+  n=$((n + 1))
+  same "the first patient with PIN $pin holds its fingerprint" "$(lookup_of together "$n")" "$(app_fingerprint "$pin")"
+  same "the second patient with PIN $pin holds none" "$(lookup_of together "$((n + 10))")" ""
+done
+# shellcheck disable=SC2086
+no_patient_data "three tasks at the same time" "$(cat "$DIR"/together.*)" together $TOGETHER_PINS
+ok "three tasks at the same time, every PIN shared by two patients: the first by id ends up with each fingerprint"
 
 out="$(CLOUD_RUN_TASK_INDEX=1 CLOUD_RUN_TASK_COUNT=3 stamp pins count 2>&1)" || fail "count as task 1 of 3: $out"
 case "$out" in *pin_holders=*) fail "only the first task counts; task 2 of 3 printed: $out" ;; esac
 out="$(CLOUD_RUN_TASK_INDEX=0 CLOUD_RUN_TASK_COUNT=3 stamp pins count 2>&1)" || fail "count as task 0 of 3: $out"
-echo "$out" | grep -q "pin_holders=6 current=6 without=0" || fail "the first of three tasks must count: $out"
+echo "$out" | grep -q "pin_holders=5 current=5 without=0" || fail "the first of three tasks must count: $out"
 ok "count, run as several tasks, is printed once"
 
 before="$(pins_state odd)"
@@ -666,9 +818,9 @@ fi
 same "a refused task changed nothing" "$(pins_state odd)" "$before"
 ok "a task that cannot tell its share refuses to run"
 
-# 5. Without the secret there is no key: nothing may be counted as
+# 6. Without the secret there is no key: nothing may be counted as
 #    "current" or stamped under an empty one.
-for mode in count stamp; do
+for mode in count stamp stamp-after-new-secret; do
   if out="$(PGDATABASE=odd bash "$STAMP_PINS" "$mode" 2>&1)"; then
     fail "stamp-pins.sh $mode must refuse to run without NEXTAUTH_SECRET"
   fi
@@ -681,9 +833,9 @@ for mode in count stamp; do
   fi
 done
 same "nothing was stamped without the secret" "$(pins_state odd)" "$before"
-ok "count and stamp refuse to run without NEXTAUTH_SECRET"
+ok "count, stamp and stamp-after-new-secret refuse to run without NEXTAUTH_SECRET"
 
-for bad in "" "sideways" "stamp extra" "count stamp"; do
+for bad in "" "sideways" "stamp extra" "count stamp" "stamp-after" "stamp-after-new-secret now"; do
   # shellcheck disable=SC2086
   if out="$(stamp odd $bad 2>&1)"; then
     fail "stamp-pins.sh must refuse: '$bad'"

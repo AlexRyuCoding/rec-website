@@ -1,7 +1,7 @@
 // The working half of deploy/ops/stamp-pins.sh — read that file's header
 // first: it says what the job is for and what it promises.
 //
-//   node stamp-pins.mjs count | stamp
+//   node stamp-pins.mjs count | stamp | stamp-after-new-secret
 //
 // The rules are in lib.mjs (pure, tested by src/lib/stamp-pins.test.ts).
 // This file talks to the database, through psql as the other ops scripts
@@ -30,6 +30,7 @@ import {
   parseHolders,
   parseOutcome,
   pinFingerprint,
+  stampRefusal,
   Stop,
   taskShare,
   usableCost,
@@ -102,12 +103,28 @@ select p.id::text || ' ' || encode(convert_to(p.pin, 'UTF8'), 'hex')
 //              and holds this fingerprint. The unique index allows one.
 //   took-over  stored, and taken from a LATER patient with the same PIN.
 //
-// Why the earlier patient: with two patients on one PIN the kiosk finds
-// the first by id (pin-server.ts reads holders in id order and stops at
-// the first match). Whoever holds the fingerprint is who that PIN signs
-// in from now on — so it goes to the same patient as before this job,
-// whichever task gets there first. The other stays as they are today:
-// without a fingerprint, compared the slow way.
+// Why the earlier patient. For a PIN the app (pin-server.ts) looks for
+// the fingerprint FIRST, and only if nobody holds it compares the PIN
+// with the holders that have no current fingerprint, in id order,
+// stopping at the first match. So a PIN two patients share signs in
+// whoever holds its fingerprint — and, while neither does, the first by
+// id. For a pair from old data, neither of them stamped, that is the
+// earlier patient today; giving the fingerprint to the earlier one keeps
+// it so, whichever task gets there first. The other stays as they are:
+// without a fingerprint, compared the slow way, unable to sign in with
+// that PIN (as today).
+//
+// What this cannot avoid: if the LATER patient's task reaches them
+// first, the PIN signs the later one in from that moment until the
+// earlier patient's task takes the fingerprint over — and if the run is
+// cancelled or that task fails in between, until `stamp` is run again.
+// That is why the runbook has it run while the clinic is closed, and a
+// cancelled run repeated before the clinic opens.
+//
+// The row is locked BEFORE it is looked at (`for update`). A PIN change
+// still in flight — an open transaction — is then waited for and seen.
+// Looking without the lock, the write would wait for it instead, and
+// put the old PIN's fingerprint on the new PIN.
 //
 // Only pin_lookup is written, never pin, so migration 0017's trigger
 // (which clears pin_lookup when pin changes without it) leaves the new
@@ -242,25 +259,18 @@ function count(say, secret, share) {
   }
   const counts = parseCounts(psql(COUNT_SQL(`${keyId(secret)}\n`)));
   const without = counts.holders - counts.current;
-  const otherKey = without - counts.never;
   const ms = compareMs();
   const time = estimate(counts.costs, ms, share.count);
   say(
     `pin_holders=${counts.holders} current=${counts.current}` +
       ` without=${without} never_stamped=${counts.never}` +
-      ` other_key=${otherKey} unusable=${time.unusable}`
+      ` other_key=${without - counts.never} unusable=${time.unusable}`
   );
   if (counts.holders === 0) {
     say("no patient has a PIN here. is this the right database?");
   }
-  if (otherKey > 0) {
-    say(
-      "other_key is not 0: those fingerprints were made with another" +
-        " NEXTAUTH_SECRET than this job has. that is expected after the" +
-        " secret was replaced; otherwise this job has the wrong secret, and" +
-        " stamping would undo the app's own work."
-    );
-  }
+  const refusal = stampRefusal(counts);
+  if (refusal !== null) say(`stamp would refuse: ${refusal}`);
   say(
     `one compare takes ${ms.toFixed(1)} ms here: a holder is about` +
       ` ${Math.round(ms * 5)} s of one CPU, at most ${Math.round(ms * 10)} s`
@@ -291,7 +301,10 @@ function chunkSize(env) {
   return Number(env.STAMP_CHUNK);
 }
 
-function stamp(say, secret, share, limit) {
+// `secretIsNew`: the caller says NEXTAUTH_SECRET was replaced (the mode
+// stamp-after-new-secret), which is the one thing the look below cannot
+// tell from a job that was given the wrong secret.
+function stamp(say, secret, share, limit, secretIsNew) {
   const started = Date.now();
   const key = keyId(secret);
   const tally = {
@@ -309,6 +322,16 @@ function stamp(say, secret, share, limit) {
       .join(" ") + ` minutes=${Math.round((Date.now() - started) / 60_000)}`;
 
   if (share.count > 1) sleep(share.index * START_APART_MS);
+
+  // Before anything is written: is there any sign that this job's secret
+  // is the site's? (stampRefusal in lib.mjs.) Every task looks for
+  // itself, at the whole table.
+  if (!secretIsNew) {
+    const refusal = stampRefusal(parseCounts(psql(COUNT_SQL(`${key}\n`))));
+    if (refusal !== null) {
+      throw new Stop(`refusing to stamp, nothing was written: ${refusal}`);
+    }
+  }
 
   // Each read asks for holders AFTER the last one seen, so every holder
   // is looked at once in a run — also the ones that cannot be stamped,
@@ -351,8 +374,13 @@ function stamp(say, secret, share, limit) {
 
 function main() {
   const mode = process.argv[2];
-  if (process.argv.length !== 3 || (mode !== "count" && mode !== "stamp")) {
-    console.error("usage: stamp-pins.mjs count | stamp");
+  if (
+    process.argv.length !== 3 ||
+    !["count", "stamp", "stamp-after-new-secret"].includes(mode)
+  ) {
+    console.error(
+      "usage: stamp-pins.mjs count | stamp | stamp-after-new-secret"
+    );
     return 2;
   }
   // Every line says which part of the job wrote it, and a line about a
@@ -370,7 +398,13 @@ function main() {
       count(say, secret, share);
     } else {
       who = `stamp-pins task ${share.index + 1}/${share.count}`;
-      stamp(say, secret, share, chunkSize(process.env));
+      stamp(
+        say,
+        secret,
+        share,
+        chunkSize(process.env),
+        mode === "stamp-after-new-secret"
+      );
     }
     return 0;
   } catch (error) {

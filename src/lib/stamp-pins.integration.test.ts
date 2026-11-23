@@ -4,6 +4,11 @@
 // anyone. Before it, a wrong PIN costs one bcrypt compare per PIN holder
 // — about ten seconds at the kiosk on the live site.
 //
+// It goes the way the runbook has the owner go: the job refuses to stamp
+// until a patient has signed in at the kiosk (the app's own fingerprint
+// is its evidence that the job's secret is the site's), then counts,
+// then stamps.
+//
 // Run with `npm run test:rest`, which builds the ops image (as Cloud
 // Build does) and starts Postgres + PostgREST. The job here is that
 // image's own copy, with its Node and its bcryptjs, connecting to the
@@ -29,7 +34,6 @@ const RUN = `stamp-${Date.now().toString(36)}`;
 // Made up. The app reads it from NEXTAUTH_SECRET; the job is given the
 // same value, as both get the same secret on Cloud Run.
 const SECRET = `made-up-secret-${RUN}`;
-const OLD_SECRET = `made-up-secret-before-a-rotation-${RUN}`;
 
 const db = () => createServiceClient();
 
@@ -71,15 +75,16 @@ interface Holder {
   name: string;
   pin: string;
   cost: number;
-  // The fingerprint the row starts with.
-  lookup: "none" | "old-key";
 }
-// As the app makes them (cost 8), and two quick ones.
-const HOLDERS: Holder[] = [
-  { name: "Opal", pin: "1975", cost: 8, lookup: "none" },
-  { name: "Quill", pin: "8351", cost: 4, lookup: "none" },
-  { name: "Wren", pin: "0704", cost: 4, lookup: "old-key" },
+// The one who signs in at the kiosk before the job is run.
+const REGULAR: Holder = { name: "Ada", pin: "2580", cost: 4 };
+// The ones the job is for: as the app makes them (cost 8), and two quick.
+const UNSTAMPED: Holder[] = [
+  { name: "Opal", pin: "1975", cost: 8 },
+  { name: "Quill", pin: "8351", cost: 4 },
+  { name: "Wren", pin: "0704", cost: 4 },
 ];
+const HOLDERS = [REGULAR, ...UNSTAMPED];
 const WRONG_PIN = "6392";
 
 const rows = new Map<string, { id: string; pin: string }>();
@@ -95,6 +100,18 @@ async function lookupOf(name: string) {
     .single();
   expect(error).toBeNull();
   return data as { pin: string | null; pin_lookup: string | null };
+}
+// Nothing of a patient's, and not the secret, in what the job printed.
+function expectCountsOnly(said: string) {
+  for (const holder of HOLDERS) {
+    const { id, pin } = rows.get(holder.name)!;
+    for (const theirs of [id, pin, holder.name, holder.pin]) {
+      expect(said).not.toContain(theirs);
+    }
+    expect(said).not.toContain(pinFingerprint(holder.pin, SECRET));
+  }
+  expect(said).not.toContain(SECRET);
+  expect(said).not.toContain("Madeupson");
 }
 
 beforeAll(async () => {
@@ -122,10 +139,6 @@ beforeAll(async () => {
         last_name: "Madeupson",
         pb_client_id: `${RUN}-${++n}`,
         pin,
-        pin_lookup:
-          holder.lookup === "old-key"
-            ? pinFingerprint(holder.pin, OLD_SECRET)
-            : null,
       })
       .select("id")
       .single();
@@ -154,47 +167,55 @@ describe("the stamping job, then the app's own sign-in", () => {
     vi.stubEnv("NEXTAUTH_SECRET", SECRET);
     const compare = vi.spyOn(bcrypt, "compare");
     expect(await findPatientByPin(db(), WRONG_PIN)).toBeNull();
-    // One has a fingerprint, but from before a rotation: it counts for
-    // nothing, and all three are compared.
     expect(compare).toHaveBeenCalledTimes(HOLDERS.length);
+  });
+
+  it("the job refuses to stamp while no patient has signed in — nothing shows its secret is the site's", async () => {
+    const { status, stdout, stderr } = stampPins("stamp");
+    expect(stderr).toMatch(
+      /^stamp-pins task 1\/1 stopped: refusing to stamp, nothing was written: no patient/m
+    );
+    expect(status).toBe(1);
+    for (const holder of HOLDERS) {
+      expect((await lookupOf(holder.name)).pin_lookup).toBeNull();
+    }
+    expectCountsOnly(stdout + stderr);
+  }, 120_000);
+
+  it("a patient signs in at the kiosk: the app stamps her, with the site's secret", async () => {
+    vi.stubEnv("NEXTAUTH_SECRET", SECRET);
+    const found = await findPatientByPin(db(), REGULAR.pin);
+    expect(found).toMatchObject({ id: rows.get(REGULAR.name)!.id });
+    expect((await lookupOf(REGULAR.name)).pin_lookup).toBe(
+      pinFingerprint(REGULAR.pin, SECRET)
+    );
   });
 
   it("count says how many have no current fingerprint, and changes nothing", () => {
     const { status, stdout, stderr } = stampPins("count");
     expect(stderr + stdout).toContain(
-      "stamp-pins count: pin_holders=3 current=0 without=3 never_stamped=2 other_key=1 unusable=0"
+      "stamp-pins count: pin_holders=4 current=1 without=3 never_stamped=3 other_key=0 unusable=0"
     );
+    expect(stdout).not.toContain("would refuse");
     expect(stdout).toContain("stamp-pins count: nothing was changed");
     expect(status).toBe(0);
-  });
+  }, 120_000);
 
-  it("the job stamps all three, and prints nothing of theirs", async () => {
-    for (const holder of HOLDERS) {
-      const before = await lookupOf(holder.name);
-      expect(before.pin_lookup === null).toBe(holder.lookup === "none");
-    }
-
+  it("the job stamps the other three, and prints nothing of theirs", async () => {
     const { status, stdout, stderr } = stampPins("stamp");
-    const said = stdout + stderr;
     expect(stdout).toMatch(
       /^stamp-pins task 1\/1 done: seen=3 stamped=3 took_over=0 same_pin=0 no_match=0 unusable=0 changed=0 minutes=\d+$/m
     );
     expect(status).toBe(0);
 
     for (const holder of HOLDERS) {
-      const { id, pin } = rows.get(holder.name)!;
       const after = await lookupOf(holder.name);
       // Exactly what the app would have stored at this patient's next
       // sign-in — and the hash is the one it was.
       expect(after.pin_lookup).toBe(pinFingerprint(holder.pin, SECRET));
-      expect(after.pin).toBe(pin);
-      for (const theirs of [id, pin, after.pin_lookup!, holder.name]) {
-        expect(said).not.toContain(theirs);
-      }
-      expect(said).not.toContain(holder.pin);
+      expect(after.pin).toBe(rows.get(holder.name)!.pin);
     }
-    expect(said).not.toContain(SECRET);
-    expect(said).not.toContain("Madeupson");
+    expectCountsOnly(stdout + stderr);
   }, 240_000);
 
   it("after: each stamped patient signs in with ONE compare — the fast way", async () => {

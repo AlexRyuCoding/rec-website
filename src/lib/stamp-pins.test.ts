@@ -4,7 +4,10 @@
 // has Node and nothing of the app's build. What it does to a database is
 // tested in scripts/test-ops.sh; that the app then finds the patients it
 // stamped, in src/lib/stamp-pins.integration.test.ts.
-import { readFileSync } from "fs";
+import { spawnSync } from "child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 import bcrypt from "bcryptjs";
 import { describe, expect, it } from "vitest";
 import {
@@ -20,6 +23,7 @@ import {
   parseHolders,
   parseOutcome,
   pinFingerprint as opsFingerprint,
+  stampRefusal,
   taskShare,
   usableCost,
   writeRow,
@@ -79,6 +83,79 @@ describe("the job's fingerprint is the app's, byte for byte", () => {
     expect(() => opsFingerprint("4821", "")).toThrow();
     expect(() => keyId("")).toThrow();
   });
+});
+
+// The ops image is not built unless deploy/ops/stamp-pins/check-parity.mjs
+// passes against pin-lookup.ts — and it reads that file with Node
+// itself, which leaves the types out and does nothing more. A change
+// that is ordinary TypeScript (a relative import, an "@/lib" import, an
+// enum) cannot be loaded that way; without this case it would pass
+// `npm test`, tsc and lint and only fail in Cloud Build, after the
+// merge, stopping the deploy. So the very check the image runs is run
+// here too.
+//
+// Node reads TypeScript by itself from 22.18 (and 23.6): the image has
+// 22.23, this repository's computers 24. On an older Node the two cases
+// are skipped — and the image's build is then the first to say.
+describe("the ops image's own check, as `npm test` runs it", () => {
+  const [major, minor] = process.versions.node.split(".").map(Number);
+  const nodeReadsTypeScript =
+    major >= 24 ||
+    (major === 23 && minor >= 6) ||
+    (major === 22 && minor >= 18);
+  const check = (path: string) =>
+    spawnSync(
+      process.execPath,
+      [
+        "--disable-warning=ExperimentalWarning",
+        "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON",
+        "deploy/ops/stamp-pins/check-parity.mjs",
+        path,
+      ],
+      { encoding: "utf8" }
+    );
+
+  it.skipIf(!nodeReadsTypeScript)(
+    "passes on src/lib/pin-lookup.ts as it stands (needs Node 22.18 or newer)",
+    () => {
+      const run = check("src/lib/pin-lookup.ts");
+      expect(run.stderr).toBe("");
+      expect(run.stdout).toContain("equals the app's (40000 compared)");
+      expect(run.status).toBe(0);
+    }
+  );
+
+  it.skipIf(!nodeReadsTypeScript)(
+    "fails on a pin-lookup.ts that Node cannot read by itself, or that makes another fingerprint",
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), "parity-"));
+      try {
+        const source = readFileSync("src/lib/pin-lookup.ts", "utf8");
+        const variants: Record<string, string> = {
+          // Fine for the app's build; not loadable as the file stands.
+          "relative-import.ts": `import { helper } from "./pin-helper";\n${source}\nexport const used = helper;\n`,
+          "alias-import.ts": `import { helper } from "@/lib/pin-helper";\n${source}\nexport const used = helper;\n`,
+          "enum.ts": `${source}\nexport enum Kind { Current, Old }\n`,
+          // Loadable, and different.
+          "drifted.ts": source.replace(
+            "rac-pin-lookup-v1",
+            "rac-pin-lookup-v2"
+          ),
+        };
+        for (const [name, text] of Object.entries(variants)) {
+          expect(text).not.toBe(source);
+          writeFileSync(join(dir, name), text);
+          const run = check(join(dir, name));
+          expect(run.status, name).toBe(1);
+          expect(run.stderr, name).toMatch(
+            name === "drifted.ts" ? /is NOT the app's/ : /could not be loaded/
+          );
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  );
 });
 
 describe("candidatePins — the order PINs are tried in", () => {
@@ -369,6 +446,45 @@ describe("dbFailure — a database error, reduced to its code", () => {
       dbErrorCode("ERROR:  canceling statement due to timeout\n")
     ).toBeNull();
     expect(dbErrorCode("")).toBeNull();
+  });
+});
+
+// A wrong NEXTAUTH_SECRET would stamp fingerprints the kiosk cannot use,
+// over the app's own. The job cannot check a secret; it can only look
+// for the app's work under it.
+describe("stampRefusal — is there any sign this job's secret is the site's?", () => {
+  it("is null once a patient has a fingerprint under this key and nobody one under another", () => {
+    expect(stampRefusal({ holders: 10, current: 1, never: 9 })).toBeNull();
+    expect(stampRefusal({ holders: 10, current: 7, never: 3 })).toBeNull();
+  });
+
+  it("is null when there is nobody to stamp", () => {
+    expect(stampRefusal({ holders: 10, current: 10, never: 0 })).toBeNull();
+    expect(stampRefusal({ holders: 0, current: 0, never: 0 })).toBeNull();
+  });
+
+  it("refuses while nobody has a fingerprint under this key", () => {
+    const why = stampRefusal({ holders: 10, current: 0, never: 10 });
+    expect(why).toMatch(/^no patient/);
+    expect(why).toMatch(/sign in once at the kiosk/);
+  });
+
+  it("refuses while anybody has one made with another secret — however many are current", () => {
+    for (const current of [0, 1, 5]) {
+      const why = stampRefusal({ holders: 10, current, never: 3 });
+      expect(why).toMatch(new RegExp(`^${7 - current} fingerprint`));
+      expect(why).toMatch(/another NEXTAUTH_SECRET/);
+      // The one legitimate case has its own way in.
+      expect(why).toMatch(/stamp-after-new-secret/);
+    }
+  });
+
+  it("says it in one line", () => {
+    for (const never of [10, 3]) {
+      expect(stampRefusal({ holders: 10, current: 0, never })).not.toContain(
+        "\n"
+      );
+    }
   });
 });
 

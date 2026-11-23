@@ -6,6 +6,9 @@
 #                         and roughly how long stamping them takes.
 #                         Changes nothing.
 #   stamp-pins.sh stamp   work out and store the missing fingerprints.
+#   stamp-pins.sh stamp-after-new-secret
+#                         the same, for the one time `stamp` refuses by
+#                         design: after NEXTAUTH_SECRET was replaced.
 #
 # Why: the app only gives a patient a fingerprint when they next sign in.
 # Until every PIN holder has one, any PIN that matches no fingerprint —
@@ -29,6 +32,16 @@
 # It needs:
 #   NEXTAUTH_SECRET   the site's own value — the fingerprint is keyed
 #                     with it. Without it the job refuses to run.
+#
+# The job cannot check that the secret it was given IS the site's, and a
+# fingerprint made with another one is useless to the kiosk. So `stamp`
+# first looks for the app's own work and refuses, writing nothing:
+#  - while no patient has a fingerprint made with this secret (nothing
+#    shows it is the site's — one sign-in at the kiosk makes the first);
+#  - while any patient has a fingerprint made with another secret (this
+#    job's may be the wrong one). After the secret really was replaced
+#    that is every fingerprint: `stamp-after-new-secret` skips this look,
+#    and only this.
 #   PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE (libpq's variables), as
 #                     the role that owns the tables, like migrate.sh.
 #
@@ -44,7 +57,8 @@
 #    pipe: never a file, never a command line.
 #  - A fingerprint is stored only if the patient's hash is still the one
 #    that was read and they still have no current fingerprint. A PIN
-#    reset, a new PIN or a sign-in while the job runs always wins.
+#    reset, a new PIN or a sign-in while the job runs always wins —
+#    also one still in flight: the row is locked before it is looked at.
 #  - It can be stopped at any moment and run again: each patient is one
 #    small transaction, and a patient already stamped is not read again.
 #  - A hash that matches none of the 10,000 (not a 4-digit PIN, or not a
@@ -54,10 +68,14 @@
 # The "done" line of each task:
 #   seen       holders without a current fingerprint this task looked at
 #   stamped    fingerprints stored (took_over of them: see same_pin)
-#   same_pin   left without: an earlier patient has the same PIN. A
-#              fingerprint belongs to ONE patient — the one the kiosk
-#              finds for that PIN, the first by id. took_over = it was
-#              moved to that patient from a later one.
+#   same_pin   left without: an earlier patient (by id) has the same
+#              PIN. A fingerprint belongs to ONE patient, and a shared
+#              PIN signs in whoever holds it — or, while nobody does, the
+#              first by id, which is who gets it. took_over = it was
+#              moved to that patient from a later one, whom a task had
+#              reached first. Until that move the PIN signs the LATER
+#              patient in: run `stamp` while the clinic is closed, and
+#              run it again if a run was cancelled or a task failed.
 #   no_match   left without: none of the 10,000 PINs gives this hash
 #   unusable   left without: not a bcrypt hash of the app's kind
 #   changed    left alone: reset, replaced or stamped by the app meanwhile
@@ -72,12 +90,12 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: stamp-pins.sh count | stamp" >&2
+  echo "usage: stamp-pins.sh count | stamp | stamp-after-new-secret" >&2
   exit 2
 }
 [ "$#" -eq 1 ] || usage
 case "$1" in
-  count | stamp) ;;
+  count | stamp | stamp-after-new-secret) ;;
   *) usage ;;
 esac
 

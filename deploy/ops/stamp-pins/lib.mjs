@@ -314,6 +314,48 @@ export function dbErrorCode(stderr) {
   return codes.length > 0 ? codes[codes.length - 1][1] : null;
 }
 
+// ------------------------------------------------- is the secret the site's?
+/**
+ * Why `stamp` must not run on a database with these counts — one line —
+ * or null when nothing stands in its way.
+ *
+ * A fingerprint made with another secret than the site's is useless to
+ * the kiosk, and stamping with one would replace the fingerprints the
+ * app made itself: nobody locked out, but everyone back on the slow way
+ * until the job is run again with the right secret. The job cannot check
+ * its secret. What it can see is the app's own work: a patient who has
+ * signed in since fingerprints exist carries one that starts with the id
+ * of the site's key. So:
+ *
+ *  - a fingerprint that is NOT under this job's key means this job's
+ *    secret may not be the site's (or the secret was replaced — the one
+ *    case with its own way in, `stamp-after-new-secret`);
+ *  - no fingerprint under this job's key at all, with holders still to
+ *    stamp, means there is no evidence either way. One sign-in at the
+ *    kiosk makes it.
+ *
+ * `counts` is parseCounts()'s: holders, current, never.
+ */
+export function stampRefusal({ holders, current, never }) {
+  const without = holders - current;
+  const otherKey = without - never;
+  if (otherKey > 0) {
+    return (
+      `${otherKey} fingerprint(s) here were made with another NEXTAUTH_SECRET` +
+      " than this job has, so this job's secret may not be the site's." +
+      " only if the secret really was replaced: run stamp-after-new-secret"
+    );
+  }
+  if (without > 0 && current === 0) {
+    return (
+      "no patient here has a fingerprint made with this job's" +
+      " NEXTAUTH_SECRET yet, so nothing shows that it is the site's." +
+      " sign in once at the kiosk with a PIN you know, then count again"
+    );
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------- estimate
 /**
  * How long the stamping will take. `costs` is how many unstamped holders
