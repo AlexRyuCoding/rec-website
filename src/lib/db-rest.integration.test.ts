@@ -20,8 +20,10 @@ import {
   it,
   vi,
 } from "vitest";
+import { loadAuditPage } from "./audit-server";
 import { parsePatientSearch } from "./patient-search";
 import { searchPatients } from "./patient-search-server";
+import { recordSignIn, recordSignInRefused, recordSignOut } from "./signin-log";
 import { createServiceClient, fetchAllPatientsWithPins } from "./supabase";
 import { applyFlowChange } from "./visits-server";
 
@@ -47,7 +49,7 @@ async function removeRows() {
   // Check-ins go with their patients (on delete cascade).
   await client.from("patients").delete().like("pb_client_id", `${RUN}-%`);
   await client.from("rooms").delete().like("name", `${RUN}%`);
-  await client.from("staff_audit_log").delete().eq("staff_email", STAFF);
+  await client.from("staff_audit_log").delete().like("staff_email", `${RUN}%`);
 }
 
 beforeAll(() => {
@@ -250,6 +252,61 @@ describe("filters", () => {
       [p2, new Date(at(4)).getTime()],
       [p1, new Date(at(2)).getTime()],
     ]);
+  });
+});
+
+describe("the record of sign-ins (migration 0022)", () => {
+  const STRANGER = `${RUN}-stranger@example.com`;
+  const mine = async () =>
+    (await loadAuditPage(db(), {})).entries
+      .filter((e) => e.staffEmail.startsWith(RUN))
+      .map((e) => [e.staffEmail, e.action, e.detail, e.patientCount]);
+
+  it("a sign-in, a refused account and a sign-out are rows, read back by the Log page's query", async () => {
+    vi.stubEnv("ALLOWED_ADMIN_EMAILS", STAFF);
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    await recordSignIn(STAFF);
+    await recordSignInRefused(STRANGER, Date.now());
+    await recordSignOut(
+      { email: STAFF, dayEnd: Date.now() + 60_000 },
+      Date.now()
+    );
+    expect(await mine()).toEqual([
+      [STAFF, "staff_signout", null, 0],
+      [STRANGER, "signin_refused", "Not on the staff list", 0],
+      [STAFF, "staff_signin", null, 0],
+    ]);
+    expect(logged).not.toHaveBeenCalled();
+    logged.mockRestore();
+  });
+
+  it("the look-back for the limit works here: the same address again is not a second row", async () => {
+    await recordSignInRefused(STRANGER, Date.now());
+    await recordSignInRefused(STRANGER.toUpperCase(), Date.now());
+    await recordSignInRefused(`${RUN}-other@example.com`, Date.now());
+    expect((await mine()).map((row) => row[0])).toEqual([
+      `${RUN}-other@example.com`,
+      STRANGER,
+    ]);
+  });
+
+  it("an address full of markup and quotes is stored and handed back as text", async () => {
+    const odd = `${RUN}'"<b>&;--%_\\@example.com`;
+    await recordSignInRefused(odd, Date.now());
+    expect((await mine()).map((row) => row[0])).toEqual([odd]);
+    // …and can be looked for as text, too.
+    const page = await loadAuditPage(db(), { staffEmail: odd });
+    expect(page.entries.map((e) => e.staffEmail)).toEqual([odd]);
+  });
+
+  // What a sign-in row meets between the deploy and migration 0022: the
+  // table's check refuses the action. PostgREST reports it as 23514 —
+  // an error to log, nothing thrown.
+  it("an action the table does not know is refused as 23514", async () => {
+    const res = await db()
+      .from("staff_audit_log")
+      .insert({ staff_email: STAFF, action: "made_up_action" });
+    expect(res.error?.code).toBe("23514");
   });
 });
 
