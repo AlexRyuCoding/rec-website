@@ -43,12 +43,22 @@ const when = (iso: string) =>
     minute: "2-digit",
   });
 
-// Dashboard → Log: what staff did with patient information — who, when,
-// what, and which patients. Read-only: nothing here can be changed, and
-// nothing in the app deletes a row.
+// Dashboard → Log: who signed in, and what staff did with patient
+// information — who, when, what, and which patients. Read-only: nothing
+// here can be changed, and nothing in the app deletes a row.
 //
 // The question it exists for is "who looked at this patient?": the
 // Patients tab links here with the log narrowed to one patient.
+//
+// A "Sign-in refused" row has, under Who, the address of a Google account
+// that is not staff. That text was chosen by a stranger: it is shown as
+// text like everything else here, and a very long one wraps inside its
+// column instead of pushing the table off the page. Strangers are never
+// in the "Staff member" list — that is the staff list itself (the route).
+
+// An address longer than any staff member's is allowed to break anywhere.
+// Ordinary ones keep their column exactly as it was.
+const LONG_ADDRESS = 40;
 export default function AuditPanel({
   patient,
   onClearPatient,
@@ -198,9 +208,10 @@ export default function AuditPanel({
 
       <Panel className="overflow-hidden">
         <p className="border-b border-ui-line px-[18px] py-3 text-sm text-ui-text-2">
-          What staff did with patient information: searches, PIN resets,
-          check-ins, history views and exports, removals from the rooms board,
-          and device pairing. It cannot be edited.
+          Who signed in or out, which accounts were refused, and what staff did
+          with patient information: searches, PIN resets, check-ins, history
+          views and exports, removals from the rooms board, and device pairing.
+          It cannot be edited.
         </p>
         {loading && entries.length === 0 ? (
           <p className="py-10 text-center text-ui-text-3">Loading...</p>
@@ -233,7 +244,13 @@ export default function AuditPanel({
                       >
                         {when(entry.at)}
                       </td>
-                      <td className={`${tdClass} text-ui-text-2`}>
+                      <td
+                        className={`${tdClass} text-ui-text-2 ${
+                          entry.staffEmail.length > LONG_ADDRESS
+                            ? "min-w-[12rem] max-w-[22rem] break-all"
+                            : ""
+                        }`}
+                      >
                         {entry.staffEmail}
                       </td>
                       <td className={`${tdClass} whitespace-nowrap`}>

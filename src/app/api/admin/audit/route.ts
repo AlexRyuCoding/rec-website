@@ -47,7 +47,11 @@ export const GET = staffRoute(async (req) => {
     return NextResponse.json(
       {
         ...page,
-        // Who can appear in the log: the accounts allowed to sign in.
+        // Who the log can be narrowed to: the accounts allowed to sign in.
+        // Taken from the staff list, never from the rows — a "Sign-in
+        // refused" row carries the address of someone who is not staff,
+        // and a stranger must not be able to add names to this list.
+        // (Those rows are found with the kind of activity instead.)
         staff: [...allowedAdminEmails()].sort(),
       },
       { headers: noStore }
