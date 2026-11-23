@@ -1,10 +1,12 @@
 // Finding a patient by PIN, and saving a new PIN. Rules and the reason
 // for the fingerprint: pin-lookup.ts. The fingerprint lives in
-// patients.pin_lookup (migration 0017).
+// patients.pin_lookup (migration 0017). Comparing and hashing: pin-hash.ts;
+// the order patients are compared in: pin-match.ts.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import bcrypt from "bcryptjs";
+import { comparePin, compareWidth, hashPin } from "./pin-hash";
 import { isCurrentFingerprint, pinFingerprint } from "./pin-lookup";
+import { firstMatch, PinCompare } from "./pin-match";
 import { fetchAllPatientsWithPins, PinRow } from "./supabase";
 
 const PIN_COLUMNS = "id, pin, first_name, last_name, pb_client_id";
@@ -21,6 +23,10 @@ interface PinOptions {
   // one there are no fingerprints and every lookup is the slow way.
   secret?: string | undefined;
   hashRounds?: number;
+  // For tests: the compare to use, and how many run at the same moment.
+  // In the app these are pin-hash.ts's comparePin and compareWidth().
+  compare?: PinCompare;
+  width?: number;
 }
 
 const liveSecret = () => process.env.NEXTAUTH_SECRET || undefined;
@@ -52,12 +58,18 @@ async function fetchHoldersWithLookup(
 //    that patient's bcrypt hash.
 // 2. Slow, for whoever has no current fingerprint yet (a PIN made before
 //    migration 0017, or before a secret rotation): compare against each
-//    of their hashes. A patient found this way is stamped with the
-//    fingerprint, so it happens once per patient.
+//    of their hashes, in id order, a few at the same moment
+//    (pin-match.ts — the answer is the first match in that order, as if
+//    they had been compared one by one). A patient found this way is
+//    stamped with the fingerprint, so it happens once per patient.
 //
 // Patients whose fingerprint is current and different are skipped in
 // step 2: their PIN is provably not this one. skipPatientId leaves one
 // patient out altogether ("is this PIN used by anyone else?").
+//
+// Step 2 costs one bcrypt compare per patient it covers, whatever runs
+// it: a wrong PIN takes (patients without a fingerprint) × (about 15 ms)
+// ÷ (CPUs). See CLAUDE.md, "PIN lookup".
 async function matchPin(
   supabase: SupabaseClient,
   pin: string,
@@ -66,6 +78,7 @@ async function matchPin(
 ): Promise<PinRow | null> {
   const secret = "secret" in options ? options.secret : liveSecret();
   const fingerprint = secret ? pinFingerprint(pin, secret) : null;
+  const compare = options.compare ?? comparePin;
 
   // Without a server secret there are no fingerprints: every PIN holder
   // is compared (how it worked before fingerprints).
@@ -80,7 +93,7 @@ async function matchPin(
     if (error) throw new Error("pin lookup failed");
     for (const row of (data ?? []) as PinRow[]) {
       if (row.id === skipPatientId) continue;
-      if (await bcrypt.compare(pin, row.pin)) return row;
+      if (await compare(pin, row.pin)) return row;
     }
   }
 
@@ -88,30 +101,39 @@ async function matchPin(
     ? await fetchHoldersWithLookup(supabase)
     : await fetchAllPatientsWithPins(supabase);
 
-  for (const row of holders) {
-    if (row.id === skipPatientId) continue;
-    if (indexed && isCurrentFingerprint(row.pin_lookup, secret!)) continue;
-    if (!(await bcrypt.compare(pin, row.pin))) continue;
-    if (indexed) {
-      // Best effort: a failed stamp only means the slow way next time.
-      try {
-        await supabase
-          .from("patients")
-          .update({ pin_lookup: fingerprint })
-          .eq("id", row.id);
-      } catch {
-        // ignore
-      }
+  // Both reads above come back ordered by id; that order decides the
+  // answer if two of these patients ever held the same PIN.
+  const unproven = holders.filter(
+    (row) =>
+      row.id !== skipPatientId &&
+      !(indexed && isCurrentFingerprint(row.pin_lookup, secret!))
+  );
+  const row = await firstMatch(
+    unproven,
+    pin,
+    compare,
+    options.width ?? compareWidth()
+  );
+  if (!row) return null;
+
+  if (indexed) {
+    // Best effort: a failed stamp only means the slow way next time.
+    try {
+      await supabase
+        .from("patients")
+        .update({ pin_lookup: fingerprint })
+        .eq("id", row.id);
+    } catch {
+      // ignore
     }
-    return {
-      id: row.id,
-      pin: row.pin,
-      first_name: row.first_name,
-      last_name: row.last_name,
-      pb_client_id: row.pb_client_id,
-    };
   }
-  return null;
+  return {
+    id: row.id,
+    pin: row.pin,
+    first_name: row.first_name,
+    last_name: row.last_name,
+    pb_client_id: row.pb_client_id,
+  };
 }
 
 export function findPatientByPin(
@@ -151,7 +173,7 @@ export async function saveNewPin(
   options: PinOptions = {}
 ): Promise<SavedPinPatient | "taken" | "error"> {
   const secret = "secret" in options ? options.secret : liveSecret();
-  const hashed = await bcrypt.hash(pin, options.hashRounds ?? PIN_HASH_ROUNDS);
+  const hashed = await hashPin(pin, options.hashRounds ?? PIN_HASH_ROUNDS);
 
   const write = (fields: Record<string, string>) =>
     supabase

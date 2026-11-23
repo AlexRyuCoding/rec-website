@@ -213,3 +213,205 @@ describe("saveNewPin", () => {
     expect(row(db, "c").pin_lookup).toBeNull();
   });
 });
+
+// The slow way: patients with no current fingerprint, compared several at
+// a time (pin-match.ts). The answers must be what one-at-a-time gave.
+describe("the slow way, among many patients", () => {
+  // Each patient gets a hash of their own (their own salt), as in the
+  // real table, so a compare can be traced to its row. p000 … p039; all
+  // have the PIN "1111" unless `pins` says otherwise.
+  const many = (count: number, pins: Record<number, string> = {}): Patient[] =>
+    Array.from({ length: count }, (_, i) => {
+      const id = `p${String(i).padStart(3, "0")}`;
+      return {
+        id,
+        first_name: id.toUpperCase(),
+        last_name: "Test",
+        pb_client_id: `pb-${id}`,
+        pin: bcrypt.hashSync(pins[i] ?? "1111", 4),
+        pin_lookup: null,
+      };
+    });
+
+  // The real compare, counting which stored hashes it was asked about.
+  const counting = () => {
+    const asked: string[] = [];
+    const compare = async (pin: string, hash: string) => {
+      asked.push(hash);
+      return bcrypt.compare(pin, hash);
+    };
+    return { asked, compare };
+  };
+
+  const updates = (db: ReturnType<typeof fakeSupabase>) =>
+    db.queries.filter((q) => q.kind === "update");
+  const stamped = (db: ReturnType<typeof fakeSupabase>) =>
+    (db.tables.patients as Patient[])
+      .filter((p) => p.pin_lookup)
+      .map((p) => p.id);
+
+  it("finds the one patient among many, and stamps that patient only, once", async () => {
+    for (const width of [1, 4, 7]) {
+      const db = fakeSupabase({ patients: many(40, { 29: "2222" }) });
+      const found = await findPatientByPin(db.client, "2222", {
+        ...opts,
+        width,
+      });
+      expect(found).toEqual({
+        id: "p029",
+        pin: row(db, "p029").pin,
+        first_name: "P029",
+        last_name: "Test",
+        pb_client_id: "pb-p029",
+      });
+      expect(stamped(db)).toEqual(["p029"]);
+      expect(row(db, "p029").pin_lookup).toBe(pinFingerprint("2222", SECRET));
+      expect(updates(db)).toHaveLength(1);
+    }
+  });
+
+  it("returns null for a PIN nobody has: every patient compared once, nobody stamped", async () => {
+    const db = fakeSupabase({ patients: many(40) });
+    const { asked, compare } = counting();
+    expect(
+      await findPatientByPin(db.client, "3333", { ...opts, width: 4, compare })
+    ).toBeNull();
+    expect(asked).toHaveLength(40);
+    expect(new Set(asked).size).toBe(40);
+    expect(stamped(db)).toEqual([]);
+    expect(updates(db)).toHaveLength(0);
+  });
+
+  it("stops comparing after the group that holds the match", async () => {
+    const db = fakeSupabase({ patients: many(40, { 5: "2222" }) });
+    const { asked, compare } = counting();
+    await findPatientByPin(db.client, "2222", { ...opts, width: 4, compare });
+    // p000–p007: two groups of four
+    expect(asked).toHaveLength(8);
+  });
+
+  it("never compares a patient whose current fingerprint already says 'another PIN'", async () => {
+    const patients = many(12, { 7: "2222" });
+    for (const i of [0, 1, 2, 3, 4]) {
+      patients[i].pin_lookup = pinFingerprint("1111", SECRET);
+    }
+    const db = fakeSupabase({ patients });
+    const { asked, compare } = counting();
+    expect(
+      await findPatientByPin(db.client, "3333", { ...opts, width: 4, compare })
+    ).toBeNull();
+    expect(asked).toHaveLength(7);
+    for (const i of [0, 1, 2, 3, 4]) {
+      expect(asked).not.toContain(patients[i].pin);
+    }
+  });
+
+  it("leaves the skipped patient out altogether — not compared, not stamped", async () => {
+    const db = fakeSupabase({ patients: many(20, { 13: "2222" }) });
+    const { asked, compare } = counting();
+    const options = { ...opts, width: 4, compare };
+    expect(await pinUsedByAnother(db.client, "2222", "p013", options)).toBe(
+      false
+    );
+    expect(asked).toHaveLength(19);
+    expect(asked).not.toContain(row(db, "p013").pin);
+    expect(stamped(db)).toEqual([]);
+    // …and someone else asking about the same PIN is told it is taken
+    expect(await pinUsedByAnother(db.client, "2222", "p002", options)).toBe(
+      true
+    );
+  });
+
+  it("with the same PIN on two patients, always answers with the first by id — at any width", async () => {
+    // The database forbids it for fingerprinted PINs; among old ones the
+    // answer must still not depend on which compare finishes first.
+    for (const width of [1, 2, 3, 4, 8, 50]) {
+      // rows handed over out of order: the database sorts them by id
+      const patients = many(30, { 11: "2222", 12: "2222", 27: "2222" });
+      const db = fakeSupabase({ patients: [...patients].reverse() });
+      // the earlier row's compare is the slow one
+      const compare = async (pin: string, hash: string) => {
+        if (hash === patients[11].pin) {
+          await new Promise((done) => setTimeout(done, 15));
+        }
+        return bcrypt.compare(pin, hash);
+      };
+      const found = await findPatientByPin(db.client, "2222", {
+        ...opts,
+        width,
+        compare,
+      });
+      expect(found?.id).toBe("p011");
+      expect(stamped(db)).toEqual(["p011"]);
+      expect(updates(db)).toHaveLength(1);
+    }
+  });
+
+  it("reads every page of patients (the database hands out 1,000 at a time)", async () => {
+    const patients: Patient[] = Array.from({ length: 1003 }, (_, i) => ({
+      id: `q${String(i).padStart(5, "0")}`,
+      first_name: "Q",
+      last_name: "Test",
+      pb_client_id: null,
+      pin: `hash-${i}`,
+      pin_lookup: null,
+    }));
+    const db = fakeSupabase({ patients });
+    const asked: string[] = [];
+    const compare = async (_pin: string, hash: string) => {
+      asked.push(hash);
+      return hash === "hash-1002";
+    };
+    const found = await findPatientByPin(db.client, "2222", {
+      ...opts,
+      width: 4,
+      compare,
+    });
+    expect(found?.id).toBe("q01002");
+    expect(asked).toHaveLength(1003);
+  });
+
+  it("a database error while reading the patients still throws", async () => {
+    // query 0 is the fingerprint lookup; query 1 reads the patients
+    const db = fakeSupabase(
+      { patients: many(8, { 3: "2222" }) },
+      { onQuery: (_query, index) => (index === 1 ? "XX000" : undefined) }
+    );
+    await expect(
+      findPatientByPin(db.client, "2222", { ...opts, width: 4 })
+    ).rejects.toThrow();
+    expect(stamped(db)).toEqual([]);
+  });
+
+  it("a compare that fails is an error — never 'PIN not recognized'", async () => {
+    const db = fakeSupabase({ patients: many(8, { 6: "2222" }) });
+    const compare = async (pin: string, hash: string) => {
+      if (hash === row(db, "p002").pin) throw new Error("compare failed");
+      return bcrypt.compare(pin, hash);
+    };
+    await expect(
+      findPatientByPin(db.client, "2222", { ...opts, width: 4, compare })
+    ).rejects.toThrow();
+    expect(stamped(db)).toEqual([]);
+  });
+
+  it("a stamp the database refuses does not stop the sign-in", async () => {
+    const db = fakeSupabase(
+      { patients: many(8, { 6: "2222" }) },
+      { onQuery: (query) => (query.kind === "update" ? "XX000" : undefined) }
+    );
+    expect(
+      await findPatientByPin(db.client, "2222", { ...opts, width: 4 })
+    ).toMatchObject({ id: "p006" });
+    expect(stamped(db)).toEqual([]);
+  });
+
+  it("without a server secret: found among many, nobody stamped", async () => {
+    const db = fakeSupabase({ patients: many(20, { 17: "2222" }) });
+    expect(
+      await findPatientByPin(db.client, "2222", { secret: undefined, width: 4 })
+    ).toMatchObject({ id: "p017" });
+    expect(stamped(db)).toEqual([]);
+    expect(updates(db)).toHaveLength(0);
+  });
+});
