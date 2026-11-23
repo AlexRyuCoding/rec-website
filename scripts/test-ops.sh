@@ -1,20 +1,32 @@
 #!/usr/bin/env bash
-# Tests the two operations scripts — deploy/ops/migrate.sh and
-# deploy/ops/copy-data.sh — against a throwaway local Postgres with two
-# databases: "src" stands in for the database being left, "dst" for the
-# new one. Needs Postgres installed (initdb, pg_ctl, psql, pg_dump).
+# Tests the operations scripts — deploy/ops/migrate.sh,
+# deploy/ops/copy-data.sh and deploy/ops/stamp-pins.sh — against a
+# throwaway local Postgres: "src" stands in for the database being left,
+# "dst" for the new one, and the stamping has databases of its own. Needs
+# Postgres installed (initdb, pg_ctl, psql, pg_dump) and Node with the
+# repository's packages (npm install).
 # Made-up rows only; nothing is sent to Supabase or Google Cloud.
 # Usage: npm run test:ops
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-# POSTGRES_IMAGE=postgres:17 npm run test:ops — the same test inside that
-# Docker image instead of this computer's Postgres: the way to run it on
-# the version pinned in deploy/versions.env (what Cloud SQL runs).
+# POSTGRES_IMAGE=postgres:17 npm run test:ops — the same test in Docker
+# instead of on this computer's Postgres: the way to run it on the
+# version pinned in deploy/versions.env (what Cloud SQL runs). It runs
+# inside the OPS IMAGE (deploy/ops.Dockerfile) built on that Postgres, as
+# Cloud Build builds it — so the stamping that is tested is the image's
+# own copy, with the image's Node and the image's bcryptjs.
 if [ -n "${POSTGRES_IMAGE:-}" ]; then
-  exec docker run --rm -u postgres -v "$PWD":/repo:ro -w /repo \
-    "$POSTGRES_IMAGE" bash scripts/test-ops.sh
+  # shellcheck disable=SC1091
+  . deploy/versions.env
+  docker build -q -f deploy/ops.Dockerfile \
+    --build-arg POSTGRES_IMAGE="$POSTGRES_IMAGE" \
+    --build-arg OPS_NODE_VERSION="$OPS_NODE_VERSION" \
+    -t rac-ops:test-ops . >/dev/null
+  exec docker run --rm -v "$PWD":/repo:ro -w /repo \
+    -e STAMP_PINS=/app/deploy/ops/stamp-pins.sh \
+    rac-ops:test-ops bash scripts/test-ops.sh
 fi
 
 PORT="${TEST_OPS_PORT:-54328}"
@@ -279,6 +291,405 @@ if out="$(copy_data sideways 2>&1)"; then
   fail "copy-data.sh must refuse an argument it does not know"
 fi
 ok "copy-data.sh refuses an unknown argument"
+
+# ------------------------------------------------------------- stamp-pins
+# deploy/ops/stamp-pins.sh gives every PIN holder the fingerprint the
+# kiosk looks them up by. Made-up patients; their hashes are made here by
+# bcryptjs from PINs this test knows. What the job is checked against is
+# the APP's own fingerprint — src/lib/pin-lookup.ts, run by Node as it
+# stands — never the job's copy of it.
+#
+# Inside the ops image (POSTGRES_IMAGE=…, see the top) STAMP_PINS names
+# the image's own copy: its Node, its bcryptjs.
+STAMP_PINS="${STAMP_PINS:-deploy/ops/stamp-pins.sh}"
+STAMP_DIR="$(cd "$(dirname "$STAMP_PINS")/stamp-pins" && pwd)"
+# Made up for this test.
+SECRET="made-up-secret-for-this-test-only"
+OLD_SECRET="the-made-up-secret-before-a-rotation"
+
+# stamp <database> <argument…> — more settings in front: X=1 stamp …
+# The job must END, whatever it finds: it is stopped after three minutes
+# (the alarm outlives perl's hand-over to the job), which fails the test.
+stamp() {
+  local db="$1"
+  shift
+  PGDATABASE="$db" NEXTAUTH_SECRET="$SECRET" \
+    perl -e 'alarm shift; exec @ARGV or die' 180 bash "$STAMP_PINS" "$@"
+}
+hash_of() { # hash_of <pin> [cost] — a bcryptjs hash; cost 4 keeps the test quick
+  (cd "$STAMP_DIR" && node --input-type=module \
+    -e 'import bcrypt from "bcryptjs"; process.stdout.write(bcrypt.hashSync(process.argv[1], Number(process.argv[2])));' \
+    "$1" "${2:-4}")
+}
+app_fingerprint() { # app_fingerprint <pin> [secret] — as the app makes it
+  node --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON \
+    --input-type=module \
+    -e 'const app = await import(process.argv[1]); process.stdout.write(app.pinFingerprint(process.argv[2], process.argv[3]));' \
+    "$PWD/src/lib/pin-lookup.ts" "$1" "${2:-$SECRET}"
+}
+pin_id() { # pin_id <n> — a made-up patient id; a lower n sorts first
+  printf '00000000-0000-4000-8000-0000000000%02d' "$1"
+}
+# add_holder <database> <n> <first name> <hash or ''> [fingerprint]
+add_holder() {
+  local pin="null" lookup="null"
+  [ -z "$4" ] || pin="'$4'"
+  [ -z "${5:-}" ] || lookup="'$5'"
+  sql "$1" "insert into public.patients (id, first_name, last_name, pb_client_id, pin, pin_lookup) values ('$(pin_id "$2")', '$3', 'Madeupson', 'stamp-test-$2', $pin, $lookup)"
+}
+lookup_of() { # lookup_of <database> <n> — the stored fingerprint, or ''
+  sql "$1" "select coalesce(pin_lookup, '') from public.patients where id = '$(pin_id "$2")'"
+}
+pin_of() { # pin_of <database> <n> — the stored hash, or ''
+  sql "$1" "select coalesce(pin, '') from public.patients where id = '$(pin_id "$2")'"
+}
+# Everything the job could change, as one value.
+pins_state() { # pins_state <database>
+  sql "$1" "select md5(coalesce(string_agg(id::text || ':' || coalesce(pin, '-') || ':' || coalesce(pin_lookup, '-'), '|' order by id), '')) from public.patients"
+}
+# says <output> <field> — the number after "field=" on the job's "done" line
+says() {
+  printf '%s\n' "$1" | sed -n "s/^stamp-pins task .* done:.* $2=\([0-9][0-9]*\).*/\1/p"
+}
+# Counts only: never a PIN, a hash, a fingerprint, an id or a name.
+# no_patient_data <what> <output> <database> <pin…>
+no_patient_data() {
+  local what="$1" out="$2" db="$3" secret
+  shift 3
+  while read -r secret; do
+    [ -n "$secret" ] || continue
+    case "$out" in *"$secret"*) fail "$what printed something of a patient's" ;; esac
+  done < <(
+    sql "$db" "select id::text from public.patients"
+    sql "$db" "select pin from public.patients where pin is not null"
+    sql "$db" "select pin_lookup from public.patients where pin_lookup is not null"
+    sql "$db" "select left(pin_lookup, 8) from public.patients where pin_lookup is not null"
+    sql "$db" "select first_name from public.patients"
+    echo "Madeupson"
+    echo "$SECRET"
+    printf '%s\n' "$@"
+  )
+}
+
+if ! command -v node >/dev/null 2>&1; then
+  fail "stamp-pins needs Node, and this has none. Inside Docker the test runs in the ops image: POSTGRES_IMAGE=postgres:17 npm run test:ops"
+fi
+
+# The check the ops image is built behind (deploy/ops.Dockerfile): the
+# job's fingerprint against the app's source. It must also be able to
+# fail — a guard that lets everything through is worse than none.
+out="$(node "$STAMP_DIR/check-parity.mjs" "$PWD/src/lib/pin-lookup.ts" 2>&1)" \
+  || fail "check-parity.mjs against the app's pin-lookup.ts: $out"
+sed 's/rac-pin-lookup-v1/rac-pin-lookup-v2/' src/lib/pin-lookup.ts > "$DIR/drifted.ts"
+if out="$(node "$STAMP_DIR/check-parity.mjs" "$DIR/drifted.ts" 2>&1)"; then
+  fail "check-parity.mjs must fail when the app's fingerprint is made differently"
+fi
+if out="$(node "$STAMP_DIR/check-parity.mjs" "$DIR/no-such-file.ts" 2>&1)"; then
+  fail "check-parity.mjs must fail when it cannot load the app's file"
+fi
+if out="$(node "$STAMP_DIR/check-parity.mjs" 2>&1)"; then
+  fail "check-parity.mjs must fail when it is not told where the app's file is"
+fi
+ok "check-parity.mjs: the job's fingerprint equals the app's, and a difference is caught"
+
+# One built database, copied for each scene below.
+sql postgres "create database pins_base owner ops_admin" >/dev/null
+sql pins_base "alter schema public owner to ops_admin"
+out="$(migrate pins_base 2>&1)" || fail "migrate.sh on pins_base: $out"
+new_pins_db() { # new_pins_db <name>
+  sql postgres "create database $1 template pins_base owner ops_admin" >/dev/null
+}
+
+# 1. The ordinary run.
+new_pins_db pins
+H1="$(hash_of 1234 8)" # as the app makes them: cost 8
+H2="$(hash_of 0000)"
+H3="$(hash_of 1975)"
+H4="$(hash_of 0704)"
+H6="$(hash_of 8351)" # nothing likely about it: found late
+H7="$(hash_of 2580)"
+H7="\$2a${H7#\$2b}" # the same hash as an older library wrote it
+add_holder pins 1 Opal "$H1"
+add_holder pins 2 Quill "$H2"
+add_holder pins 3 Wren "$H3" "$(app_fingerprint 1975 "$OLD_SECRET")"
+add_holder pins 4 Ada "$H4" "$(app_fingerprint 0704)"
+add_holder pins 5 Nopin ""
+add_holder pins 6 Late "$H6"
+add_holder pins 7 Older "$H7"
+PINS="1234 0000 1975 0704 8351 2580"
+
+before="$(pins_state pins)"
+out="$(stamp pins count 2>&1)" || fail "stamp-pins.sh count: $out"
+echo "$out" | grep -qx "stamp-pins count: pin_holders=6 current=1 without=5 never_stamped=4 other_key=1 unusable=0" \
+  || fail "count must say 6 holders, 1 current, 5 without (4 never stamped, 1 under another key); it said: $out"
+echo "$out" | grep -q "^stamp-pins count: .*minute" || fail "count must give a rough time: $out"
+echo "$out" | grep -q "^stamp-pins count: other_key is not 0" \
+  || fail "count must point out fingerprints made with another secret (this job may have the wrong one): $out"
+echo "$out" | grep -qx "stamp-pins count: nothing was changed" || fail "count must say it changed nothing: $out"
+same "count changes nothing" "$(pins_state pins)" "$before"
+# shellcheck disable=SC2086
+no_patient_data "count" "$out" pins $PINS
+ok "count: how many PIN holders have no current fingerprint, a rough time, and no change"
+
+out="$(stamp pins stamp 2>&1)" || fail "stamp-pins.sh stamp: $out"
+same "five were looked at" "$(says "$out" seen)" "5"
+same "five were stamped" "$(says "$out" stamped)" "5"
+same "the app's fingerprint for a PIN hashed at cost 8" "$(lookup_of pins 1)" "$(app_fingerprint 1234)"
+same "the app's fingerprint for 0000" "$(lookup_of pins 2)" "$(app_fingerprint 0000)"
+same "a PIN found late is found all the same" "$(lookup_of pins 6)" "$(app_fingerprint 8351)"
+same "a \$2a\$ hash is read like a \$2b\$ one" "$(lookup_of pins 7)" "$(app_fingerprint 2580)"
+ok "stamp: each holder gets exactly the fingerprint the app makes for their PIN"
+
+same "a fingerprint made under an older secret is replaced" "$(lookup_of pins 3)" "$(app_fingerprint 1975)"
+ok "stamp: a fingerprint from before a secret rotation is replaced"
+
+same "a patient with a current fingerprint is left alone" "$(lookup_of pins 4)" "$(app_fingerprint 0704)"
+same "a patient without a PIN gets nothing" "$(lookup_of pins 5)" ""
+same "no hash was touched" \
+  "$(pin_of pins 1)|$(pin_of pins 2)|$(pin_of pins 3)|$(pin_of pins 4)|$(pin_of pins 5)|$(pin_of pins 6)|$(pin_of pins 7)" \
+  "$H1|$H2|$H3|$H4||$H6|$H7"
+ok "stamp: current fingerprints, patients without a PIN and every hash are left as they were"
+
+# shellcheck disable=SC2086
+no_patient_data "stamp" "$out" pins $PINS
+ok "stamp prints counts only: no PIN, hash, fingerprint, id or name"
+
+# Rule 2, against this real Postgres: 0017's trigger clears pin_lookup
+# when pin changes without a new fingerprint. The job writes pin_lookup
+# alone — and it stayed (above), with the trigger in place and switched on:
+same "the trigger that clears a stale fingerprint is in place" \
+  "$(sql pins "select count(*) from pg_trigger where tgname = 'patients_clear_stale_pin_lookup' and tgenabled = 'O'")" "1"
+
+after_first="$(pins_state pins)"
+out="$(stamp pins stamp 2>&1)" || fail "stamp-pins.sh stamp, second run: $out"
+same "a second run finds nobody to look at" "$(says "$out" seen)" "0"
+same "a second run changes nothing" "$(pins_state pins)" "$after_first"
+out="$(stamp pins count 2>&1)" || fail "stamp-pins.sh count, afterwards: $out"
+echo "$out" | grep -qx "stamp-pins count: pin_holders=6 current=6 without=0 never_stamped=0 other_key=0 unusable=0" \
+  || fail "count must say nobody is left; it said: $out"
+case "$out" in *"other_key is not 0"*) fail "count warned about another secret when there is none: $out" ;; esac
+ok "a second run changes nothing, and count then says nobody is left"
+
+# 2. Two patients with one PIN (possible in data from before the unique
+#    index), a hash no PIN matches, and values that are not hashes at all.
+#    The fingerprint goes to the patient the kiosk itself would find for
+#    that PIN — the first by id, as pin-server.ts reads them — and the
+#    other is left without one: counted, never fatal.
+new_pins_db odd
+add_holder odd 11 First "$(hash_of 4321)"
+add_holder odd 12 Second "$(hash_of 4321)"
+add_holder odd 13 Fine "$(hash_of 1111)"
+# "Another task got there first": the later patient already holds it.
+add_holder odd 21 Earlier "$(hash_of 2468)"
+add_holder odd 22 Later "$(hash_of 2468)" "$(app_fingerprint 2468)"
+H31="$(hash_of 12345)" # five digits: none of the 10,000
+add_holder odd 31 Fivedigits "$H31"
+add_holder odd 32 Nothash "made-up-hash-not-a-real-bcrypt-value"
+add_holder odd 33 Costly "$(hash_of 1111 | sed 's/^\$2b\$04\$/$2b$12$/')"
+add_holder odd 34 Empty "x"
+sql odd "update public.patients set pin = '' where id = '$(pin_id 34)'"
+add_holder odd 35 Last "$(hash_of 2222)"
+
+out="$(stamp odd stamp 2>&1)" || fail "stamp-pins.sh must finish when some holders cannot be stamped: $out"
+same "all nine without a fingerprint were looked at, once" "$(says "$out" seen)" "9"
+same "four got theirs" "$(says "$out" stamped)" "4"
+same "one of them took it over from a later patient" "$(says "$out" took_over)" "1"
+same "one shares a PIN with an earlier patient" "$(says "$out" same_pin)" "1"
+same "one hash matched no PIN" "$(says "$out" no_match)" "1"
+same "three are not hashes the job works on" "$(says "$out" unusable)" "3"
+same "the earlier of two with one PIN has the fingerprint" "$(lookup_of odd 11)" "$(app_fingerprint 4321)"
+same "the later one has none" "$(lookup_of odd 12)" ""
+same "the one after them was not lost" "$(lookup_of odd 13)" "$(app_fingerprint 1111)"
+same "the earlier patient takes the fingerprint over" "$(lookup_of odd 21)" "$(app_fingerprint 2468)"
+same "and the later one is left without" "$(lookup_of odd 22)" ""
+same "a hash no PIN matches is left alone" "$(lookup_of odd 31)|$(pin_of odd 31)" "|$H31"
+same "what is not a hash is left alone" "$(lookup_of odd 32)$(lookup_of odd 33)$(lookup_of odd 34)" ""
+same "the holder after all of those is stamped" "$(lookup_of odd 35)" "$(app_fingerprint 2222)"
+same "one fingerprint, one patient" \
+  "$(sql odd "select count(*) - count(distinct pin_lookup) from public.patients where pin_lookup is not null")" "0"
+no_patient_data "stamp, with holders it cannot stamp" "$out" odd 4321 1111 2468 12345 2222
+ok "two patients with one PIN: the first by id gets the fingerprint, the other is counted, nobody else is lost"
+ok "a hash no PIN matches, and values that are not hashes, are counted and passed over"
+
+after_odd="$(pins_state odd)"
+out="$(stamp odd stamp 2>&1)" || fail "stamp-pins.sh, again with holders it cannot stamp: $out"
+same "a later run tries the six again" "$(says "$out" seen)" "6"
+same "and stamps none" "$(says "$out" stamped)" "0"
+same "both later patients of a shared PIN are counted" "$(says "$out" same_pin)" "2"
+same "the unmatched hash is tried again, once" "$(says "$out" no_match)" "1"
+same "nothing changed" "$(pins_state odd)" "$after_odd"
+out="$(stamp odd count 2>&1)" || fail "stamp-pins.sh count, with holders it cannot stamp: $out"
+echo "$out" | grep -qx "stamp-pins count: pin_holders=10 current=4 without=6 never_stamped=6 other_key=0 unusable=3" \
+  || fail "count must say six are left, three of them unusable; it said: $out"
+ok "a later run tries them again and settles the same way"
+
+# 3. The kiosk in use while the job runs. A stand-in psql lets the test
+#    act between the job's read and its first write: by then one patient
+#    has had their PIN reset by staff, one has chosen a new PIN, one was
+#    stamped by the app, one got a new PIN from code that knows nothing
+#    of fingerprints. None of the four writes may land.
+new_pins_db race
+add_holder race 41 Reset "$(hash_of 1010)"
+add_holder race 42 Newpin "$(hash_of 2020)"
+add_holder race 43 Signedin "$(hash_of 3030)"
+add_holder race 44 Plainwrite "$(hash_of 5050)"
+NEW42="$(hash_of 9090)"
+NEW44="$(hash_of 6060)"
+cat > "$DIR/meanwhile.sql" <<SQL
+update public.patients set pin = null where id = '$(pin_id 41)';
+update public.patients set pin = '$NEW42', pin_lookup = '$(app_fingerprint 9090)' where id = '$(pin_id 42)';
+update public.patients set pin_lookup = '$(app_fingerprint 3030)' where id = '$(pin_id 43)';
+update public.patients set pin = '$NEW44' where id = '$(pin_id 44)';
+SQL
+REAL_PSQL="$(command -v psql)"
+mkdir -p "$DIR/stand-in"
+cat > "$DIR/stand-in/psql" <<STANDIN
+#!/usr/bin/env bash
+# Stand-in psql: notes how it was called, and before the job's SECOND
+# call (its first write) does what happened at the kiosk meanwhile.
+printf '%s\n' "\$*" >> "$DIR/psql-calls"
+if [ "\$(wc -l < "$DIR/psql-calls" | tr -d ' ')" = "2" ]; then
+  "$REAL_PSQL" -U postgres -X -q -v ON_ERROR_STOP=1 -d race -f "$DIR/meanwhile.sql" >/dev/null
+fi
+exec "$REAL_PSQL" "\$@"
+STANDIN
+chmod +x "$DIR/stand-in/psql"
+out="$(PATH="$DIR/stand-in:$PATH" stamp race stamp 2>&1)" || fail "stamp-pins.sh while the kiosk is in use: $out"
+same "all four were looked at" "$(says "$out" seen)" "4"
+same "none was stamped by the job" "$(says "$out" stamped)" "0"
+same "all four had changed meanwhile" "$(says "$out" changed)" "4"
+same "a PIN reset by staff stays reset" "$(pin_of race 41)|$(lookup_of race 41)" "|"
+same "a new PIN keeps its own fingerprint" "$(pin_of race 42)|$(lookup_of race 42)" "$NEW42|$(app_fingerprint 9090)"
+same "a patient the app stamped keeps that" "$(lookup_of race 43)" "$(app_fingerprint 3030)"
+same "a new PIN written without a fingerprint gets none from the old PIN" "$(pin_of race 44)|$(lookup_of race 44)" "$NEW44|"
+ok "a PIN reset, a new PIN or a sign-in between the job's read and its write is never overwritten"
+
+# Hashes and ids travel through pipes: nothing of a patient's is ever an
+# argument of a program (where other programs could read it).
+while read -r secret; do
+  if grep -qF -- "$secret" "$DIR/psql-calls"; then
+    fail "the job put something of a patient's on psql's command line"
+  fi
+done < <(
+  sql race "select id::text from public.patients"
+  sql race "select pin from public.patients where pin is not null"
+  sql race "select pin_lookup from public.patients where pin_lookup is not null"
+  echo "$SECRET"
+)
+same "psql was called for the read, each write and the last look" \
+  "$(wc -l < "$DIR/psql-calls" | tr -d ' ')" "6"
+ok "nothing of a patient's, and not the secret, is ever on a command line"
+
+# The next run finds 44's new PIN, which nobody has stamped.
+out="$(stamp race stamp 2>&1)" || fail "stamp-pins.sh after the kiosk scene: $out"
+same "a new PIN written without a fingerprint is stamped by the next run" \
+  "$(lookup_of race 44)" "$(app_fingerprint 6060)"
+
+# A database error is shown as its code alone. Here Postgres's own text
+# would quote the row (a made-up trigger that fails with the hash in its
+# message).
+new_pins_db loud
+HLOUD="$(hash_of 7777)"
+add_holder loud 51 Loud "$HLOUD"
+sql loud "create function public.stamp_test_loud() returns trigger language plpgsql as \$f\$ begin raise exception 'refused % %', new.pin, new.first_name using detail = new.pin_lookup; end \$f\$"
+sql loud "create trigger stamp_test_loud before update on public.patients for each row execute function public.stamp_test_loud()"
+if out="$(stamp loud stamp 2>&1)"; then
+  fail "stamp-pins.sh must fail when the database refuses a write"
+fi
+echo "$out" | grep -q "database error P0001" || fail "the error must be shown as its code: $out"
+no_patient_data "a failed stamp" "$out" loud 7777
+case "$out" in *refused* | *"$HLOUD"*) fail "a failed stamp printed Postgres's own words: $out" ;; esac
+same "nothing was written" "$(lookup_of loud 51)" ""
+ok "a database error stops the task and is shown as its code alone"
+
+if out="$(stamp bare count 2>&1)"; then
+  fail "stamp-pins.sh count must fail on a database without the patients table"
+fi
+echo "$out" | grep -q "database error 42P01" || fail "a missing table must be shown as its code: $out"
+if out="$(PGPORT=1 stamp pins count 2>&1)"; then
+  fail "stamp-pins.sh must fail when the database cannot be reached"
+fi
+echo "$out" | grep -q "the database could not be reached" || fail "an unreachable database must be said plainly: $out"
+case "$out" in *127.0.0.1* | *ops_admin*) fail "an unreachable database printed psql's own words: $out" ;; esac
+ok "a missing table and an unreachable database are errors, said without psql's own words"
+
+# 4. Shares. Three tasks, each on its own copy of the same twelve
+#    holders: every holder is in exactly one task's share.
+new_pins_db shares_seed
+n=60
+for pin in 1111 2222 3333 4444 5555 6666 7777 8888 9999 1212 1313 1414; do
+  n=$((n + 1))
+  add_holder shares_seed "$n" "Share$n" "$(hash_of "$pin")"
+done
+taken=""
+total=0
+for index in 0 1 2; do
+  sql postgres "create database shares_$index template shares_seed owner ops_admin" >/dev/null
+  out="$(CLOUD_RUN_TASK_INDEX="$index" CLOUD_RUN_TASK_COUNT=3 STAMP_CHUNK=2 stamp "shares_$index" stamp 2>&1)" \
+    || fail "stamp-pins.sh as task $index of 3: $out"
+  echo "$out" | grep -q "^stamp-pins task $((index + 1))/3 done: " || fail "task $index of 3 must say which task it is: $out"
+  mine="$(sql "shares_$index" "select id from public.patients where pin_lookup is not null order by id")"
+  same "task $index of 3 stamped everyone it looked at" "$(says "$out" stamped)" "$(says "$out" seen)"
+  same "task $index of 3 looked at its share and nobody else" "$(says "$out" seen)" "$(printf '%s\n' "$mine" | grep -c . || true)"
+  total=$((total + $(says "$out" seen)))
+  taken="$taken$mine
+"
+done
+same "the three shares hold all twelve holders" "$total" "12"
+same "no holder is in two shares" "$(printf '%s' "$taken" | grep . | sort | uniq -d | wc -l | tr -d ' ')" "0"
+same "every holder is in one" "$(printf '%s' "$taken" | grep . | sort -u | wc -l | tr -d ' ')" "12"
+# The same three tasks on ONE database, as Cloud Run runs them.
+for index in 0 1 2; do
+  out="$(CLOUD_RUN_TASK_INDEX="$index" CLOUD_RUN_TASK_COUNT=3 stamp shares_seed stamp 2>&1)" \
+    || fail "stamp-pins.sh as task $index of 3, together: $out"
+done
+same "three tasks together stamp all twelve" \
+  "$(sql shares_seed "select count(*) from public.patients where pin_lookup is not null")" "12"
+ok "three tasks: every holder is in exactly one task's share"
+
+out="$(CLOUD_RUN_TASK_INDEX=1 CLOUD_RUN_TASK_COUNT=3 stamp pins count 2>&1)" || fail "count as task 1 of 3: $out"
+case "$out" in *pin_holders=*) fail "only the first task counts; task 2 of 3 printed: $out" ;; esac
+out="$(CLOUD_RUN_TASK_INDEX=0 CLOUD_RUN_TASK_COUNT=3 stamp pins count 2>&1)" || fail "count as task 0 of 3: $out"
+echo "$out" | grep -q "pin_holders=6 current=6 without=0" || fail "the first of three tasks must count: $out"
+ok "count, run as several tasks, is printed once"
+
+before="$(pins_state odd)"
+if out="$(CLOUD_RUN_TASK_INDEX=3 CLOUD_RUN_TASK_COUNT=3 stamp odd stamp 2>&1)"; then
+  fail "stamp-pins.sh must refuse a task index outside its count"
+fi
+if out="$(CLOUD_RUN_TASK_INDEX=1 stamp odd stamp 2>&1)"; then
+  fail "stamp-pins.sh must refuse a task index without a count"
+fi
+if out="$(STAMP_CHUNK=0 stamp odd stamp 2>&1)"; then
+  fail "stamp-pins.sh must refuse a chunk size of 0"
+fi
+same "a refused task changed nothing" "$(pins_state odd)" "$before"
+ok "a task that cannot tell its share refuses to run"
+
+# 5. Without the secret there is no key: nothing may be counted as
+#    "current" or stamped under an empty one.
+for mode in count stamp; do
+  if out="$(PGDATABASE=odd bash "$STAMP_PINS" "$mode" 2>&1)"; then
+    fail "stamp-pins.sh $mode must refuse to run without NEXTAUTH_SECRET"
+  fi
+  if out="$(PGDATABASE=odd NEXTAUTH_SECRET="" bash "$STAMP_PINS" "$mode" 2>&1)"; then
+    fail "stamp-pins.sh $mode must refuse to run with an empty NEXTAUTH_SECRET"
+  fi
+  if out="$(PGDATABASE=odd node "$STAMP_DIR/stamp-pins.mjs" "$mode" 2>&1)"; then
+    fail "stamp-pins.mjs $mode, run by itself, must refuse to run without NEXTAUTH_SECRET"
+  fi
+done
+same "nothing was stamped without the secret" "$(pins_state odd)" "$before"
+ok "count and stamp refuse to run without NEXTAUTH_SECRET"
+
+for bad in "" "sideways" "stamp extra" "count stamp"; do
+  # shellcheck disable=SC2086
+  if out="$(stamp odd $bad 2>&1)"; then
+    fail "stamp-pins.sh must refuse: '$bad'"
+  fi
+done
+same "a refused command changed nothing" "$(pins_state odd)" "$before"
+ok "stamp-pins.sh refuses an argument it does not know"
 
 # ------------------------------------------------------------- set-secret
 # deploy/ops/set-secret.sh, with a stand-in for gcloud that keeps what it

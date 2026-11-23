@@ -7,6 +7,11 @@
 
 import { createHash, createHmac } from "node:crypto";
 
+// An error whose words were written in this job, and so can be printed.
+// Its message never quotes a value: it names what was wrong. Any other
+// error is shown by its kind alone (stamp-pins.mjs).
+export class Stop extends Error {}
+
 // ------------------------------------------------------------ fingerprint
 // A copy of src/lib/pin-lookup.ts, and it must stay one: the app looks a
 // PIN up by ITS fingerprint, and on the slow way skips everyone whose
@@ -22,7 +27,7 @@ const KEY_ID_LENGTH = 8;
 
 function needSecret(serverSecret) {
   if (typeof serverSecret !== "string" || serverSecret === "") {
-    throw new Error("the server secret is missing");
+    throw new Stop("the server secret is missing");
   }
 }
 
@@ -185,7 +190,7 @@ export function taskShare(env) {
     index >= count
   ) {
     // A wrong share would leave patients to no task, silently.
-    throw new Error(
+    throw new Stop(
       "CLOUD_RUN_TASK_INDEX and CLOUD_RUN_TASK_COUNT do not name a task"
     );
   }
@@ -205,7 +210,7 @@ const FINGERPRINT = /^[0-9a-f]{72}$/;
 const MAX_CHUNK = 1000;
 
 function must(holds, field) {
-  if (!holds) throw new Error(`refusing an unexpected ${field}`);
+  if (!holds) throw new Stop(`refusing an unexpected ${field}`);
 }
 const isCount = (n, least, most) =>
   Number.isInteger(n) && n >= least && n <= most;
@@ -247,7 +252,7 @@ export function parseHolders(stdout) {
     const id = line.slice(0, cut);
     const hex = line.slice(cut + 1);
     if (cut === -1 || !UUID.test(id) || !/^([0-9a-f]{2})*$/.test(hex)) {
-      throw new Error("the database's list of holders could not be read");
+      throw new Stop("the database's list of holders could not be read");
     }
     return { id, hash: Buffer.from(hex, "hex").toString("utf8") };
   });
@@ -259,7 +264,7 @@ export const OUTCOMES = ["stamped", "took-over", "duplicate", "changed"];
 export function parseOutcome(stdout) {
   const said = lines(stdout);
   if (said.length !== 1 || !OUTCOMES.includes(said[0])) {
-    throw new Error("the database's answer to a write could not be read");
+    throw new Stop("the database's answer to a write could not be read");
   }
   return said[0];
 }
@@ -272,11 +277,11 @@ export function parseCounts(stdout) {
     const cost = /^cost (\d\d|other) (\d+)$/.exec(line);
     if (total) counts[total[1]] = Number(total[2]);
     else if (cost) counts.costs[cost[1]] = Number(cost[2]);
-    else throw new Error("the database's counts could not be read");
+    else throw new Stop("the database's counts could not be read");
   }
   for (const name of ["holders", "current", "never"]) {
     if (!Number.isInteger(counts[name])) {
-      throw new Error("the database's counts could not be read");
+      throw new Stop("the database's counts could not be read");
     }
   }
   return counts;
@@ -290,19 +295,23 @@ export function parseCounts(stdout) {
  */
 export function dbFailure(status, stderr) {
   if (status === null) return "database error (psql did not finish)";
-  const codes = [
-    ...String(stderr).matchAll(
-      /(?:ERROR|FATAL|PANIC):\s+([0-9A-Z]{5})[ \t]*$/gm
-    ),
-  ];
-  if (codes.length > 0) {
-    return `database error ${codes[codes.length - 1][1]} (psql exit ${status})`;
-  }
+  const code = dbErrorCode(stderr);
+  if (code !== null) return `database error ${code} (psql exit ${status})`;
   // psql's own exit code for "no connection".
   if (status === 2) {
     return "the database could not be reached (psql exit 2)";
   }
   return `database error (psql exit ${status})`;
+}
+
+/** The code of the last error in psql's error output, or null. */
+export function dbErrorCode(stderr) {
+  const codes = [
+    ...String(stderr).matchAll(
+      /(?:ERROR|FATAL|PANIC):[ \t]+([0-9A-Z]{5})[ \t]*$/gm
+    ),
+  ];
+  return codes.length > 0 ? codes[codes.length - 1][1] : null;
 }
 
 // ---------------------------------------------------------------- estimate
