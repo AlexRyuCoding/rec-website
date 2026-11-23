@@ -87,6 +87,13 @@ the Google-side variables set, behaviour is exactly Vercel + Supabase.
   x-forwarded-for (CLIENT_IP_FROM_RIGHT) and x-real-ip is never read —
   a caller can forge everything to the left of what the load balancer
   wrote. The per-address limits (forms, TV and kiosk pairing) depend on it.
+- NEXTAUTH_SECRET is the SAME value on both hosts (carried across
+  sealed on 2026-11-22; deploy/RUNBOOK.md, "What the rehearsal found").
+  Do not issue a new one for the switch: the PIN fingerprints are keyed
+  with it, and under a new key the rehearsal measured 7 to 8 seconds
+  per PIN. A wrong PIN takes about 10 seconds on either host for now —
+  fingerprints only exist since migration 0017, so most PIN holders are
+  still compared the slow way; speeding that up is a follow-up.
 - A route that sends a redirect builds the address with siteUrl()
   (src/lib/site-url.ts, tested — on NEXTAUTH_URL), never from `req.url`:
   on Cloud Run that is the server's own listening address
