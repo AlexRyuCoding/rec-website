@@ -14,7 +14,7 @@ time you open a terminal").
 - [Part 1 — Build the Google Cloud side, with made-up data](#part-1--build-the-google-cloud-side-with-made-up-data)
 - [Part 2 — Move live updates, while still on Vercel](#part-2--move-live-updates-while-still-on-vercel)
 - [Part 3 — Rehearsal with real data](#part-3--rehearsal-with-real-data)
-- [Part 4 — The switch (Tuesday 2026-11-24, clinic closed)](#part-4--the-switch-tuesday-2026-11-24-clinic-closed)
+- [Part 4 — The switch (done on the night of 2026-11-22)](#part-4--the-switch-done-on-the-night-of-2026-11-22)
 - [Part 5 — Clean up, after two normal clinic days](#part-5--clean-up-after-two-normal-clinic-days)
 - [Everyday](#everyday)
 - [When something is wrong](#when-something-is-wrong)
@@ -77,23 +77,21 @@ these once broke a command here):
 
 ## Where things stand
 
-On the night of 2026-11-22:
+**The site has run on Google Cloud since the night of 2026-11-22.** The
+switch (Part 4) was done that night, not on the Tuesday first planned.
 
-- **Part 1 is done.** The whole Google Cloud side is built and every
-  check of 1.10 held, with a made-up patient.
-- **Part 2, steps 1 to 4 are done.** The live site (still on Vercel)
-  sends its live updates through the Realtime project. Step 5, the Cloud
-  Build trigger, is not made yet: until it is, a build is started by hand
-  with the command of 1.7.2 (with `_DEPLOY_SERVICE=true`).
-- **Part 3 is done.** The copy matched row for row, twice, and the copy
-  was emptied afterwards. What the PIN timing found is written there.
-- **The new side uses the SAME `NEXTAUTH_SECRET` as the old one**, not a
-  new one (Part 3, "What the rehearsal found"). So at the switch staff
-  stay signed in, PIN sign-ins are as fast as before, and a connected
-  Spotify account stays connected.
-- **Next: Part 4, the switch.** Before it, make sure every Google
-  account staff sign in with is both in `allowed-admin-emails` and, while
-  the sign-in app is in "Testing", among its Test users (1.6).
+- **Parts 1 to 4 are done.** What each found is written in its part;
+  "What the switch found" is at the end of Part 4.
+- **Deploying is automatic.** A merge to `main` is built and deployed by
+  the Cloud Build trigger `rac-deploy-main` (Part 2, step 5). Merge on a
+  day the clinic is closed, or after hours.
+- **The site is watched.** Google checks the home page every minute and
+  emails the clinic if it stops answering ("Everyday", "Is it up?").
+- **`new.ryuacupuncture.com` now only redirects** to the real address.
+- **Still to do: Part 5**, the clean-up, after two normal clinic days.
+  Until then the OLD Supabase project still holds a copy of every
+  patient, and the Vercel project still exists (no longer connected to
+  the repository, no longer serving any address).
 
 Each finished step below says "done" and keeps the command that was used.
 
@@ -649,14 +647,35 @@ root.
    error. Change something on one board: a second board shows it within
    a second.
    - If not: remove the three variables, redeploy. Everything is as before.
-5. Connect the repository to Cloud Build (console, cannot be scripted):
-   Cloud Build → Triggers → Connect repository → GitHub → this
-   repository. Then Create trigger: region `us-west1`, event "Push to a
-   branch", branch `^main$`, configuration `cloudbuild.yaml`, service
-   account `rac-build`, and under Substitution variables:
-   - `_REALTIME_URL` — the Realtime project's address
-   - `_REALTIME_ANON_KEY` — its publishable key
-   - `_NEXTAUTH_URL` — `https://new.ryuacupuncture.com` (changed in Part 4)
+5. **Done on 2026-11-22**, from the terminal. Connect the repository to
+   Cloud Build and make the trigger:
+
+   ```sh
+   gcloud builds connections create github rac-github --region="${REGION}"
+   ```
+
+   - It prints a link. Open it signed in to GitHub as the repository's
+     owner, and allow Cloud Build. (A page saying the state "is
+     PENDING_INSTALL_APP, not PENDING_USER_OAUTH" means it already
+     worked.) Then get the second link, to install Google's build app on
+     this one repository:
+     `gcloud builds connections describe rac-github --region="${REGION}" --format="value(installationState.actionUri)"`
+   - When `--format="value(installationState.stage)"` says `COMPLETE`:
+
+   ```sh
+   gcloud builds repositories create rec-website --connection=rac-github \
+     --region="${REGION}" --remote-uri="https://github.com/${GITHUB_OWNER}/rec-website.git"
+   gcloud builds triggers create github --name=rac-deploy-main --region="${REGION}" \
+     --repository="projects/${PROJECT_ID}/locations/${REGION}/connections/rac-github/repositories/rec-website" \
+     --branch-pattern='^main$' --build-config=cloudbuild.yaml \
+     --service-account="projects/${PROJECT_ID}/serviceAccounts/rac-build@${PROJECT_ID}.iam.gserviceaccount.com" \
+     --substitutions="_REALTIME_URL=${REALTIME_URL},_REALTIME_ANON_KEY=${REALTIME_ANON_KEY},_NEXTAUTH_URL=https://www.ryuacupuncture.com"
+   ```
+
+   - `GITHUB_OWNER` is the GitHub account the repository belongs to.
+   - Cloud Build's own account needs to keep the GitHub token in Secret
+     Manager; it was given `roles/secretmanager.admin` for that.
+   - To run it by hand: `gcloud builds triggers run rac-deploy-main --region="${REGION}" --branch=main`
 
 ## Part 3 — Rehearsal with real data
 
@@ -717,7 +736,7 @@ root.
   sign in. Making that slow way faster is a follow-up, for after the
   switch.
 
-## Part 4 — The switch (Tuesday 2026-11-24, clinic closed)
+## Part 4 — The switch (done on the night of 2026-11-22)
 
 1. **Stop the old side.** Vercel → the **project** → Settings → Domains:
    remove `www.ryuacupuncture.com` and `ryuacupuncture.com` from the
@@ -759,7 +778,10 @@ root.
    8. A room assignment crossing to a second board within a second.
    9. The appointment form sends its email.
    10. An email sent to the clinic's address still arrives.
-6. **Practice Better webhook.** Do this yourself, in a terminal window
+6. **Practice Better webhook.** Read "What the switch found" below
+   first: the key must be allowed to write, and an existing webhook for
+   the same address has to be deleted before a new one is made.
+   Do this yourself, in a terminal window
    Claude is not using: the script prints a secret, once. Nothing is
    written to a file — the three values it needs go straight from Secret
    Manager to the one command.
@@ -798,6 +820,32 @@ root.
    - Both say `Deleted`. The builds notice the job is gone and leave it
      alone.
 
+### What the switch found (2026-11-22)
+
+- **Vercel will not add an `A` record while a `CNAME` of the same name
+  exists.** The old `www` CNAME and the old bare-domain `A` record
+  (`76.76.21.21`) had to be deleted by hand, each on its own row, before
+  and after adding the new ones. Until the old bare-domain record was
+  gone, half the visitors without `www` reached Vercel's "not found".
+- **A browser can keep showing Vercel's "This page doesn't exist"** for
+  a while: Chrome remembers where a site lived and keeps old connections
+  open. Quit the browser fully and reopen it.
+- **Signing in must start on the real address.** A sign-in begun on
+  `new.ryuacupuncture.com` comes back to `www` and fails ("Sign-in
+  failed", `error=OAuthCallback`; the log says "State cookie was
+  missing"). `new.` now redirects to `www` at the load balancer, so this
+  cannot be done by accident any more.
+- **Practice Better: the key must be allowed to write.** A read-only key
+  reads records and lists webhooks, but creating one answers 401.
+- **Practice Better: an address can have one webhook.** Asking for a
+  second one for the same address returns the EXISTING one, without a
+  signing secret (the script then prints `undefined`). Delete the old
+  one first — and never store a secret without looking at its length:
+  a real one is 44 characters.
+- The copy job and `source-database-url` were deleted the same night;
+  the old webhook is gone. **There is no way back to Vercel any more**,
+  and none is needed.
+
 **The way back — only until the first real check-in on the new side.**
 Delete the two `A` records of step 4 and add both domains back to the
 Vercel project. Decide by the end of Tuesday: if a check of step 5 fails
@@ -820,26 +868,49 @@ and is not fixed that day, go back.
 ## Part 5 — Clean up, after two normal clinic days
 
 1. You confirm two clinic days ran without a hosting problem.
-2. Delete the OLD Supabase project (it held every patient). Not the
-   Realtime one.
-3. Delete the Vercel **project** and its environment variables. Keep the
-   Vercel account and the domain in it: it still hosts the domain's DNS.
-4. Revoke the old keys at Practice Better, Resend and Spotify; delete the
+2. Delete the OLD Supabase project (it holds a copy of every patient,
+   with a company the clinic has no agreement with). Not the Realtime one.
+3. Delete the Vercel **project** (Settings → General → Delete Project).
+   Keep the Vercel account and the domain in it: it still hosts the
+   domain's DNS. **Never** use Delete, or Delete DNS Zone, on the
+   account's Domains page.
+   - The project is already disconnected from the repository and serves
+     no address.
+   - With the project gone the account only holds DNS records, which the
+     free plan does too.
+4. Delete the keys that are no longer used: the old Resend key; at
+   Practice Better the old key and the read-only one made on the 22nd
+   (keep the read-and-write one in use); Spotify's if there was one; the
    old Google sign-in client if you can find it.
-5. The copy job and its secret are already gone (Part 4, step 8); check:
-   `gcloud run jobs list --region "${REGION}" --format="value(name)"`
-   shows `rac-migrate` only. Delete the DNS record `new` in Vercel, and
-   remove the `new.` redirect address from the Google sign-in client (1.6).
+5. Check: `gcloud run jobs list --region "${REGION}" --format="value(name)"`
+   shows `rac-migrate` only.
 6. Claude: remove the three Supabase database variables and the "both
-   hosts" note from `CLAUDE.md`, delete `vercel.json`, pull request.
+   hosts" wording from `CLAUDE.md`, delete `vercel.json`, pull request.
 
 ## Everyday
 
 ### Deploy
 
-Merge to `main`. Cloud Build builds and deploys by itself (about ten
+Merge to `main`. Cloud Build builds and deploys by itself (about six
 minutes). Cloud Build → History shows SUCCESS or FAILURE; a failed build
-leaves the running site as it was.
+leaves the running site as it was. Every merge reaches the live site, so
+merge on a day the clinic is closed, or after hours.
+
+### Is it up?
+
+- Google checks `https://www.ryuacupuncture.com/` every minute from
+  several places (Monitoring → Uptime checks → "Clinic site is up"). If
+  it fails from more than one of them for two minutes, the alert "The
+  clinic website is not answering" emails the clinic's alerts inbox
+  (Monitoring → Alerting → Notification channels). A test alert was sent
+  and received on 2026-11-22.
+- What is recorded, and for how long: every request at the load
+  balancer, and who read or changed the database's settings, the secrets,
+  the access rules and the service (Data Access audit logs for Cloud SQL,
+  Secret Manager, IAM and Cloud Run). Logs are kept six years
+  (Logging → Log storage → `_Default`).
+- The database is backed up every day, with seven days of
+  point-in-time recovery.
 
 ### Apply a migration
 
