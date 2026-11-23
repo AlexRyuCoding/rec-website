@@ -5,6 +5,7 @@ import {
   formSubmissionsExhausted,
   recordFormSubmission,
 } from "@/lib/form-rate-limit";
+import { errorLabel } from "@/lib/error-label";
 
 // Sender must be on a Resend-verified domain in production.
 // onboarding@resend.dev only delivers to the Resend account owner's inbox.
@@ -71,7 +72,7 @@ ${message}
     });
 
     if (error) {
-      console.error("Email sending failed:", error);
+      console.error("Email sending failed:", errorLabel(error));
       return NextResponse.json(
         { error: "Failed to send email" },
         { status: 500 }
@@ -80,7 +81,7 @@ ${message}
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Email sending failed:", error);
+    console.error("Email sending failed:", errorLabel(error));
     return NextResponse.json(
       { error: "Failed to send email" },
       { status: 500 }

@@ -9,7 +9,7 @@ vi.mock("./admin-auth", () => ({
   isAdminAuthorized: async () => signedIn.email !== null,
 }));
 
-import { staffRoute } from "./staff-route";
+import { neverCached, staffRoute } from "./staff-route";
 
 const request = () => new NextRequest("https://example.test/api/admin/thing");
 const context = <P>(params: P) => ({ params: Promise.resolve(params) });
@@ -46,6 +46,36 @@ describe("staffRoute", () => {
     expect((await route(request(), context({}))).status).toBe(401);
   });
 
+  it("marks every answer as never to be cached, whatever the handler set", async () => {
+    signedIn.email = "desk@example.com";
+    const plain = await staffRoute(async () => Response.json({ rooms: [] }))(
+      request(),
+      context({})
+    );
+    expect(plain.headers.get("cache-control")).toBe("no-store");
+    expect(await plain.json()).toEqual({ rooms: [] });
+
+    const cacheable = await staffRoute(
+      async () =>
+        new Response("x", {
+          headers: { "Cache-Control": "public, max-age=60" },
+        })
+    )(request(), context({}));
+    expect(cacheable.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("does so for an answer whose headers cannot be changed (a redirect)", async () => {
+    signedIn.email = "desk@example.com";
+    const res = await staffRoute(async () =>
+      Response.redirect("https://example.test/admin/dashboard", 303)
+    )(request(), context({}));
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe(
+      "https://example.test/admin/dashboard"
+    );
+    expect(res.headers.get("cache-control")).toBe("no-store");
+  });
+
   it("can send a browser to the login page instead of answering JSON", async () => {
     const handler = vi.fn(async () => new Response("connected"));
     const route = staffRoute(handler, {
@@ -58,6 +88,18 @@ describe("staffRoute", () => {
     expect(res.headers.get("location")).toBe(
       "https://example.test/admin/login"
     );
+  });
+});
+
+describe("neverCached", () => {
+  it("keeps the status, the body and the other headers", async () => {
+    const res = neverCached(
+      new Response("made up", { status: 201, headers: { "X-Thing": "1" } })
+    );
+    expect(res.status).toBe(201);
+    expect(res.headers.get("x-thing")).toBe("1");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(await res.text()).toBe("made up");
   });
 });
 

@@ -1247,7 +1247,14 @@ Input rules (do not regress these — each fixes a way presses were lost):
 - setup-pin PATCH refuses to overwrite an existing PIN (403) and enforces
   PIN uniqueness across patients
 - Failed PIN lookups rate limited durably in Supabase (fails closed)
-- No patient data logged to console
+- No patient data logged to console. A caught error is logged only as
+  `errorLabel(error)` (src/lib/error-label.ts, tested): its kind, a code,
+  a status — never its message or the object, which often quote the row
+  or the address being handled. error-label.test.ts fails if a file under
+  src/ hands a caught error to console.* directly.
+- Every answer of a staff route and of a kiosk route is `Cache-Control:
+  no-store`: staffRoute and kioskRoute set it themselves (neverCached,
+  staff-route.ts), so a route cannot forget.
 - /admin/\* routes protected by middleware.ts (the login page and the
   kiosk page shell are open; the kiosk shell holds no patient data)
 - Waiting-room screens authenticate with a staff-approved device cookie;

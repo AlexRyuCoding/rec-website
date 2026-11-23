@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { CLINIC_TZ, fetchTodaySession } from "@/lib/practice-better";
 import { kioskRoute } from "@/lib/kiosk-route";
+import { errorLabel } from "@/lib/error-label";
 
 export const GET = kioskRoute(async (req) => {
   const { searchParams } = new URL(req.url);
@@ -40,7 +41,7 @@ export const GET = kioskRoute(async (req) => {
       },
     });
   } catch (err) {
-    console.error("Appointments fetch error:", err);
+    console.error("Appointments fetch error:", errorLabel(err));
     return NextResponse.json({ appointment: null });
   }
 });
