@@ -77,12 +77,25 @@ these once broke a command here):
 
 ## Where things stand
 
-On 2026-11-22: steps 1.1 to 1.5 and 1.7.1 to 1.7.4 are done — the
-project's basics, the database, the image repository and build account,
-the Realtime project, the secrets, the first build, both jobs, and the
-database's tables (all 21 migrations). **Next: 1.6 if not yet done, then
-1.7.5.** Each finished step below says "done" and keeps the command that
-was used.
+On the night of 2026-11-22:
+
+- **Part 1 is done.** The whole Google Cloud side is built and every
+  check of 1.10 held, with a made-up patient.
+- **Part 2, steps 1 to 4 are done.** The live site (still on Vercel)
+  sends its live updates through the Realtime project. Step 5, the Cloud
+  Build trigger, is not made yet: until it is, a build is started by hand
+  with the command of 1.7.2 (with `_DEPLOY_SERVICE=true`).
+- **Part 3 is done.** The copy matched row for row, twice, and the copy
+  was emptied afterwards. What the PIN timing found is written there.
+- **The new side uses the SAME `NEXTAUTH_SECRET` as the old one**, not a
+  new one (Part 3, "What the rehearsal found"). So at the switch staff
+  stay signed in, PIN sign-ins are as fast as before, and a connected
+  Spotify account stays connected.
+- **Next: Part 4, the switch.** Before it, make sure every Google
+  account staff sign in with is both in `allowed-admin-emails` and, while
+  the sign-in app is in "Testing", among its Test users (1.6).
+
+Each finished step below says "done" and keeps the command that was used.
 
 ## Part 1 — Build the Google Cloud side, with made-up data
 
@@ -673,11 +686,36 @@ root.
    with the right totals; Log shows history; the rooms board shows the
    clinic's rooms and doctors; Setup lists the paired screens and kiosk.
 6. **PIN timing.** On the kiosk page, type a real PIN you know, then a
-   wrong one. Time "Checking…" for each.
-   - More than 5 seconds for either: **stop** and discuss before Part 4.
+   wrong one. Time "Checking…" for each, and time the same two on the
+   live site.
+   - Slower than the live site by more than a second or two, or more
+     than 5 seconds where the live site is quick: **stop** and discuss
+     before Part 4.
 7. Empty it again:
    `gcloud run jobs execute rac-copy-data --region "${REGION}" --args=empty --wait`
    → nine lines ending `dest=0`.
+
+### What the rehearsal found (2026-11-22)
+
+- All nine tables matched: 5,599 patients, 1,667 check-ins, 47 paired
+  screens, 64 audit rows, 5 rooms, 3 doctors, 3 stations, 1 kiosk, 1
+  music setting.
+- **With a new `NEXTAUTH_SECRET` the PINs took 7 to 8 seconds.** The
+  quick PIN lookup is keyed with that secret (CLAUDE.md, "PIN lookup"),
+  so under a new one every stored fingerprint is out of date and each
+  PIN is compared against every patient who has one.
+- The old host would not show the value, so it was handed over sealed:
+  for a few minutes the live site had a staff-only page that returned
+  the value encrypted with a public key whose private half existed only
+  in Secret Manager; it was opened straight into `nextauth-secret` and
+  never shown. The page and the private key are both gone (pull requests
+  #70 and #71).
+- With the same secret: a right PIN takes 1 second. **A wrong PIN takes
+  about 10 seconds — on the live site too.** That is not the move: the
+  fingerprints only exist since migration 0017 (applied 2026-11-22), so
+  nearly every PIN holder is still compared the slow way until they next
+  sign in. Making that slow way faster is a follow-up, for after the
+  switch.
 
 ## Part 4 — The switch (Tuesday 2026-11-24, clinic closed)
 
@@ -691,7 +729,9 @@ root.
    → nine lines ending `ok`.
 3. **Give the app its real address.** In the Cloud Build trigger, change
    `_NEXTAUTH_URL` to `https://www.ryuacupuncture.com` and press Run.
-   When it says SUCCESS:
+   (No trigger yet? Run the command of 1.7.2 with `_DEPLOY_SERVICE=true`
+   and `_NEXTAUTH_URL=https://www.ryuacupuncture.com`; the same wherever
+   a later step says "press Run".) When it says SUCCESS:
 
    ```sh
    gcloud scheduler jobs update http rac-keepalive --location "${REGION}" \
@@ -854,8 +894,10 @@ clinic hours, and deploy straight away.**
    - `db-authenticator-password` → then `pgrst-db-uri` again (1.5.3) →
      then execute `rac-migrate` (it gives the database the new password).
    - `pgrst-jwt-secret` → then `db-rest-jwt` again (1.5.3).
-4. `nextauth-secret`: staff sign in again, every patient's first PIN
-   entry is slower once, and Spotify must be reconnected.
+4. `nextauth-secret`: avoid changing it. Staff must sign in again,
+   Spotify must be reconnected, and every PIN fingerprint goes out of
+   date at once — the rehearsal measured 7 to 8 seconds per PIN entry
+   until each patient has signed in once more.
 
 ### The header the load balancer removes
 
