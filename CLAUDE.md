@@ -10,7 +10,14 @@ patients use it unassisted; it needs no staff sign-in.
 ## Tech Stack
 
 - Framework: Next.js (App Router)
-- Database: Supabase (PostgreSQL) via @supabase/supabase-js (service-role client, server-side only)
+- Database: PostgreSQL through PostgREST, via @supabase/supabase-js
+  (service-role client, server-side only). Two hosts run the SAME build
+  until the switch to Google Cloud — see "Hosting":
+  - Vercel + Supabase (Supabase's own PostgREST);
+  - Google Cloud: Cloud Run + Cloud SQL (Postgres 17), with a PostgREST
+    container beside the app
+- Live updates: Supabase Realtime (broadcast only, never patient data),
+  in a Supabase project of its own once the Realtime settings are set
 - EHR: Practice Better API (REST, OAuth2)
 - PIN hashing: bcryptjs
 - All secrets in .env.local — never hardcoded
@@ -25,9 +32,21 @@ patients use it unassisted; it needs no staff sign-in.
 
 ## Environment Variables (.env.local)
 
-- NEXT_PUBLIC_SUPABASE_URL=
-- NEXT_PUBLIC_SUPABASE_ANON_KEY=
-- SUPABASE_SERVICE_ROLE_KEY=
+- NEXT_PUBLIC_SUPABASE_URL= / NEXT_PUBLIC_SUPABASE_ANON_KEY= /
+  SUPABASE_SERVICE_ROLE_KEY= (the Vercel + Supabase side only: database
+  and — unless the Realtime three below are set — live updates. Not set on
+  Google Cloud; they go away after the switch)
+- DB_REST_URL= / DB_REST_JWT= (Google Cloud side: PostgREST's address,
+  http://127.0.0.1:3001, and the token it accepts. Set together: the URL
+  without the token is an error, never a quiet return to Supabase)
+- NEXT_PUBLIC_REALTIME_URL= / NEXT_PUBLIC_REALTIME_ANON_KEY= /
+  REALTIME_SERVICE_KEY= (live updates' own Supabase project: its address,
+  its publishable key, its secret key. All three or none — half a set is
+  ignored and Supabase's are used whole. The two NEXT_PUBLIC ones are
+  fixed into the pages at build time)
+- CLIENT_IP_FROM_RIGHT= (Google Cloud side: 2. Which entry of
+  x-forwarded-for, counted from the right, is the caller's address —
+  see getClientIp. Not set on Vercel)
 - PB_CLIENT_ID=
 - PB_CLIENT_SECRET=
 - PB_WEBHOOK_VERIFICATION_TOKEN= (self-generated; validates the one-time webhook handshake)
@@ -36,11 +55,85 @@ patients use it unassisted; it needs no staff sign-in.
 - NEXTAUTH_URL= (http://localhost:3000 in dev; https://www.ryuacupuncture.com in prod)
 - GOOGLE_CLIENT_ID= / GOOGLE_CLIENT_SECRET= (Google Cloud OAuth client)
 - ALLOWED_ADMIN_EMAILS= (comma-separated staff Google accounts allowed to unlock the kiosk)
-- CRON_SECRET= (self-generated; auths the daily Vercel Cron keepalive ping)
+- CRON_SECRET= (self-generated; auths the daily keepalive ping — Vercel
+  Cron on Vercel, Cloud Scheduler on Google Cloud)
 - RESEND_API_KEY= (Resend API key; sends appointment-request + grievance form emails)
 - RESEND_FROM_EMAIL= (sender on the Resend-verified domain, e.g. forms@ryuacupuncture.com; falls back to onboarding@resend.dev which only delivers to the Resend account owner)
 - SPOTIFY_CLIENT_ID= / SPOTIFY_CLIENT_SECRET= (optional; a Spotify developer app, only needed for Spotify as the waiting-room music source. Its Redirect URI must be https://www.ryuacupuncture.com/api/admin/spotify/callback)
 - SPOTIFY_REDIRECT_URI= (optional; local dev only — Spotify refuses "localhost", so use http://127.0.0.1:3000/api/admin/spotify/callback)
+
+## Hosting (two hosts until the switch to Google Cloud)
+
+The owner's step-by-step: deploy/RUNBOOK.md. The switch is planned for
+2026-11-24; until the clean-up after it, BOTH hosts must keep working
+from the same build, chosen only by environment variables. With none of
+the Google-side variables set, behaviour is exactly Vercel + Supabase.
+
+- No query was rewritten. `createServiceClient()` (src/lib/supabase.ts)
+  asks `dbTarget(process.env)` (src/lib/db-rest.ts, pure, tested) where
+  to point: Supabase, or — with DB_REST_URL — a PostgREST of our own,
+  the same REST layer Supabase runs. supabase-js always asks for
+  `/rest/v1/<table>`; a bare PostgREST serves `/<table>`, so the prefix
+  is taken off each request. Do not change `.from()` / `.rpc()` call
+  sites or fake-supabase.ts for the sake of the host.
+- Live updates read their own settings (src/lib/realtime-config.ts,
+  tested): the Realtime three as a complete set, otherwise Supabase's,
+  never a mix. next.config.js applies the browser's half of that rule to
+  the content-security policy (csp.test.ts) — keep the two in step, or
+  the policy blocks the board's websocket, which crashes the page on an
+  iPad.
+- The caller's address (getClientIp, src/lib/validation.ts, tested):
+  behind Google's load balancer it is counted from the RIGHT of
+  x-forwarded-for (CLIENT_IP_FROM_RIGHT) and x-real-ip is never read —
+  a caller can forge everything to the left of what the load balancer
+  wrote. The per-address limits (forms, TV and kiosk pairing) depend on it.
+- On Google Cloud one Cloud Run instance is three containers sharing
+  localhost (deploy/service.template.yaml, filled in by
+  deploy/render-service.sh): the app (the only one receiving requests),
+  PostgREST on 127.0.0.1:3001, and the Cloud SQL Auth Proxy on
+  127.0.0.1:5432, started in the reverse of that order. PostgREST has NO
+  anonymous role (never set PGRST_DB_ANON_ROLE): a request without the
+  app's token is refused before it reaches the database.
+- Versions are pinned in one place, deploy/versions.env: Postgres 17 (the
+  major of the Supabase project being left — the ops image's pg_dump
+  must be at least that), PostgREST (chosen by `npm run test:rest`, not
+  copied from Supabase), the Cloud SQL Auth Proxy.
+- The server needs Node 22 or newer (Dockerfile): the Supabase client
+  throws on older ones for lack of a built-in WebSocket.
+- Images: Dockerfile (the site, Next.js `output: "standalone"`, port
+  8080, unprivileged user; the two NEXT_PUBLIC_REALTIME values are build
+  arguments and the build stops without them) and deploy/ops.Dockerfile
+  (psql + pg_dump + the SQL + the ops scripts, for the two jobs).
+  cloudbuild.yaml builds and deploys on every push to `main`; it never
+  runs a migration.
+- Migrations on Google Cloud are applied on purpose, by executing the
+  job `rac-migrate` (deploy/ops/migrate.sh): roles → password of
+  PostgREST's login → migrations not yet recorded, each in one
+  transaction with its record → grants → `notify pgrst` so PostgREST
+  re-reads the schema (it keeps its own picture; without this a new
+  table is "not found" until a restart). A migration is merged and
+  applied BEFORE the code that needs it. Supabase does none of this:
+  there, a migration is still pasted into the SQL editor.
+- Real patient data moves only by the job `rac-copy-data`
+  (deploy/ops/copy-data.sh), started by the owner: one transaction on
+  the destination, prints a count per table and never a row (database
+  errors are shown as their code alone — the full text can quote a row).
+- Secrets live in Google Secret Manager and are put there with
+  deploy/ops/set-secret.sh, which never prints one or puts one on a
+  command line. Never ask the owner to paste a secret into a chat.
+- Tests beyond `npm test` and `npm run test:db`:
+  - `npm run test:ops` — migrate.sh, copy-data.sh, set-secret.sh (with a
+    stand-in gcloud) and render-service.sh, against a throwaway local
+    Postgres, run as an administrator that is not a superuser (as on
+    Cloud SQL).
+  - `npm run test:rest` — needs Docker. Postgres + PostgREST at the
+    pinned versions (deploy/local/docker-compose.yml), built by
+    migrate.sh; src/lib/db-rest.integration.test.ts runs the app's own
+    queries through createServiceClient(). A case that fails there is a
+    real difference from Supabase: change the pinned version or
+    PostgREST's settings, never the app's query code.
+  - `POSTGRES_IMAGE=postgres:17 npm run test:db` (or `test:ops`) — the
+    same suites inside that image, i.e. on the version Cloud SQL runs.
 
 ## Route Structure
 
@@ -130,8 +223,11 @@ patients use it unassisted; it needs no staff sign-in.
   until done. {quick:true} = newest 100 only (catches recently created
   patients, e.g. a missed webhook; PB orders by creation, so it can't see
   edits to old records) and reports how many were genuinely new
-- /api/cron/keepalive — daily Vercel Cron ping (Bearer CRON_SECRET) so the
-  free-tier Supabase project never pauses for inactivity
+- /api/cron/keepalive — daily ping (Bearer CRON_SECRET; Vercel Cron or
+  Cloud Scheduler) so a free-tier Supabase project never pauses for
+  inactivity. With live updates in a project of their own it reads one
+  row of THAT project's `keepalive` table and does not touch the
+  database; otherwise it counts patients in the one Supabase project
 - /api/patients/lookup — matches PIN, returns patient record
 - /api/patients/setup-pin — creates PIN for new patient
   (both through src/lib/pin-server.ts — see "PIN lookup" below)
@@ -201,6 +297,17 @@ patients use it unassisted; it needs no staff sign-in.
 
 ## Supabase Schema
 
+Where the DDL runs. On Supabase: paste a migration into the SQL editor.
+On Google Cloud (Cloud SQL): the job `rac-migrate` (deploy/ops/migrate.sh)
+applies supabase/cloud-sql/roles.sql, then every migration not yet
+recorded in ops.schema_migrations, then supabase/cloud-sql/grants.sql —
+see "Hosting". There, row-level security is on for every table with ONE
+policy per table, `app_all`, for `service_role` only (Cloud SQL cannot
+hand out BYPASSRLS, which is how Supabase's service role gets through):
+any other role still reads and writes nothing. Wherever a section below
+says "RLS with no policies", read "no policy for anyone but the app's
+role" on Google Cloud; supabase/tests/app_roles.sql holds it.
+
 Canonical DDL: supabase/migrations/0001_patient_signin.sql (idempotent —
 paste into the Supabase SQL editor to apply). RLS is enabled with no
 policies on both tables; all access goes through the service-role key.
@@ -236,10 +343,9 @@ policies on both tables; all access goes through the service-role key.
 | seen_at        | timestamp | nullable; the room's timer was started (0011) |
 | done_at        | timestamp | nullable; visit finished or removed (0011)    |
 
-Records from Practice Better: the webhook, the dashboard sync and
-scripts/sync-patients.js all turn a PB client record into a patients row
-with toPatientRow (src/lib/patient-record.ts; the script keeps a copy of
-the same rules, and patient-record.test.ts runs both). Names lose the
+Records from Practice Better: the webhook and the dashboard sync both
+turn a PB client record into a patients row with toPatientRow
+(src/lib/patient-record.ts, tested). Names lose the
 spaces around them, runs of blanks (tabs, non-breaking spaces) become one
 space and invisible pasted characters are dropped, so "Ann " and "Ann"
 are one spelling; the email is trimmed and lowercased; a blank email or
@@ -925,14 +1031,9 @@ src/app/waiting-room/music/ (useRadio, useYouTube, useSpotify, MusicBar).
 
 ## Scripts
 
-### scripts/sync-patients.js
-
-- Authenticates with Practice Better API
-- Fetches all client records (GET /consultant/records, paginated)
-- Upserts into Supabase patients table using pb_client_id as the unique key
-- Cleans each record on the way in — see "Records from Practice Better"
-- Run manually from terminal: node scripts/sync-patients.js
-- Safe to re-run — upsert won't duplicate records
+scripts/sync-patients.js is gone: it wrote to Supabase's REST address
+from a laptop, which a database on Google Cloud does not offer. Dashboard
+→ Setup → "Full sync" does the same job.
 
 ### scripts/setup-pb-webhook.js
 
@@ -941,6 +1042,23 @@ src/app/waiting-room/music/ (useRadio, useYouTube, useSpotify, MusicBar).
 - Prints the signing secret once — store as PB_WEBHOOK_SIGNING_SECRET
 - Run: node scripts/setup-pb-webhook.js [endpointUrl]
   (default endpoint: https://www.ryuacupuncture.com/api/webhooks/practice-better)
+- It prints a secret: the owner runs it in a terminal of their own
+
+### scripts/mint-db-jwt.js
+
+- Makes DB_REST_JWT (role: service_role, HS256, no expiry) from
+  PostgREST's signing secret: secret in on stdin, token out on stdout,
+  nothing on a command line. Refuses a secret under 32 characters
+
+### deploy/ops/ (run inside Google Cloud, or by `npm run test:ops`)
+
+- migrate.sh — builds or updates a database outside Supabase (job
+  `rac-migrate`); see "Hosting"
+- copy-data.sh copy | empty — the nine tables from the old database into
+  the new one, or out again (job `rac-copy-data`)
+- set-secret.sh random | ask | stdin NAME — a value into Secret Manager
+  without showing it
+- deploy/render-service.sh — fills in the Cloud Run service definition
 
 ## Page UI — /admin/patient-signin
 
@@ -1083,6 +1201,12 @@ Input rules (do not regress these — each fixes a way presses were lost):
 - All DB and API calls in server-side API routes only
 - Supabase service role key used server-side only; RLS enabled with no
   policies, so the anon key can read nothing
+- On Google Cloud: the database listens only inside the Cloud Run
+  instance (PostgREST and the Cloud SQL Auth Proxy on loopback); PostgREST
+  has no anonymous role, so only the app's token (DB_REST_JWT,
+  server-side only) gets anything; RLS stays on with one policy per
+  table, for the app's role alone; the service is reachable only through
+  the load balancer; every secret is in Secret Manager
 - Staff auth = Google sign-in (NextAuth) restricted to ALLOWED_ADMIN_EMAILS;
   no shared password exists
 - Patient API routes require a paired kiosk or the staff session (401
