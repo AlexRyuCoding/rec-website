@@ -92,6 +92,9 @@ switch (Part 4) was done that night, not on the Tuesday first planned.
   Until then the OLD Supabase project still holds a copy of every
   patient, and the Vercel project still exists (no longer connected to
   the repository, no longer serving any address).
+- **Still to do: stamp the PIN fingerprints** ("Everyday"). Until that
+  is done a wrong PIN keeps the kiosk on "Checking…" for about ten
+  seconds. When it is done, write the date here.
 
 Each finished step below says "done" and keeps the command that was used.
 
@@ -742,7 +745,7 @@ root.
   fingerprints only exist since migration 0017 (applied 2026-11-22), so
   nearly every PIN holder is still compared the slow way until they next
   sign in. Making that slow way faster is a follow-up, for after the
-  switch.
+  switch. (It became "Stamp the PIN fingerprints", under "Everyday".)
 
 ## Part 4 — The switch (done on the night of 2026-11-22)
 
@@ -891,7 +894,8 @@ and is not fixed that day, go back.
    (keep the read-and-write one in use); Spotify's if there was one; the
    old Google sign-in client if you can find it.
 5. Check: `gcloud run jobs list --region "${REGION}" --format="value(name)"`
-   shows `rac-migrate` only.
+   shows `rac-migrate` only (and `rac-stamp-pins`, if the stamping under
+   "Everyday" has been started and not yet finished).
 6. Claude: remove the three Supabase database variables and the "both
    hosts" wording from `CLAUDE.md`, delete `vercel.json`, pull request.
 
@@ -941,6 +945,134 @@ and the migration is not recorded, so the job would try it again later.
 If SQL was pasted anyway: execute `rac-migrate` afterwards (it gives the
 permissions and tells the database layer to look again).
 
+### Stamp the PIN fingerprints
+
+Done once — and again, all of it, if `nextauth-secret` is ever replaced.
+
+**What it is.** The kiosk finds a patient by a fingerprint of their PIN,
+stored beside it. A patient only gets that fingerprint the next time
+they sign in; until every patient with a PIN has one, each wrong PIN is
+checked against all the others one by one — about ten seconds of
+"Checking…". This job gives everyone their fingerprint now.
+
+**What it does not do.** Nobody gets a new PIN and no PIN changes. No
+PIN is written or shown anywhere: the job prints numbers of patients and
+nothing else. A PIN that staff reset, or a patient who signs in, while
+it runs is left exactly as the kiosk made it. It can run while the
+clinic is open, and it can be stopped at any moment (Cloud Run → Jobs →
+`rac-stamp-pins` → the execution → Cancel) and started again: it goes on
+with whoever is left.
+
+**What it costs.** About a minute of one computer per patient with a PIN
+— around twenty hours of computing for a thousand, shared between
+twenty that run side by side: roughly a dollar or two.
+
+1. **Gate.** The pull request that added the job is merged, and its
+   build says SUCCESS (Cloud Build → History). The job runs the image
+   that build made; an older image does not contain it.
+
+2. Make the job. It runs nothing yet (safe to run again; it then
+   updates the job):
+
+   ```sh
+   gcloud run jobs deploy rac-stamp-pins --region "${REGION}" \
+     --image "${REGION}-docker.pkg.dev/${PROJECT_ID}/rac/ops:latest" \
+     --service-account "rac-ops@${PROJECT_ID}.iam.gserviceaccount.com" \
+     --set-cloudsql-instances "${PROJECT_ID}:${REGION}:rac-db" \
+     --set-env-vars "PGHOST=/cloudsql/${PROJECT_ID}:${REGION}:rac-db,PGUSER=postgres,PGDATABASE=rac" \
+     --set-secrets "PGPASSWORD=db-postgres-password:latest,NEXTAUTH_SECRET=nextauth-secret:latest" \
+     --command /app/deploy/ops/stamp-pins.sh --args=count \
+     --tasks 20 --parallelism 20 --cpu 1 --memory 512Mi \
+     --max-retries 1 --task-timeout 4h
+   ```
+
+   - Made this way the job only **counts** when started. Stamping has
+     to be asked for (step 4), so a press on "Execute" in the console
+     changes nothing.
+   - It refuses with a message about a quota or a limit: run it again
+     with `--tasks 10 --parallelism 10`. Everything below then takes
+     twice as long and says 10 where it says 20.
+
+3. Count first. This changes nothing:
+
+   ```sh
+   gcloud run jobs execute rac-stamp-pins --region "${REGION}" --wait
+   gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="rac-stamp-pins" AND textPayload:"stamp-pins count"' --freshness=30m --format="value(textPayload)"
+   ```
+
+   - The lines come newest first. Claude may read them: they are counts.
+     The one to look at:
+     `stamp-pins count: pin_holders=… current=… without=… never_stamped=… other_key=… unusable=…`
+     - `pin_holders` — patients who have a PIN. Several hundred.
+     - `current` — those who already have their fingerprint (they have
+       signed in since 2026-11-22).
+     - `without` — those this job is for.
+   - Another says how long it will take:
+     `as 20 task(s) side by side about … minutes (at most …)`.
+     More than about 90 minutes: tell Claude before step 4 (the job can
+     be given more tasks).
+   - **Stop, and show Claude the lines, if:** `pin_holders=0` (the job is
+     not looking at the clinic's database); or `other_key` is not 0 and
+     `nextauth-secret` was not just replaced (the job was not given the
+     site's secret — a line says so in words); or a line says
+     `stopped:` (see "When something is wrong").
+
+4. Stamp:
+
+   ```sh
+   gcloud run jobs execute rac-stamp-pins --region "${REGION}" --args=stamp
+   ```
+
+   - The command comes back at once; the work goes on in Google Cloud.
+     The terminal and the computer may be closed.
+
+5. Is it finished? Cloud Run → Jobs → `rac-stamp-pins` → the newest
+   execution: it is finished when it shows a green tick and
+   **20 / 20 tasks** succeeded. Then read what each task did:
+
+   ```sh
+   gcloud run jobs executions list --job rac-stamp-pins --region "${REGION}" --limit 3
+   gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="rac-stamp-pins" AND (textPayload:"done:" OR textPayload:"stopped:")' --freshness=6h --format="value(textPayload)"
+   ```
+
+   - Twenty lines, one per task:
+     `stamp-pins task 7/20 done: seen=… stamped=… took_over=… same_pin=… no_match=… unusable=… changed=… minutes=…`
+     - `seen` — patients this task looked at; `stamped` — fingerprints
+       it stored. For most tasks the two are equal and the rest are 0.
+     - `changed` — left alone: reset, replaced or signed in meanwhile.
+     - `same_pin` — left without: another patient has the very same
+       PIN, and a fingerprint can belong to one patient only. It went
+       to the one the kiosk already signs in for that PIN
+       (`took_over` = it was moved to that patient). The other could
+       not sign in with that PIN before either; they need "Reset PIN".
+     - `no_match` and `unusable` — left without: what is stored for
+       them is not a 4-digit PIN the kiosk could have made.
+   - A line with `stopped:` is a task that failed. Google starts a
+     failed task once more by itself, and it goes on with whoever is
+     left, so a `stopped:` line followed by twenty `done:` lines is a
+     finished run. The line holds an error code and no patient data:
+     show Claude all the same.
+   - The execution ended with failed tasks, or was cancelled: nothing
+     is half-done. Do step 4 again; only who is left is worked on.
+
+6. Check. Step 3 again:
+   - `without=0`: every patient with a PIN has their fingerprint.
+   - Otherwise `without` is the patients the tasks reported as
+     `same_pin`, `no_match` or `unusable` (and anyone who made a PIN
+     in the last minutes). They are exactly as they were before the
+     job. Tell Claude the numbers; the job never says who they are.
+   - At the kiosk: type a PIN that is nobody's. "We don't recognize
+     that PIN" should now come in about a second.
+
+7. Delete the job (its log lines stay). Step 2 makes it again whenever
+   it is needed:
+
+   ```sh
+   gcloud run jobs delete rac-stamp-pins --region "${REGION}"
+   ```
+
+   - Then write the date under "Where things stand".
+
 ### Read the logs
 
 Cloud Run → `rac-web` → Logs. Each line says which container wrote it.
@@ -976,7 +1108,9 @@ clinic hours, and deploy straight away.**
 4. `nextauth-secret`: avoid changing it. Staff must sign in again,
    Spotify must be reconnected, and every PIN fingerprint goes out of
    date at once — the rehearsal measured 7 to 8 seconds per PIN entry
-   until each patient has signed in once more.
+   until each patient has signed in once more. If it has to change:
+   after the deploy of step 2, do "Stamp the PIN fingerprints" (above)
+   again, all of it. Nobody is locked out in between; PINs are slow.
 
 ### The header the load balancer removes
 
@@ -1045,6 +1179,20 @@ not the only one:
 - **`rac-migrate` or `rac-copy-data` cannot connect, or says "Malformed
   CloudSQL instance string".** Make the job again with the command of
   1.7.3 exactly as written, braces included, and check step 1.5.2 was done.
+- **`rac-stamp-pins` logs `stopped:`.** What follows says why, and never
+  holds patient data.
+  - `the database could not be reached`: the job was made without the
+    database attached, or with a wrong name — make it again with the
+    command of "Stamp the PIN fingerprints", step 2, exactly as written.
+    Once, in the middle of a run, it is a passing hiccup: the task is
+    started again by itself.
+  - `NEXTAUTH_SECRET is not set`: the job was made without
+    `NEXTAUTH_SECRET=nextauth-secret:latest`. Same remedy.
+  - `database error` and a code of five characters: show Claude the
+    line. Nothing is half-done; whatever was stamped stays stamped.
+  - The execution fails before any line is logged, with a message about
+    a permission on a secret: `rac-ops` cannot read `nextauth-secret`
+    (step 1.1 gives it the right for every secret).
 - **The certificate stays `PROVISIONING` or says `FAILED`.** Step 1.8.5
   says how to read the reason.
 - **Vercel shows a certificate warning for the domain before Part 4.**
@@ -1074,5 +1222,11 @@ settled, and each has a check above:
 - which place in `x-forwarded-for` holds the caller's address (1.10.7);
 - the load balancer and certificate commands of 1.8, which were written
   from Google's documentation and not run;
+- "Stamp the PIN fingerprints": the job itself was run from the built
+  image against a made-up database, and the app then signed in the
+  patients it stamped. Its `gcloud` commands were written from Google's
+  documentation and not run; whether the project may run twenty tasks at
+  once, and how fast Cloud Run's computers are at this work, show in
+  steps 2 and 3;
 - that the Realtime project's secret key is accepted by the daily ping
   (1.9), and that the ping is enough to keep a free project awake.

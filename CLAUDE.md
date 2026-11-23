@@ -94,9 +94,11 @@ behaviour is exactly Vercel + Supabase.
   sealed on 2026-11-22; deploy/RUNBOOK.md, "What the rehearsal found").
   Do not issue a new one for the switch: the PIN fingerprints are keyed
   with it, and under a new key the rehearsal measured 7 to 8 seconds
-  per PIN. A wrong PIN takes about 10 seconds on either host for now —
-  fingerprints only exist since migration 0017, so most PIN holders are
-  still compared the slow way; speeding that up is a follow-up.
+  per PIN. A wrong PIN took about 10 seconds on either host at the
+  switch — fingerprints only exist since migration 0017, so most PIN
+  holders were still compared the slow way. The stamping job (see "PIN
+  lookup") is what ends that; deploy/RUNBOOK.md, "Where things stand",
+  says whether it has been run.
 - A route that sends a redirect builds the address with siteUrl()
   (src/lib/site-url.ts, tested — on NEXTAUTH_URL), never from `req.url`:
   on Cloud Run that is the server's own listening address
@@ -134,15 +136,19 @@ behaviour is exactly Vercel + Supabase.
 - Versions are pinned in one place, deploy/versions.env: Postgres 17 (the
   major of the Supabase project being left — the ops image's pg_dump
   must be at least that), PostgREST (chosen by `npm run test:rest`, not
-  copied from Supabase), the Cloud SQL Auth Proxy.
+  copied from Supabase), the Cloud SQL Auth Proxy, and the Node inside
+  the ops image (for the stamping job only — the site's own Node is the
+  Dockerfile's).
 - The server needs Node 22 or newer (Dockerfile): the Supabase client
   throws on older ones for lack of a built-in WebSocket.
 - Images: Dockerfile (the site, Next.js `output: "standalone"`, port
   8080, unprivileged user; the two NEXT_PUBLIC_REALTIME values are build
   arguments and the build stops without them) and deploy/ops.Dockerfile
-  (psql + pg_dump + the SQL + the ops scripts, for the two jobs).
+  (psql + pg_dump + the SQL + the ops scripts, for the jobs; plus Node
+  and bcryptjs for the stamping job, and its build stops if that job's
+  fingerprint is not the app's — see "PIN lookup").
   cloudbuild.yaml builds and deploys on every push to `main`; it never
-  runs a migration.
+  runs a migration or any other job.
 - Migrations on Google Cloud are applied on purpose, by executing the
   job `rac-migrate` (deploy/ops/migrate.sh): roles → password of
   PostgREST's login → migrations not yet recorded, each in one
@@ -159,18 +165,23 @@ behaviour is exactly Vercel + Supabase.
   deploy/ops/set-secret.sh, which never prints one or puts one on a
   command line. Never ask the owner to paste a secret into a chat.
 - Tests beyond `npm test` and `npm run test:db`:
-  - `npm run test:ops` — migrate.sh, copy-data.sh, set-secret.sh (with a
-    stand-in gcloud) and render-service.sh, against a throwaway local
-    Postgres, run as an administrator that is not a superuser (as on
-    Cloud SQL).
+  - `npm run test:ops` — migrate.sh, copy-data.sh, stamp-pins.sh,
+    set-secret.sh (with a stand-in gcloud) and render-service.sh, against
+    a throwaway local Postgres, run as an administrator that is not a
+    superuser (as on Cloud SQL). Needs Node and `npm install` (the
+    stamping job's half is Node).
   - `npm run test:rest` — needs Docker. Postgres + PostgREST at the
     pinned versions (deploy/local/docker-compose.yml), built by
     migrate.sh; src/lib/db-rest.integration.test.ts runs the app's own
     queries through createServiceClient(). A case that fails there is a
     real difference from Supabase: change the pinned version or
-    PostgREST's settings, never the app's query code.
+    PostgREST's settings, never the app's query code. It also builds the
+    ops image and runs its stamping job beside that database, then signs
+    in through the app (src/lib/stamp-pins.integration.test.ts).
   - `POSTGRES_IMAGE=postgres:17 npm run test:db` (or `test:ops`) — the
-    same suites inside that image, i.e. on the version Cloud SQL runs.
+    same suites in Docker, i.e. on the version Cloud SQL runs. `test:ops`
+    then runs inside the ops image built on that Postgres, so the
+    stamping job tested is the image's own copy (its Node, its bcryptjs).
 
 ## Route Structure
 
@@ -472,13 +483,17 @@ tested).
 - Lookup = one indexed query for the fingerprint, then ONE bcrypt compare
   to confirm. The bcrypt hash stays the authority; a fingerprint alone
   never signs anyone in.
-- Nothing is backfilled (a fingerprint needs the PIN, which is not
-  stored). A patient without a current fingerprint is found the old way
-  once and stamped. So wrong PINs still cost a compare against every
-  not-yet-stamped patient; that shrinks as patients return.
+- The app itself only stamps a patient when they sign in: one without a
+  current fingerprint is found the old way once, then stamped. Until
+  every holder has one, any PIN that matches no fingerprint — every wrong
+  PIN — is compared against each holder without one (about 13 ms
+  apiece): about 10 seconds on the live site on 2026-11-22, the day
+  0017 was applied. That slow way stays in the code as the safety net;
+  what makes it rare is the stamping job below.
 - The fingerprint starts with an id of its key. Rotating NEXTAUTH_SECRET
   makes every fingerprint "old": patients are found the old way once and
-  re-stamped. Nobody is locked out and nothing needs clearing by hand.
+  re-stamped. Nobody is locked out and nothing needs clearing by hand —
+  but every PIN is slow again until the stamping job has been run again.
 - A database trigger clears pin_lookup whenever pin changes without a new
   fingerprint in the same statement (staff Reset PIN), so reset-pin did
   not need to learn about the column. Do not remove the trigger: a stale
@@ -493,6 +508,69 @@ tested).
 - Why an HMAC and not a plain hash: with only 10,000 possible PINs any
   unkeyed hash is reversed by trying them all; the key lives only on the
   server.
+
+### The stamping job (deploy/ops/stamp-pins.sh, since 2026-11-23)
+
+Gives every existing PIN holder their fingerprint at once, instead of
+one sign-in at a time. Introduced because no library or CPU got the slow
+way under 2 seconds (measured). Run by the owner as the Cloud Run job
+`rac-stamp-pins` (deploy/RUNBOOK.md, "Stamp the PIN fingerprints"):
+once, and AGAIN after NEXTAUTH_SECRET is ever replaced. The job is
+deleted after use; the code stays.
+
+- `count` changes nothing: how many holders have no current fingerprint
+  and roughly how long stamping takes. `stamp` does it. "Current" is the
+  app's rule (isCurrentFingerprint); a fingerprint from an older secret
+  counts as missing and is replaced.
+- How: a PIN has only 10,000 values, so for each holder the job tries
+  them against the stored bcrypt hash until one matches — the check the
+  kiosk makes — and stores that PIN's fingerprint. Up to 10,000 compares
+  a holder: about 70 seconds of one CPU on average, 140 at most. That
+  work runs in the JOB (Node + bcryptjs in the ops image), never in the
+  database, which only hands out a few hashes and takes fingerprints
+  back. Likely PINs are tried first (repeats, runs, years, dates — from
+  published studies, never from patients' data); all 10,000 are tried
+  before a hash is given up on.
+- Nobody's PIN changes; no PIN is written anywhere. The job writes
+  pin_lookup and nothing else — which is also why 0017's trigger leaves
+  its value alone.
+- The job's fingerprint must be the app's, byte for byte: a different
+  value under the current key id would make the kiosk skip that patient
+  for ever. The job keeps its own copy of the rule
+  (deploy/ops/stamp-pins/lib.mjs — the ops image has none of the app's
+  build), held to src/lib/pin-lookup.ts three ways: stamp-pins.test.ts
+  runs both on all 10,000 PINs; the ops image is not built unless
+  check-parity.mjs finds them equal against the pin-lookup.ts of the
+  same commit; stamp-pins.integration.test.ts signs in through the app
+  as a patient the job stamped. So pin-lookup.ts has to stay one file on
+  Node's own modules — the image build reads it as it stands — and a
+  change to how a fingerprint is made goes into lib.mjs in the same
+  commit (a failing ops image stops the deploy).
+- A write lands only if the patient's hash is still the one that was
+  read and they still have no current fingerprint; the row is locked
+  while that is decided. A PIN reset, a new PIN or a sign-in while the
+  job runs always wins. One patient is one transaction: the job can be
+  stopped at any moment and run again.
+- Two patients with the same PIN (possible in data from before the
+  unique index): the fingerprint goes to the first by id — the one the
+  kiosk already finds for that PIN, since pin-server.ts reads holders in
+  id order — even if another task stamped the later one first
+  (`took_over`). The other is left without (`same_pin`), on the slow way
+  as today; they can only be helped by a staff Reset PIN.
+- A hash no PIN matches (`no_match`) and a value that is not a bcrypt
+  hash of cost 4–10 (`unusable`) are counted, left alone, passed over
+  once per run (each read continues after the last id seen) and looked
+  at again by the next run.
+- It prints counts only — never a PIN, hash, fingerprint, id or name.
+  Its three statements are fixed text; ids, hashes and fingerprints
+  travel as COPY data on psql's standard input (not in a statement the
+  database could log with an error, not on a command line, not in a
+  file), and a database error is shown as its code alone.
+- Parallel by Cloud Run TASKS: each task takes the holders whose id
+  hashes into its share (CLOUD_RUN_TASK_INDEX of CLOUD_RUN_TASK_COUNT;
+  neither = everyone). bcryptjs — not a faster native library — on
+  purpose: exactly the code, at exactly the version, the app compares
+  PINs with (the two lock files are compared by stamp-pins.test.ts).
 
 ## Expected arrivals (migration 0020 — must be applied to use it)
 
@@ -1197,6 +1275,9 @@ from a laptop, which a database on Google Cloud does not offer. Dashboard
   `rac-migrate`); see "Hosting"
 - copy-data.sh copy | empty — the nine tables from the old database into
   the new one, or out again (job `rac-copy-data`)
+- stamp-pins.sh count | stamp — gives every PIN holder the fingerprint
+  the kiosk looks them up by (job `rac-stamp-pins`, made when needed);
+  its Node half is deploy/ops/stamp-pins/. See "PIN lookup"
 - set-secret.sh random | ask | stdin NAME — a value into Secret Manager
   without showing it
 - deploy/render-service.sh — fills in the Cloud Run service definition
@@ -1339,6 +1420,11 @@ Input rules (do not regress these — each fixes a way presses were lost):
 
 - PINs hashed with bcryptjs (never stored plain text); the lookup
   fingerprint beside the hash is keyed with a server-only secret
+- The stamping job (deploy/ops/stamp-pins.sh) works PINs out from their
+  hashes in memory, to store the fingerprint the app would store itself:
+  it writes no PIN anywhere, prints counts only, and takes hashes out of
+  the database only through a pipe into its own memory. It runs inside
+  Google Cloud as `rac-ops`, started by the owner
 - All DB and API calls in server-side API routes only
 - Supabase service role key used server-side only; RLS enabled with no
   policies, so the anon key can read nothing

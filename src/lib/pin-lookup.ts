@@ -17,6 +17,15 @@
 // The fingerprint starts with a short id of the key that made it. If
 // NEXTAUTH_SECRET is ever rotated, old fingerprints simply stop being
 // "current": those patients are found the slow way once and re-stamped.
+//
+// The job that stamps every PIN holder at once (deploy/ops/stamp-pins.sh)
+// keeps its own copy of the two functions below, in
+// deploy/ops/stamp-pins/lib.mjs, and must make the very same values.
+// Change how a fingerprint is made, and change it there in the same
+// commit: stamp-pins.test.ts compares the two, and the ops image is not
+// built while they differ (which stops a deploy). For that check this
+// file is read by Node as it stands — keep it one file that imports
+// nothing but Node's own modules.
 
 import { createHash, createHmac } from "crypto";
 
