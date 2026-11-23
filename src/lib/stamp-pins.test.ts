@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   askRow,
   candidatePins,
+  dbErrorCode,
   dbFailure,
   estimate,
   findPin,
@@ -358,6 +359,16 @@ describe("dbFailure — a database error, reduced to its code", () => {
   it("copes with no text at all, and with a timeout", () => {
     expect(dbFailure(1, "")).toBe("database error (psql exit 1)");
     expect(dbFailure(null, "")).toBe("database error (psql did not finish)");
+  });
+
+  it("dbErrorCode is the last error's code, or null — what decides a second try", () => {
+    expect(dbErrorCode("ERROR:  40P01\n")).toBe("40P01");
+    expect(dbErrorCode("ERROR:  23505\nERROR:  55P03\n")).toBe("55P03");
+    expect(dbErrorCode("psql:<stdin>:12: ERROR:  57014\n")).toBe("57014");
+    expect(
+      dbErrorCode("ERROR:  canceling statement due to timeout\n")
+    ).toBeNull();
+    expect(dbErrorCode("")).toBeNull();
   });
 });
 
