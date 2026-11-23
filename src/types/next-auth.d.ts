@@ -9,6 +9,10 @@ declare module "next-auth" {
   interface Session {
     dayEnd?: number;
     dashAt?: number;
+    // Whether the dashboard is locked, as the SERVER's clock has it. The
+    // page asks this, never its own clock: a computer whose clock is off
+    // must not lock a dashboard that was just opened.
+    dashLocked?: boolean;
   }
 }
 

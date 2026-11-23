@@ -1,7 +1,7 @@
 import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { isAllowedAdminEmail } from "@/lib/admin-allowlist";
-import { renewDashboardActivity } from "@/lib/dashboard-lock";
+import { dashboardLocked, renewDashboardActivity } from "@/lib/dashboard-lock";
 import {
   recordSignIn,
   recordSignInRefused,
@@ -57,6 +57,11 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (typeof token.dayEnd === "number") session.dayEnd = token.dayEnd;
       if (typeof token.dashAt === "number") session.dashAt = token.dashAt;
+      // Said by the server, on the server's clock (dashAt was stamped by
+      // it too). The page must not work this out with the computer's own
+      // clock: one that runs a minute slow would find every fresh sign-in
+      // "in the future" and lock the dashboard for good.
+      session.dashLocked = dashboardLocked(token.dashAt, Date.now());
       return session;
     },
   },

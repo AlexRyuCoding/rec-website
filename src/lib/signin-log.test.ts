@@ -262,6 +262,26 @@ describe("recordSignInRefused", () => {
     expect(lines()).not.toContain("@example.com");
   });
 
+  it("…also when they all arrive at the same moment", async () => {
+    const db = logDb();
+    await Promise.all(
+      Array.from({ length: 200 }, (_, i) =>
+        recordSignInRefused(`stranger${i}@example.com`, NOW + i, db.get)
+      )
+    );
+    expect(db.log()).toHaveLength(REFUSED_PER_HOUR);
+  });
+
+  it("the same address arriving many times at once is one row", async () => {
+    const db = logDb();
+    await Promise.all(
+      Array.from({ length: 50 }, () =>
+        recordSignInRefused("stranger@example.com", NOW, db.get)
+      )
+    );
+    expect(db.log()).toHaveLength(1);
+  });
+
   it("the limit is the last hour's: older rows do not count", async () => {
     const db = logDb(
       Array.from({ length: 60 }, (_, i) =>

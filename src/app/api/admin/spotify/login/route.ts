@@ -1,7 +1,7 @@
 import { randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { siteUrl } from "@/lib/site-url";
-import { staffRoute } from "@/lib/staff-route";
+import { dashboardRoute } from "@/lib/staff-route";
 import {
   SPOTIFY_STATE_COOKIE,
   spotifyAuthorizeUrl,
@@ -15,11 +15,17 @@ export const dynamic = "force-dynamic";
 const toLogin = (req: NextRequest) =>
   NextResponse.redirect(siteUrl("/admin/login", req));
 
+// …and someone whose dashboard has locked goes back to it, where the lock
+// screen is: a locked browser must not be able to replace the clinic's
+// Spotify connection.
+const toLockedDashboard = (req: NextRequest) =>
+  NextResponse.redirect(siteUrl("/admin/dashboard?tab=setup", req));
+
 // Step 1 of connecting the clinic's Spotify account: send the signed-in
 // staff member to Spotify's own consent page. The random `state` comes
 // back with them and must match the cookie, so nobody can be tricked
 // into connecting an account they did not choose.
-export const GET = staffRoute(
+export const GET = dashboardRoute(
   async (req) => {
     if (!spotifyConfigured()) {
       return NextResponse.redirect(
@@ -40,5 +46,5 @@ export const GET = staffRoute(
     });
     return res;
   },
-  { whenNotStaff: toLogin }
+  { whenNotStaff: toLogin, whenLocked: toLockedDashboard }
 );

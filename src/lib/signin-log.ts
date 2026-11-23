@@ -100,15 +100,33 @@ export function recordSignOut(
   );
 }
 
+// Refusals are looked back on and written ONE AT A TIME on this server:
+// "read the last hour, then write" is two steps, and a burst arriving
+// together would otherwise each read an empty hour and each write (200
+// at once wrote 200 rows — found in review, 2026-11-23). Held per server
+// instance, of which there are at most three; a limit across instances
+// would need the count and the write in one database function.
+let refusedInTurn: Promise<void> = Promise.resolve();
+
 // A Google account that is not on the staff list tried to sign in and was
-// refused. Anyone can cause this, so the row is bounded (refusedRowVerdict)
-// and the bound always holds: if the look-back cannot be made, nothing is
-// written. (A staff view that repeats is written when in doubt —
-// recordStaffActionOnce — but staff cause those; strangers cause these.)
+// refused. Anyone can cause this, so the row is bounded (refusedRowVerdict):
+// if the look-back cannot be made, nothing is written. (A staff view that
+// repeats is written when in doubt — recordStaffActionOnce — but staff
+// cause those; strangers cause these.)
 export function recordSignInRefused(
   email: unknown,
   nowMs: number,
   getDb: GetDb = createServiceClient
+): Promise<void> {
+  const turn = refusedInTurn.then(() => writeRefusedRow(email, nowMs, getDb));
+  refusedInTurn = turn;
+  return turn;
+}
+
+function writeRefusedRow(
+  email: unknown,
+  nowMs: number,
+  getDb: GetDb
 ): Promise<void> {
   return withoutBlocking("signin_refused", async () => {
     const db = getDb();

@@ -5,9 +5,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-const staff = vi.hoisted(() => ({ email: null as string | null }));
+const staff = vi.hoisted(() => ({
+  email: null as string | null,
+  // When the dashboard was last used; set fresh in the tests that sign in.
+  dashAt: undefined as number | undefined,
+}));
 vi.mock("@/lib/admin-auth", () => ({
   getAdminEmail: async () => staff.email,
+  getStaffSession: async () =>
+    staff.email ? { email: staff.email, dashAt: staff.dashAt } : null,
   isAdminAuthorized: async () => staff.email !== null,
 }));
 
@@ -22,6 +28,7 @@ const location = (res: Response) => res.headers.get("location");
 
 beforeEach(() => {
   staff.email = null;
+  staff.dashAt = Date.now();
   vi.stubEnv("NEXTAUTH_URL", SITE);
   vi.stubEnv("SPOTIFY_CLIENT_ID", "");
   vi.stubEnv("SPOTIFY_CLIENT_SECRET", "");
@@ -85,5 +92,18 @@ describe("Spotify connect: a signed-in staff member", () => {
     expect(to.searchParams.get("redirect_uri")).toBe(
       `${SITE}/api/admin/spotify/callback`
     );
+  });
+});
+
+describe("Spotify connect: signed in, but the dashboard has locked", () => {
+  it("step 1 goes back to the dashboard (its lock screen), not on to Spotify", async () => {
+    staff.email = "desk@example.com";
+    staff.dashAt = Date.now() - 45 * 60_000;
+    vi.stubEnv("SPOTIFY_CLIENT_ID", "made-up-id");
+    vi.stubEnv("SPOTIFY_CLIENT_SECRET", "made-up-secret");
+    const res = await login(request("/api/admin/spotify/login"), context);
+    expect(res.status).toBe(307);
+    expect(location(res)).toBe(`${SITE}/admin/dashboard?tab=setup`);
+    expect(res.headers.get("set-cookie")).toBeNull();
   });
 });

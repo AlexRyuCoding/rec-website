@@ -199,10 +199,9 @@ const NEVER_LOCKED: Record<string, string> = {
   // By id, from the board's Expected list as well as from the dashboard's
   // search; it answers with no more than the board already shows.
   "checkins/route.ts POST": "staff check-in, also from the rooms board",
-  // A browser travels through these two while connecting Spotify; they
-  // hold no patient information.
-  "spotify/login/route.ts GET": "browser step of connecting Spotify",
-  "spotify/callback/route.ts GET": "browser step of connecting Spotify",
+  // The browser comes back here from Spotify's consent page, minutes
+  // after step 1 (which does lock); it holds no patient information.
+  "spotify/callback/route.ts GET": "the way back from Spotify's consent page",
 };
 
 describe("every route under /api/admin", () => {
