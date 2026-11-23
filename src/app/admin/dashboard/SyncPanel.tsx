@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { RefreshCcw } from "lucide-react";
-import { goToStaffLogin } from "@/lib/staff-login-redirect";
+import { leaveDashboard } from "@/lib/staff-login-redirect";
 import Button from "../ui/Button";
 import Panel from "../ui/Panel";
 
@@ -33,8 +33,8 @@ export default function SyncPanel() {
             quick ? { quick: true } : beforeId ? { before_id: beforeId } : {}
           ),
         });
-        if (res.status === 401) {
-          goToStaffLogin();
+        if (res.status === 401 || res.status === 423) {
+          leaveDashboard(res.status);
           return;
         }
         const data: {

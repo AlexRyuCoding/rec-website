@@ -3,12 +3,12 @@ import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase";
 import { recordStaffAction } from "@/lib/audit-server";
 import { DEVICES } from "@/lib/display-auth";
-import { staffRoute } from "@/lib/staff-route";
+import { dashboardRoute } from "@/lib/staff-route";
 
 // Revoke a paired waiting-room screen or check-in kiosk. Its cookie stops
 // working at once: the TV falls back to showing a fresh pairing code, the
 // kiosk to its set-up screen (and is an ordinary browser again).
-export const DELETE = staffRoute<{ id: string }>(
+export const DELETE = dashboardRoute<{ id: string }>(
   async (_req, { email: staffEmail }, { params }) => {
     const { id } = await params;
     if (!z.string().uuid().safeParse(id).success) {

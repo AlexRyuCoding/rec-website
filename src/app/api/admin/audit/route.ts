@@ -4,7 +4,7 @@ import { createServiceClient } from "@/lib/supabase";
 import { allowedAdminEmails } from "@/lib/admin-allowlist";
 import { STAFF_ACTIONS } from "@/lib/audit-log";
 import { loadAuditPage } from "@/lib/audit-server";
-import { staffRoute } from "@/lib/staff-route";
+import { dashboardRoute } from "@/lib/staff-route";
 
 const noStore = { "Cache-Control": "no-store" };
 
@@ -21,7 +21,7 @@ const querySchema = z.object({
 //
 // The patient is given by id, never by name: a name in the address would
 // end up in request logs. Replies name patients, so no cache keeps them.
-export const GET = staffRoute(async (req) => {
+export const GET = dashboardRoute(async (req) => {
   const { searchParams } = new URL(req.url);
   const parsed = querySchema.safeParse(
     Object.fromEntries(

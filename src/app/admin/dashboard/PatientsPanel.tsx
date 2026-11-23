@@ -14,7 +14,7 @@ import {
 } from "../ui/styles";
 import Tag from "../ui/Tag";
 import { createSearchRunner, type SearchRunner } from "@/lib/latest-search";
-import { goToStaffLogin } from "@/lib/staff-login-redirect";
+import { leaveDashboard } from "@/lib/staff-login-redirect";
 import { createTapGuard, SCREEN_CHANGE_GUARD_MS } from "@/lib/tap-guard";
 
 interface PatientRow {
@@ -105,8 +105,8 @@ export default function PatientsPanel({
       onStart: () => setSearching(true),
       onResult: (reply) => {
         setSearching(false);
-        if (reply.status === 401) {
-          goToStaffLogin();
+        if (reply.status === 401 || reply.status === 423) {
+          leaveDashboard(reply.status);
           return;
         }
         if (!reply.ok) {
@@ -141,8 +141,8 @@ export default function PatientsPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ patient_id: id }),
       });
-      if (res.status === 401) {
-        goToStaffLogin();
+      if (res.status === 401 || res.status === 423) {
+        leaveDashboard(res.status);
         return;
       }
       if (res.ok) {
@@ -173,8 +173,8 @@ export default function PatientsPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ patient_id: id }),
       });
-      if (res.status === 401) {
-        goToStaffLogin();
+      if (res.status === 401 || res.status === 423) {
+        leaveDashboard(res.status);
         return;
       }
       const data = await res.json().catch(() => ({}));

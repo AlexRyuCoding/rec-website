@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { MonitorPlay, TabletSmartphone, Tv } from "lucide-react";
-import { goToStaffLogin } from "@/lib/staff-login-redirect";
+import { leaveDashboard } from "@/lib/staff-login-redirect";
 import Button from "../ui/Button";
 import Panel from "../ui/Panel";
 import Segmented from "../ui/Segmented";
@@ -75,8 +75,8 @@ export default function ScreensPanel() {
   const refresh = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/displays");
-      if (res.status === 401) {
-        goToStaffLogin();
+      if (res.status === 401 || res.status === 423) {
+        leaveDashboard(res.status);
         return;
       }
       if (!res.ok) return;
@@ -105,8 +105,8 @@ export default function ScreensPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code, label: label.trim() || undefined, kind }),
       });
-      if (res.status === 401) {
-        goToStaffLogin();
+      if (res.status === 401 || res.status === 423) {
+        leaveDashboard(res.status);
         return;
       }
       if (res.ok) {
@@ -140,8 +140,8 @@ export default function ScreensPanel() {
       const res = await fetch(`/api/admin/displays/${id}`, {
         method: "DELETE",
       });
-      if (res.status === 401) {
-        goToStaffLogin();
+      if (res.status === 401 || res.status === 423) {
+        leaveDashboard(res.status);
         return;
       }
       if (!res.ok) {

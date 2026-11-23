@@ -14,7 +14,8 @@
 // that is not wrapped. The wrapper also marks every answer "no-store".
 
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminEmail } from "./admin-auth";
+import { getAdminEmail, getStaffSession } from "./admin-auth";
+import { dashboardLocked } from "./dashboard-lock";
 
 // The signed-in staff member, for routes that record who did it.
 export interface Staff {
@@ -76,5 +77,35 @@ export function staffRoute<Params = Record<string, never>>(
     const email = await getAdminEmail();
     if (!email) return options.whenNotStaff?.(req) ?? unauthorized();
     return neverCached(await handler(req, { email }, context));
+  };
+}
+
+// What a dashboard-only route answers once the dashboard has locked: the
+// person is still signed in (the rooms board goes on working), but this
+// needs them to sign in again. The page shows its lock screen on a 423.
+export function locked(): Response {
+  return NextResponse.json(
+    { error: "Locked" },
+    { status: 423, headers: { "Cache-Control": "no-store" } }
+  );
+}
+
+// staffRoute for what only the dashboard uses — patient search, the
+// check-in history, the audit log, PIN resets, pairing, settings. It also
+// refuses (423) when the dashboard has not been used for 30 minutes
+// (dashboard-lock.ts). staff-route.test.ts makes this the rule: a route
+// under /api/admin must be a dashboardRoute unless it is listed there as
+// one the rooms board needs.
+export function dashboardRoute<Params = Record<string, never>>(
+  handler: StaffHandler<Params>
+) {
+  return async (
+    req: NextRequest,
+    context: RouteContext<Params>
+  ): Promise<Response> => {
+    const staff = await getStaffSession();
+    if (!staff) return unauthorized();
+    if (dashboardLocked(staff.dashAt, Date.now())) return locked();
+    return neverCached(await handler(req, { email: staff.email }, context));
   };
 }
