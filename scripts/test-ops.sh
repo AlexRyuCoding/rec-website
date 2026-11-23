@@ -279,3 +279,140 @@ if out="$(copy_data sideways 2>&1)"; then
   fail "copy-data.sh must refuse an argument it does not know"
 fi
 ok "copy-data.sh refuses an unknown argument"
+
+# ------------------------------------------------------------- set-secret
+# deploy/ops/set-secret.sh, with a stand-in for gcloud that keeps what it
+# is given in a folder: no Google account is involved, and nothing real
+# is stored anywhere.
+STORE="$DIR/secrets"
+mkdir -p "$DIR/bin" "$STORE"
+cat > "$DIR/bin/gcloud" <<'GCLOUD'
+#!/usr/bin/env bash
+# Stand-in gcloud: secrets describe | create | versions add | versions list.
+set -euo pipefail
+printf '%s\n' "$*" >> "$STORE/calls"
+[ "$1" = "secrets" ] || exit 64
+case "$2" in
+  describe) [ -d "$STORE/$3" ] ;;
+  create) mkdir "$STORE/$3" ;;
+  versions)
+    case "$3" in
+      add)
+        [ -d "$STORE/$4" ] || exit 1
+        [ "$5" = "--data-file=-" ] || exit 64
+        [ ! -e "$STORE/refuse" ] || exit 1
+        n=$(($(ls "$STORE/$4" | wc -l) + 1))
+        cat > "$STORE/$4/$n"
+        ;;
+      list) [ -d "$STORE/$4" ] && [ -n "$(ls "$STORE/$4")" ] && echo 1 || true ;;
+      *) exit 64 ;;
+    esac
+    ;;
+  *) exit 64 ;;
+esac
+GCLOUD
+chmod +x "$DIR/bin/gcloud"
+set_secret() {
+  STORE="$STORE" PATH="$DIR/bin:$PATH" bash deploy/ops/set-secret.sh "$@"
+}
+versions() { # versions <name> — how many values the stand-in holds
+  ls "$STORE/$1" 2>/dev/null | wc -l | tr -d ' '
+}
+
+out="$(set_secret random made-up-one 2>&1)" || fail "set-secret random: $out"
+value="$(cat "$STORE/made-up-one/1")"
+same "random stores 64 letters and digits" \
+  "$(printf '%s' "$value" | grep -c '^[0-9a-f]\{64\}$')" "1"
+same "and no line end after them" "$(wc -c < "$STORE/made-up-one/1" | tr -d ' ')" "64"
+case "$out" in *"$value"*) fail "set-secret random printed the value" ;; esac
+if grep -q "$value" "$STORE/calls"; then
+  fail "set-secret random put the value on a command line"
+fi
+same "it says what it stored, not the value" "$out" "stored: made-up-one (64 characters)"
+ok "set-secret random: stores a strong value, shows only its name and length"
+
+if out="$(set_secret random made-up-one 2>&1)"; then
+  fail "set-secret random must not replace a value unasked"
+fi
+same "the value was left alone" "$(versions made-up-one)" "1"
+out="$(set_secret random made-up-one --replace 2>&1)" || fail "set-secret random --replace: $out"
+same "--replace adds a new value" "$(versions made-up-one)" "2"
+[ "$(cat "$STORE/made-up-one/2")" != "$value" ] || fail "--replace stored the same value again"
+ok "set-secret random: refuses to replace a value unless given --replace"
+
+out="$(printf '  pasted-made-up-value \n' | set_secret ask made-up-two 2>&1)" \
+  || fail "set-secret ask: $out"
+same "ask stores what was typed, without the spaces and line end around it" \
+  "$(cat "$STORE/made-up-two/1")" "pasted-made-up-value"
+same "and nothing after it" "$(wc -c < "$STORE/made-up-two/1" | tr -d ' ')" "20"
+case "$out" in *pasted-made-up-value*) fail "set-secret ask printed the value" ;; esac
+if grep -q "pasted-made-up-value" "$STORE/calls"; then
+  fail "set-secret ask put the value on a command line"
+fi
+out="$(printf 'second-made-up-value\n' | set_secret ask made-up-two 2>&1)" \
+  || fail "set-secret ask, again: $out"
+same "ask again adds a new value" "$(cat "$STORE/made-up-two/2")" "second-made-up-value"
+if out="$(printf '   \n' | set_secret ask made-up-three 2>&1)"; then
+  fail "set-secret ask must refuse an empty value"
+fi
+same "nothing was created for an empty value" "$(versions made-up-three)" "0"
+ok "set-secret ask: stores the typed value, never shows it, refuses an empty one"
+
+out="$(printf 'postgres://authenticator:%s@127.0.0.1:5432/rac' "$value" | set_secret stdin made-up-four 2>&1)" \
+  || fail "set-secret stdin: $out"
+same "stdin stores exactly what another command hands it" \
+  "$(cat "$STORE/made-up-four/1")" "postgres://authenticator:$value@127.0.0.1:5432/rac"
+case "$out" in *"$value"*) fail "set-secret stdin printed the value" ;; esac
+ok "set-secret stdin: stores a value composed by another command"
+
+calls_before="$(wc -l < "$STORE/calls" | tr -d ' ')"
+for bad in "" "random" "sideways made-up" "random Made_Up" "random made-up --force" \
+  "ask made-up extra" "random --replace"; do
+  # shellcheck disable=SC2086
+  if out="$(printf 'x\n' | set_secret $bad 2>&1)"; then
+    fail "set-secret must refuse: '$bad'"
+  fi
+done
+same "a refused command reaches nothing" "$(wc -l < "$STORE/calls" | tr -d ' ')" "$calls_before"
+ok "set-secret refuses arguments it does not know"
+
+touch "$STORE/refuse"
+if out="$(set_secret random made-up-five 2>&1)"; then
+  fail "set-secret must fail when Secret Manager refuses the value"
+fi
+case "$out" in *stored:*) fail "set-secret said 'stored' although it was refused" ;; esac
+rm "$STORE/refuse"
+ok "set-secret fails, and does not say 'stored', when the value is refused"
+
+# --------------------------------------------------------- render-service
+# deploy/render-service.sh only writes text; made-up names throughout.
+render() {
+  PROJECT_ID="${PROJECT_ID-made-up-project}" \
+    IMAGE="${IMAGE-us-west1-docker.pkg.dev/made-up-project/rac/web:b1}" \
+    POSTGREST_IMAGE=us-west1-docker.pkg.dev/made-up-project/rac/postgrest:v1 \
+    NEXTAUTH_URL=https://new.example.com bash deploy/render-service.sh
+}
+out="$(render 2>&1)" || fail "render-service.sh: $out"
+if printf '%s\n' "$out" | grep -v '^[[:space:]]*#' | grep -q '\${'; then
+  fail "render-service.sh left a \${…} name unfilled"
+fi
+for line in \
+  "serviceAccountName: rac-app@made-up-project.iam.gserviceaccount.com" \
+  "image: us-west1-docker.pkg.dev/made-up-project/rac/web:b1" \
+  "image: us-west1-docker.pkg.dev/made-up-project/rac/postgrest:v1" \
+  "value: https://new.example.com" \
+  "- made-up-project:us-west1:rac-db" \
+  'run.googleapis.com/invoker-iam-disabled: "true"' \
+  "run.googleapis.com/ingress: internal-and-cloud-load-balancing"; do
+  printf '%s\n' "$out" | grep -qF -- "$line" || fail "the rendered service lacks: $line"
+done
+if printf '%s\n' "$out" | grep -v '^[[:space:]]*#' | grep -q 'PGRST_DB_ANON_ROLE'; then
+  fail "the service must not give PostgREST an anonymous role"
+fi
+if out="$(PROJECT_ID="" render 2>&1)"; then
+  fail "render-service.sh must refuse to run without PROJECT_ID"
+fi
+if out="$(IMAGE='x|y' render 2>&1)"; then
+  fail "render-service.sh must refuse a value with unexpected characters"
+fi
+ok "render-service.sh fills in every name, and refuses a missing or odd value"

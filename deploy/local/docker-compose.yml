@@ -15,6 +15,18 @@
 #
 # The database is built by migrate.sh BEFORE PostgREST starts: PostgREST
 # logs in as "authenticator", which migrate.sh creates.
+#
+# The site itself, from the same image Cloud Run runs, is the third
+# service. It is left out unless asked for (profile "app"), and needs the
+# token PostgREST accepts:
+#
+#   export DB_REST_JWT="$(printf '%s' "$PGRST_JWT_SECRET" | node scripts/mint-db-jwt.js)"
+#   docker compose --env-file deploy/versions.env -f deploy/local/docker-compose.yml \
+#     --profile app up -d --build --wait app
+#   open http://localhost:8080
+#
+# Staff sign-in does not work here (no Google keys); the public pages,
+# the kiosk shell and the pairing routes do.
 name: rac-local
 
 services:
@@ -72,4 +84,31 @@ services:
       test: ["CMD", "postgrest", "--ready"]
       interval: 1s
       timeout: 3s
+      retries: 60
+
+  app:
+    profiles: ["app"]
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      args:
+        # Made up: live updates have nowhere to connect here, and the
+        # boards fall back to their once-a-minute refresh.
+        NEXT_PUBLIC_REALTIME_URL: https://realtime.invalid
+        NEXT_PUBLIC_REALTIME_ANON_KEY: made-up-publishable-key
+    depends_on:
+      rest:
+        condition: service_healthy
+    environment:
+      DB_REST_URL: http://rest:3000
+      DB_REST_JWT: ${DB_REST_JWT:-}
+      NEXTAUTH_URL: http://localhost:8080
+      # Made up, for this computer only. The real one is in Secret Manager.
+      NEXTAUTH_SECRET: made-up-on-this-computer-only-not-a-secret
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 1s
+      timeout: 5s
       retries: 60

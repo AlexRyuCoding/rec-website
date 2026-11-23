@@ -56,6 +56,10 @@ const WAITING_ROOM_CSP = buildCsp({ music: true });
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Also write .next/standalone: the server with only the files it needs,
+  // which is what the container image runs (Dockerfile). Vercel builds
+  // its own way and is not affected.
+  output: "standalone",
   images: {
     formats: ["image/avif", "image/webp"],
   },

@@ -1,0 +1,199 @@
+# Cloud Run service "rac-web": the site, with its database layer beside it.
+#
+# This is a TEMPLATE. deploy/render-service.sh fills in the ${…} names
+# (nothing here names the real project) and the result is deployed with
+#   gcloud run services replace <rendered file> --region us-west1
+# cloudbuild.yaml does both on every merge to main.
+#
+# One instance = three containers that share "localhost":
+#
+#   app              the Next.js site — the only one that receives requests
+#   postgrest        the REST layer in front of the database (what
+#                    Supabase runs), on 127.0.0.1:3001
+#   cloud-sql-proxy  Google's connector to Cloud SQL, on 127.0.0.1:5432
+#
+# They start in that order from the bottom — proxy, then postgrest, then
+# app — each only once the one before it answers its start-up check.
+#
+# Field names follow Cloud Run's YAML reference
+# (docs.cloud.google.com/run/docs/reference/yaml/v1), read 2026-11-22.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: rac-web
+  annotations:
+    # Reachable only through the load balancer (and from inside the
+    # project): the service's own run.app address refuses the internet.
+    run.googleapis.com/ingress: internal-and-cloud-load-balancing
+    # The site is public, but the organisation's policy
+    # (iam.allowedPolicyMemberDomains) forbids granting "allUsers" the
+    # right to call it. So the caller check itself is switched off; who
+    # may see what is decided by the app (Google sign-in, device cookies).
+    run.googleapis.com/invoker-iam-disabled: "true"
+    # One instance always warm — the first PIN of the morning must not
+    # wait for a start — and at most three, which bounds the database
+    # connections (3 × PGRST_DB_POOL).
+    run.googleapis.com/minScale: "1"
+    run.googleapis.com/maxScale: "3"
+spec:
+  template:
+    metadata:
+      annotations:
+        # "X": ["Y"] = X starts after Y. Each sidecar below has a start-up
+        # check; without one Cloud Run would not wait for it.
+        run.googleapis.com/container-dependencies: '{"app":["postgrest"],"postgrest":["cloud-sql-proxy"]}'
+        run.googleapis.com/startup-cpu-boost: "true"
+        autoscaling.knative.dev/maxScale: "3"
+    spec:
+      serviceAccountName: rac-app@${PROJECT}.iam.gserviceaccount.com
+      containers:
+        # ------------------------------------------------------------ app
+        - name: app
+          image: ${IMAGE}
+          ports:
+            - name: http1
+              containerPort: 8080
+          resources:
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          startupProbe:
+            tcpSocket:
+              port: 8080
+            periodSeconds: 1
+            timeoutSeconds: 1
+            failureThreshold: 60
+          env:
+            # The database, through the postgrest container (src/lib/db-rest.ts).
+            - name: DB_REST_URL
+              value: http://127.0.0.1:3001
+            # The caller's address is the second from the right of
+            # x-forwarded-for: the load balancer appends
+            # "<caller>, <itself>" (src/lib/validation.ts). Checked with a
+            # real request when the load balancer is set up — see the runbook.
+            - name: CLIENT_IP_FROM_RIGHT
+              value: "2"
+            - name: NEXTAUTH_URL
+              value: ${NEXTAUTH_URL}
+            # Belt and braces: the server must listen on every address
+            # of the instance, whatever the platform puts in HOSTNAME.
+            - name: HOSTNAME
+              value: 0.0.0.0
+            # Everything below comes from Secret Manager, newest version,
+            # read when an instance starts: after changing a secret,
+            # deploy again (or the old value stays in use).
+            - name: DB_REST_JWT
+              valueFrom: { secretKeyRef: { name: db-rest-jwt, key: latest } }
+            - name: REALTIME_SERVICE_KEY
+              valueFrom: { secretKeyRef: { name: realtime-service-key, key: latest } }
+            - name: NEXTAUTH_SECRET
+              valueFrom: { secretKeyRef: { name: nextauth-secret, key: latest } }
+            - name: GOOGLE_CLIENT_ID
+              valueFrom: { secretKeyRef: { name: google-client-id, key: latest } }
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom: { secretKeyRef: { name: google-client-secret, key: latest } }
+            - name: ALLOWED_ADMIN_EMAILS
+              valueFrom: { secretKeyRef: { name: allowed-admin-emails, key: latest } }
+            - name: CRON_SECRET
+              valueFrom: { secretKeyRef: { name: cron-secret, key: latest } }
+            - name: PB_CLIENT_ID
+              valueFrom: { secretKeyRef: { name: pb-client-id, key: latest } }
+            - name: PB_CLIENT_SECRET
+              valueFrom: { secretKeyRef: { name: pb-client-secret, key: latest } }
+            - name: PB_WEBHOOK_VERIFICATION_TOKEN
+              valueFrom: { secretKeyRef: { name: pb-webhook-verification-token, key: latest } }
+            - name: PB_WEBHOOK_SIGNING_SECRET
+              valueFrom: { secretKeyRef: { name: pb-webhook-signing-secret, key: latest } }
+            - name: RESEND_API_KEY
+              valueFrom: { secretKeyRef: { name: resend-api-key, key: latest } }
+            - name: RESEND_FROM_EMAIL
+              valueFrom: { secretKeyRef: { name: resend-from-email, key: latest } }
+            # Spotify as a waiting-room music source: only if the clinic
+            # uses it. A secret named here must exist or no instance
+            # starts — so create both secrets first, then remove the "#"s.
+            # - name: SPOTIFY_CLIENT_ID
+            #   valueFrom: { secretKeyRef: { name: spotify-client-id, key: latest } }
+            # - name: SPOTIFY_CLIENT_SECRET
+            #   valueFrom: { secretKeyRef: { name: spotify-client-secret, key: latest } }
+
+        # ------------------------------------------------------ postgrest
+        # The same settings as deploy/local/docker-compose.yml, which is
+        # where they are tested (npm run test:rest) — keep the two in
+        # step. Different here on purpose: the two addresses and ports,
+        # and PGRST_DB_POOL.
+        - name: postgrest
+          image: ${POSTGREST_IMAGE}
+          resources:
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          env:
+            # postgres://authenticator:<password>@127.0.0.1:5432/rac
+            - name: PGRST_DB_URI
+              valueFrom: { secretKeyRef: { name: pgrst-db-uri, key: latest } }
+            - name: PGRST_JWT_SECRET
+              valueFrom: { secretKeyRef: { name: pgrst-jwt-secret, key: latest } }
+            - name: PGRST_DB_SCHEMAS
+              value: public
+            - name: PGRST_DB_EXTRA_SEARCH_PATH
+              value: public, extensions
+            # Supabase's cap, which the app's paging assumes.
+            - name: PGRST_DB_MAX_ROWS
+              value: "1000"
+            - name: PGRST_DB_POOL
+              value: "10"
+            # PGRST_DB_ANON_ROLE is deliberately NOT set: a request
+            # without a valid token is refused before it reaches the
+            # database. Do not add it.
+            #
+            # The API answers on this instance's loopback only: nothing
+            # but the app container can reach it.
+            - name: PGRST_SERVER_HOST
+              value: 127.0.0.1
+            - name: PGRST_SERVER_PORT
+              value: "3001"
+            # The admin server only says whether PostgREST is ready. It
+            # listens on every address so that Cloud Run's check can
+            # reach it; no port but the app's 8080 is reachable from
+            # outside an instance.
+            - name: PGRST_ADMIN_SERVER_HOST
+              value: 0.0.0.0
+            - name: PGRST_ADMIN_SERVER_PORT
+              value: "3002"
+          startupProbe:
+            # 200 once it has reached the database and read its schema.
+            httpGet:
+              path: /ready
+              port: 3002
+            periodSeconds: 1
+            timeoutSeconds: 1
+            failureThreshold: 60
+
+        # ------------------------------------------------ cloud-sql-proxy
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:${CLOUD_SQL_PROXY_VERSION}
+          args:
+            # The database's door: this instance's loopback only.
+            - --address=127.0.0.1
+            - --port=5432
+            # Cloud Run takes the CPU away between requests; this makes
+            # the proxy renew its certificate when a connection needs it
+            # instead of on a timer that may never fire.
+            - --lazy-refresh
+            - --structured-logs
+            # /startup, on every address so Cloud Run's check can reach it.
+            - --health-check
+            - --http-address=0.0.0.0
+            - --http-port=9090
+            - ${SQL_CONNECTION}
+          resources:
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          startupProbe:
+            httpGet:
+              path: /startup
+              port: 9090
+            periodSeconds: 1
+            timeoutSeconds: 1
+            failureThreshold: 30
