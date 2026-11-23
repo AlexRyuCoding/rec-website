@@ -20,9 +20,9 @@
 // holds that in both directions, because hashes made by one must sign
 // patients in under the other — before this change, and after a revert.
 //
-// A single compare costs the same in either (about 15 ms at cost 8 on a
-// fast laptop core; scripts/bench-pin-slow-path.mjs). The native one is
-// not there for being quicker but for where it runs.
+// A single compare costs nearly the same in either (12 to 15 ms at cost
+// 8 on a fast laptop core; scripts/bench-pin-slow-path.mjs). The native
+// one is not there for being quicker but for where it runs.
 
 import { availableParallelism } from "os";
 import bcryptjs from "bcryptjs";

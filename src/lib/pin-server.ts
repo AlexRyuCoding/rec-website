@@ -6,7 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { comparePin, compareWidth, hashPin } from "./pin-hash";
 import { isCurrentFingerprint, pinFingerprint } from "./pin-lookup";
-import { firstMatch, PinCompare } from "./pin-match";
+import { firstMatch, type PinCompare } from "./pin-match";
 import { fetchAllPatientsWithPins, PinRow } from "./supabase";
 
 const PIN_COLUMNS = "id, pin, first_name, last_name, pb_client_id";

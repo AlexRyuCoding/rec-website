@@ -25,12 +25,16 @@
 // both are lent to it; the hashes are made once, outside):
 //
 //   node scripts/bench-pin-slow-path.mjs --hashes /tmp/pin-bench.json --engines none
-//   docker run --rm --cpus 1 -w /app \
+//   docker run --rm --cpus 1 --cpuset-cpus 0 -w /app \
 //     -v "$PWD/scripts:/bench/scripts:ro" \
 //     -v "$PWD/src/lib/pin-match.ts:/bench/src/lib/pin-match.ts:ro" \
 //     -v "$PWD/node_modules/bcryptjs:/app/node_modules/bcryptjs:ro" \
 //     -v /tmp/pin-bench.json:/tmp/pin-bench.json:ro \
 //     <image> node /bench/scripts/bench-pin-slow-path.mjs --hashes /tmp/pin-bench.json
+//
+// (--cpus is how much CPU time the container gets; --cpuset-cpus 0 also
+// makes it SEE one CPU, as a one-CPU Cloud Run instance does. For four:
+// --cpus 4 --cpuset-cpus 0-3.)
 //
 // Needs Node 22.18 or newer (it loads a .ts file as it is).
 
@@ -39,7 +43,11 @@ import { createRequire } from "node:module";
 import { availableParallelism } from "node:os";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
-import { firstMatch } from "../src/lib/pin-match.ts";
+
+// The code under test, loaded as it stands. Node says a thing or two
+// about loading a .ts file; that is not this benchmark's news.
+process.removeAllListeners("warning");
+const { firstMatch } = await import("../src/lib/pin-match.ts");
 
 // Packages are looked up from where the command is run (the repository,
 // or /app in the image), not from where this file lies.
