@@ -19,7 +19,8 @@ patients use it unassisted; it needs no staff sign-in.
 - Live updates: Supabase Realtime (broadcast only, never patient data),
   in a Supabase project of its own once the Realtime settings are set
 - EHR: Practice Better API (REST, OAuth2)
-- PIN hashing: bcryptjs
+- PIN hashing: bcrypt — the native `bcrypt` package, with bcryptjs as its
+  fallback (see "PIN lookup")
 - All secrets in .env.local — never hardcoded
 - Frontend: single dark theme (no light/dark toggle) — except the staff
   dashboard and the rooms board, which have a light / dark / match-this-
@@ -96,7 +97,9 @@ behaviour is exactly Vercel + Supabase.
   with it, and under a new key the rehearsal measured 7 to 8 seconds
   per PIN. A wrong PIN takes about 10 seconds on either host for now —
   fingerprints only exist since migration 0017, so most PIN holders are
-  still compared the slow way; speeding that up is a follow-up.
+  still compared the slow way. That search no longer holds up the
+  boards, but it is as long as it was: only more CPUs or fewer patients
+  to compare shorten it (see "PIN lookup", "The slow way").
 - A route that sends a redirect builds the address with siteUrl()
   (src/lib/site-url.ts, tested — on NEXTAUTH_URL), never from `req.url`:
   on Cloud Run that is the server's own listening address
@@ -493,6 +496,62 @@ tested).
 - Why an HMAC and not a plain hash: with only 10,000 possible PINs any
   unkeyed hash is reversed by trying them all; the key lives only on the
   server.
+
+### The slow way — how it runs, and what it costs
+
+For patients without a current fingerprint. src/lib/pin-match.ts
+(firstMatch — pure, tested) decides the order; src/lib/pin-hash.ts
+(comparePin, hashPin, compareWidth — tested) is the one place a PIN
+meets bcrypt. Measure with `node scripts/bench-pin-slow-path.mjs`
+(made-up hashes, no database; its header says how to run it inside the
+image).
+
+- Those patients are compared in id order, a group at a time, and a
+  group is always waited for whole: the answer is the FIRST match by id,
+  never "whichever compare finished first". Two patients cannot hold one
+  PIN, and nothing relies on that. A compare that fails is an error, not
+  "PIN not recognized".
+- The compares run in the `bcrypt` package (C++), on Node's helper
+  threads, so the server's one main thread keeps answering the boards
+  while a PIN is searched. A group is one compare per CPU the server has
+  (compareWidth), at most the helper threads (4, or UV_THREADPOOL_SIZE).
+  Never issue all the compares at once: file reads and host-name
+  look-ups use the same threads and would wait behind every one.
+- What it buys on one CPU is the boards, not the wait. Measured through
+  the real route in the image, 1,000 patients without a fingerprint, one
+  CPU (2026-11-23, a laptop's cores): the waiting-room TV's poll took
+  about 100 ms while a wrong PIN was being searched the old way, and
+  its usual 11 ms the new way. The wrong PIN itself: 15.3 s before,
+  13.3 s after.
+- It is NOT much faster per compare, and nothing makes it so: bcrypt at
+  cost 8 is 12 to 15 ms of a fast core in either library. A wrong PIN —
+  and a new patient choosing a free PIN, which is the same search —
+  takes (patients without a fingerprint) × that ÷ CPUs: 13.3 s on one
+  CPU, 8.0 s on two, 4.4 s on four (same measurement); the bare search
+  with eight, 2.1 s. The CPU limit is left at 1
+  (deploy/service.template.yaml says what raising it does): no size
+  Cloud Run offers gets 1,000 patients under 2 seconds, and each extra
+  CPU is paid for all month.
+- What makes a wrong PIN quick is fewer patients to compare. Every
+  sign-in stamps one. Stamping all the others in one go is possible —
+  a patient's PIN can be found from the hash by trying all 10,000, at
+  most two and a half minutes of one CPU each — and has NOT been done:
+  that is the owner's decision ("nothing is backfilled" above would
+  stop being true). It also shows what the hash is worth by itself: the
+  protection of a 4-digit PIN is that nobody else can read the table.
+- bcryptjs stays in the bundle as the way through if the binary cannot
+  be loaded: pin-hash.ts tries the native library on a known hash first
+  and says so once in the log if it has to do without — slower, never
+  broken. The image build stops if the binary does not run in the
+  container (Dockerfile), so on Cloud Run the fallback should never be
+  what runs. Both libraries write and read the same hashes ($2b$; every
+  stored PIN was made by bcryptjs 3 at cost 8): old PINs verify under
+  the native one, new ones under bcryptjs (pin-hash.test.ts).
+- Worker threads running bcryptjs were measured as the alternative:
+  about half as slow again in the image (18.5 s against 12.3 s for the
+  bare search on one CPU), and the worker cannot find bcryptjs in the
+  standalone output (it is bundled into the routes, not shipped as a
+  package).
 
 ## Expected arrivals (migration 0020 — must be applied to use it)
 
@@ -1292,7 +1351,7 @@ Input rules (do not regress these — each fixes a way presses were lost):
 
 ## Security Notes
 
-- PINs hashed with bcryptjs (never stored plain text); the lookup
+- PINs hashed with bcrypt (never stored plain text); the lookup
   fingerprint beside the hash is keyed with a server-only secret
 - All DB and API calls in server-side API routes only
 - Supabase service role key used server-side only; RLS enabled with no

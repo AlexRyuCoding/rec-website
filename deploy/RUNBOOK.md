@@ -741,8 +741,11 @@ root.
   about 10 seconds — on the live site too.** That is not the move: the
   fingerprints only exist since migration 0017 (applied 2026-11-22), so
   nearly every PIN holder is still compared the slow way until they next
-  sign in. Making that slow way faster is a follow-up, for after the
-  switch.
+  sign in. It was measured afterwards (CLAUDE.md, "PIN lookup" → "The
+  slow way"): the wait is the number of those patients times about 15
+  thousandths of a second of one CPU, whichever way it is run. It gets
+  shorter by itself as patients sign in; more CPUs for the service, or
+  stamping everyone in one go, are decisions for the owner.
 
 ## Part 4 — The switch (done on the night of 2026-11-22)
 
