@@ -58,5 +58,11 @@ COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
 COPY --from=build --chown=node:node /app/public ./public
 USER node
+# PIN compares run in the `bcrypt` package's prebuilt binary
+# (src/lib/pin-hash.ts). Prove here that the build copied the one for
+# this platform and that it runs as this user: if not, the image is not
+# made and nothing is deployed — instead of a site that quietly falls
+# back to the slow JavaScript library.
+RUN node -e 'const b = require("bcrypt"); if (!b.compareSync("x", b.hashSync("x", 4))) process.exit(1)'
 EXPOSE 8080
 CMD ["node", "server.js"]

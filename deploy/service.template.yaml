@@ -55,6 +55,13 @@ spec:
               containerPort: 8080
           resources:
             limits:
+              # One CPU. The one thing here that would use more is the
+              # slow way of finding a PIN (CLAUDE.md, "PIN lookup"): it
+              # runs one bcrypt compare per CPU at the same moment, so
+              # "2" halves a wrong PIN's wait and "4" quarters it — for
+              # the monthly price of those CPUs. Above "4" also set
+              # UV_THREADPOOL_SIZE to the same number in `env` below, and
+              # Cloud Run then wants more memory (2Gi from 4 CPUs).
               cpu: "1"
               memory: 1Gi
           startupProbe:
