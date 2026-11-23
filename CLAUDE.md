@@ -87,6 +87,19 @@ the Google-side variables set, behaviour is exactly Vercel + Supabase.
   x-forwarded-for (CLIENT_IP_FROM_RIGHT) and x-real-ip is never read —
   a caller can forge everything to the left of what the load balancer
   wrote. The per-address limits (forms, TV and kiosk pairing) depend on it.
+- A route that sends a redirect builds the address with siteUrl()
+  (src/lib/site-url.ts, tested — on NEXTAUTH_URL), never from `req.url`:
+  on Cloud Run that is the server's own listening address
+  (http://0.0.0.0:8080). Reading the query of `req.url` is fine, and the
+  middleware's redirects leave as paths.
+- Google's load balancer removes the request header
+  `x-middleware-subrequest` (deploy/RUNBOOK.md 1.8.6, checked by 1.10.5):
+  on next 15.1.11 that header skips src/middleware.ts (CVE-2025-29927) —
+  the staff pages' empty shells would open; every staff API still
+  answers 401 by itself. Vercel protects its own sites. The lasting fix
+  is next 15.2.3 or later (a follow-up): until then never drop the
+  `headerAction` from the URL map, and keep the service reachable only
+  through the load balancer.
 - On Google Cloud one Cloud Run instance is three containers sharing
   localhost (deploy/service.template.yaml, filled in by
   deploy/render-service.sh): the app (the only one receiving requests),
@@ -1207,6 +1220,10 @@ Input rules (do not regress these — each fixes a way presses were lost):
   server-side only) gets anything; RLS stays on with one policy per
   table, for the app's role alone; the service is reachable only through
   the load balancer; every secret is in Secret Manager
+- The staff pages' redirect to the login page (src/middleware.ts) is a
+  convenience, not the protection: on next 15.1.11 a crafted header
+  skips it unless the host removes that header (see "Hosting"). What
+  protects staff data is the check inside every staff route (staffRoute)
 - Staff auth = Google sign-in (NextAuth) restricted to ALLOWED_ADMIN_EMAILS;
   no shared password exists
 - Patient API routes require a paired kiosk or the staff session (401
