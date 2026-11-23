@@ -32,7 +32,16 @@ RUN test -n "$NEXT_PUBLIC_REALTIME_URL" && test -n "$NEXT_PUBLIC_REALTIME_ANON_K
   || { echo "Dockerfile: the build arguments NEXT_PUBLIC_REALTIME_URL and NEXT_PUBLIC_REALTIME_ANON_KEY are both required" >&2; exit 1; }
 ENV NEXT_PUBLIC_REALTIME_URL=$NEXT_PUBLIC_REALTIME_URL \
     NEXT_PUBLIC_REALTIME_ANON_KEY=$NEXT_PUBLIC_REALTIME_ANON_KEY
-RUN npm run build
+# next/font fetches the two typefaces from Google Fonts while building, and
+# now and then that fetch comes back unusable ("An error occurred in
+# `next/font`"). Nothing is wrong with the code when it does, so the build
+# is tried up to three times before the image is given up on. A real
+# error fails all three and still stops the build.
+RUN for attempt in 1 2 3; do \
+      npm run build && exit 0; \
+      echo "Dockerfile: build attempt $attempt failed" >&2; \
+      sleep 10; \
+    done; exit 1
 
 # ---- what runs: Next.js's standalone server and only the files it needs
 FROM node:22-bookworm-slim AS run

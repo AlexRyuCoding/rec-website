@@ -934,8 +934,10 @@ Check 1.10.5 proves it.
   deploy.
 - **A build fails in the step `app-image` with "An error occurred in
   `next/font`".** The build fetches the site's fonts from Google and now
-  and then gets an answer it cannot use. Nothing running is touched:
-  press Run again (or repeat the build command).
+  and then gets an answer it cannot use (it happened on the trigger's
+  very first run). The image build tries three times by itself; if all
+  three fail, nothing running is touched: press Run again (or repeat the
+  build command).
 - **`--dry-run` (1.7.5) refuses the file.** Tell Claude the message.
   Known soft spots in `deploy/service.template.yaml`, none of which
   could be tried without a project:
