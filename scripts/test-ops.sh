@@ -544,7 +544,17 @@ fi
 echo "$out" | grep -q "^stamp-pins task 1/1 stopped: refusing to stamp, nothing was written: 1 fingerprint.* another NEXTAUTH_SECRET.*stamp-after-new-secret" \
   || fail "the refusal must say why, and name the way in after a new secret: $out"
 same "a refused stamp wrote nothing" "$(pins_state rotated)" "$before"
-# Also with a patient who has signed in since: other-key ones still refuse.
+# The way in after a new secret wants its evidence too: one patient the
+# site has stamped with the NEW secret. Without one, nothing shows that
+# the job was given it.
+if out="$(stamp rotated stamp-after-new-secret 2>&1)"; then
+  fail "stamp-after-new-secret must refuse while no patient has a fingerprint made with its secret: $out"
+fi
+echo "$out" | grep -q "^stamp-pins task 1/1 stopped: refusing to stamp, nothing was written: no patient" \
+  || fail "the refusal of stamp-after-new-secret must say why: $out"
+same "a refused stamp-after-new-secret wrote nothing" "$(pins_state rotated)" "$before"
+# With a patient who has signed in since: plain stamp still refuses the
+# other-key ones.
 add_signed_in rotated
 if out="$(stamp rotated stamp 2>&1)"; then
   fail "stamp must refuse fingerprints of another secret even when some are current: $out"
@@ -560,7 +570,7 @@ same "the never-stamped one is stamped too" "$(lookup_of rotated 1)" "$(app_fing
 no_patient_data "stamp-after-new-secret" "$out" rotated 1234 1975 0909
 out="$(stamp rotated stamp 2>&1)" || fail "plain stamp, once no fingerprint of another secret is left: $out"
 same "and finds nobody" "$(says "$out" seen)" "0"
-ok "stamp-after-new-secret replaces fingerprints from before a secret rotation"
+ok "stamp-after-new-secret replaces fingerprints from before a secret rotation, once a patient has signed in under the new one"
 
 # 3. Two patients with one PIN (possible in data from before the unique
 #    index), a hash no PIN matches, and values that are not hashes at all.

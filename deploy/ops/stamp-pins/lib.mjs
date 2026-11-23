@@ -328,18 +328,20 @@ export function dbErrorCode(stderr) {
  * of the site's key. So:
  *
  *  - a fingerprint that is NOT under this job's key means this job's
- *    secret may not be the site's (or the secret was replaced — the one
- *    case with its own way in, `stamp-after-new-secret`);
+ *    secret may not be the site's — or that the secret was replaced.
+ *    The job cannot tell which; the caller says so with `secretIsNew`
+ *    (the mode `stamp-after-new-secret`), and then this is accepted;
  *  - no fingerprint under this job's key at all, with holders still to
  *    stamp, means there is no evidence either way. One sign-in at the
- *    kiosk makes it.
+ *    kiosk makes it. This holds after a new secret too: nothing else
+ *    shows that the job was given the NEW one.
  *
  * `counts` is parseCounts()'s: holders, current, never.
  */
-export function stampRefusal({ holders, current, never }) {
+export function stampRefusal({ holders, current, never }, secretIsNew = false) {
   const without = holders - current;
   const otherKey = without - never;
-  if (otherKey > 0) {
+  if (otherKey > 0 && !secretIsNew) {
     return (
       `${otherKey} fingerprint(s) here were made with another NEXTAUTH_SECRET` +
       " than this job has, so this job's secret may not be the site's." +

@@ -302,8 +302,9 @@ function chunkSize(env) {
 }
 
 // `secretIsNew`: the caller says NEXTAUTH_SECRET was replaced (the mode
-// stamp-after-new-secret), which is the one thing the look below cannot
-// tell from a job that was given the wrong secret.
+// stamp-after-new-secret). Fingerprints of another secret are then what
+// is expected — the one thing the look below cannot tell from a job
+// that was given the wrong secret. Everything else stays as in `stamp`.
 function stamp(say, secret, share, limit, secretIsNew) {
   const started = Date.now();
   const key = keyId(secret);
@@ -326,11 +327,12 @@ function stamp(say, secret, share, limit, secretIsNew) {
   // Before anything is written: is there any sign that this job's secret
   // is the site's? (stampRefusal in lib.mjs.) Every task looks for
   // itself, at the whole table.
-  if (!secretIsNew) {
-    const refusal = stampRefusal(parseCounts(psql(COUNT_SQL(`${key}\n`))));
-    if (refusal !== null) {
-      throw new Stop(`refusing to stamp, nothing was written: ${refusal}`);
-    }
+  const refusal = stampRefusal(
+    parseCounts(psql(COUNT_SQL(`${key}\n`))),
+    secretIsNew
+  );
+  if (refusal !== null) {
+    throw new Stop(`refusing to stamp, nothing was written: ${refusal}`);
   }
 
   // Each read asks for holders AFTER the last one seen, so every holder

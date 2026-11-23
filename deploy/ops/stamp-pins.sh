@@ -40,8 +40,9 @@
 #    shows it is the site's — one sign-in at the kiosk makes the first);
 #  - while any patient has a fingerprint made with another secret (this
 #    job's may be the wrong one). After the secret really was replaced
-#    that is every fingerprint: `stamp-after-new-secret` skips this look,
-#    and only this.
+#    that is nearly every fingerprint: `stamp-after-new-secret` accepts
+#    them, and nothing else — it too wants one patient the site has
+#    stamped with the new secret.
 #   PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE (libpq's variables), as
 #                     the role that owns the tables, like migrate.sh.
 #

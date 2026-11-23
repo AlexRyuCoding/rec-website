@@ -469,6 +469,25 @@ describe("stampRefusal — is there any sign this job's secret is the site's?", 
     expect(why).toMatch(/sign in once at the kiosk/);
   });
 
+  // stamp-after-new-secret: fingerprints of the OLD secret are expected,
+  // and nothing else is taken on trust.
+  it("after a new secret: accepts fingerprints made with another one", () => {
+    expect(
+      stampRefusal({ holders: 10, current: 1, never: 0 }, true)
+    ).toBeNull();
+    expect(
+      stampRefusal({ holders: 10, current: 3, never: 2 }, true)
+    ).toBeNull();
+  });
+
+  it("after a new secret: still refuses while nobody has one under this key", () => {
+    for (const never of [0, 4, 10]) {
+      const why = stampRefusal({ holders: 10, current: 0, never }, true);
+      expect(why).toMatch(/^no patient/);
+      expect(why).toMatch(/sign in once at the kiosk/);
+    }
+  });
+
   it("refuses while anybody has one made with another secret — however many are current", () => {
     for (const current of [0, 1, 5]) {
       const why = stampRefusal({ holders: 10, current, never: 3 });
