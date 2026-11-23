@@ -30,7 +30,8 @@ import SyncPanel from "./SyncPanel";
 // - Patients: find a patient, check them in, reset a PIN (PatientsPanel)
 // - Setup: things done once or rarely — paired screens and kiosks, the
 //   waiting-room music, the Practice Better sync
-// - Log: what staff did with patient information (AuditPanel)
+// - Log: who signed in, and what staff did with patient information
+//   (AuditPanel)
 //
 // The first two are what the front desk uses all day, so they stay
 // loaded: switching tabs must not lose a half-typed search. Setup and Log
