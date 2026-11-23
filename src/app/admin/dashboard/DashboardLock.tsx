@@ -2,12 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { SessionProvider, signIn, useSession } from "next-auth/react";
 import {
-  dashboardLocked,
-  lockPhase,
-  shouldReportActivity,
-} from "@/lib/dashboard-lock";
+  SessionProvider,
+  getSession,
+  signIn,
+  signOut,
+  useSession,
+} from "next-auth/react";
+import {
+  leaveDashboardQuietly,
+  reportWhileStaying,
+} from "@/lib/dashboard-leave";
+import { lockPhase, shouldReportActivity } from "@/lib/dashboard-lock";
 import type { LockPhase } from "@/lib/dashboard-lock";
 import {
   DASHBOARD_LOCKED_EVENT,
@@ -33,12 +39,41 @@ import { useStaffTheme } from "../ui/use-staff-theme";
 //    the page is opened on a dashboard that has already locked.
 //
 // Unlocking is signing in with Google again, which comes back here.
+//
+// Two rules found the hard way (review, 2026-11-23) — do not regress:
+//  - Whether it is locked is what the SERVER says (session.dashLocked).
+//    The page never compares the server's moment with the computer's own
+//    clock: a clock a minute slow locked a dashboard just signed in to,
+//    for good. The page's own clock only measures how long nobody has
+//    touched it.
+//  - Signing out goes through signOutOfDashboard(): it stops the reports
+//    first. A report answered after the sign-out put a working sign-in
+//    cookie back.
 
 type Phase = "checking" | LockPhase;
 
 // What counts as "somebody is using the dashboard". Not mousemove: a
 // bumped desk is not a person; not the page's own refreshes.
 const INPUTS = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
+
+// The dashboard's way out (the header's "Sign out", and the lock screen's).
+export function signOutOfDashboard(): Promise<void> {
+  return leaveDashboardQuietly(() => signOut({ callbackUrl: "/admin/login" }));
+}
+
+// One fresh load of the page after a failed session request, and not a
+// second within a minute: never a loop.
+const RELOADED_KEY = "rac-dashboard-reloaded";
+function mayReloadOnce(): boolean {
+  try {
+    const last = Number(window.sessionStorage.getItem(RELOADED_KEY) ?? 0);
+    if (Date.now() - last < 60_000) return false;
+    window.sessionStorage.setItem(RELOADED_KEY, String(Date.now()));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function LockScreen() {
   useStaffTheme();
@@ -73,6 +108,18 @@ function LockScreen() {
         >
           Sign in with Google to continue
         </Button>
+        {/* The end of the day must not need an unlock first. */}
+        <Button
+          variant="quiet"
+          className="w-full"
+          onClick={() => {
+            setLoading(true);
+            void signOutOfDashboard();
+          }}
+          disabled={loading}
+        >
+          Sign out
+        </Button>
       </Panel>
     </main>
   );
@@ -88,13 +135,26 @@ function Gate({ children }: { children: ReactNode }) {
 
   // Opening the page: locked already, or open — and opening it is itself
   // a use of the dashboard.
+  const askedAgain = useRef(false);
   useEffect(() => {
     if (phase !== "checking" || status === "loading") return;
     if (status === "unauthenticated") {
-      goToStaffLogin();
+      // "Nobody is signed in" is also what one failed request looks like.
+      // Ask once more before sending a signed-in person to the login
+      // page; if they are signed in after all, load the page afresh (the
+      // provider above cannot be told to ask again by itself).
+      if (askedAgain.current) return;
+      askedAgain.current = true;
+      getSession()
+        .then((again) => {
+          if (again && mayReloadOnce()) window.location.reload();
+          else goToStaffLogin();
+        })
+        .catch(() => goToStaffLogin());
       return;
     }
-    if (dashboardLocked(session?.dashAt, Date.now())) {
+    // Locked unless the server says, in so many words, that it is not.
+    if (session?.dashLocked !== false) {
       setPhase("locked");
       return;
     }
@@ -117,13 +177,12 @@ function Gate({ children }: { children: ReactNode }) {
       if (next === "locked") return;
       if (shouldReportActivity(lastInput.current, lastReport.current, now)) {
         lastReport.current = now;
-        // The answer carries the moment as the server now has it. If the
-        // server says it has locked (this tab slept, the clock moved),
-        // the server is right.
-        updateRef
-          .current({ dashboardActive: true })
+        // The answer says whether the server now has it locked (this tab
+        // slept, another tab let it run out): the server is right.
+        // (Not sent at all once signing out has begun — dashboard-leave.ts.)
+        reportWhileStaying(() => updateRef.current({ dashboardActive: true }))
           .then((fresh) => {
-            if (fresh && dashboardLocked(fresh.dashAt, Date.now())) lock();
+            if (fresh && fresh.dashLocked !== false) lock();
           })
           .catch(() => {});
       }

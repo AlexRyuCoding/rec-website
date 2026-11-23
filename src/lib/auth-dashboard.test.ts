@@ -94,6 +94,28 @@ describe("the sign-in's dashboard moment", () => {
     expect(token.dayEnd).toBe(123);
   });
 
+  it("the server says whether it is locked — the page's clock is not asked", async () => {
+    const sessionFor = (token: JWT) =>
+      authOptions.callbacks!.session!({
+        session: {
+          user: { email: "desk@example.com" },
+          expires: "",
+        } as Session,
+        token,
+      } as Parameters<
+        NonNullable<NonNullable<typeof authOptions.callbacks>["session"]>
+      >[0]) as Promise<Session>;
+    expect(
+      (await sessionFor({ dashAt: Date.now() - 5 * MIN })).dashLocked
+    ).toBe(false);
+    expect(
+      (await sessionFor({ dashAt: Date.now() - DASHBOARD_IDLE_MS - 1000 }))
+        .dashLocked
+    ).toBe(true);
+    // a sign-in from before the lock existed
+    expect((await sessionFor({})).dashLocked).toBe(true);
+  });
+
   it("is handed to the page with the session", async () => {
     vi.useFakeTimers();
     const session = await authOptions.callbacks!.session!({

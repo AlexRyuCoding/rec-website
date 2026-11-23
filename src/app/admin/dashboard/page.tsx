@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import {
   ClipboardList,
   KeyRound,
@@ -21,6 +21,7 @@ import AuditPanel, { LogPatient } from "./AuditPanel";
 import CheckinsPanel from "./CheckinsPanel";
 import MusicPanel from "./MusicPanel";
 import PatientsPanel from "./PatientsPanel";
+import { signOutOfDashboard } from "./DashboardLock";
 import ScreensPanel from "./ScreensPanel";
 import SyncPanel from "./SyncPanel";
 
@@ -117,12 +118,10 @@ export default function AdminDashboard() {
   };
 
   // Who is signed in on this device, next to the way out.
-  const [staffEmail, setStaffEmail] = useState("");
-  useEffect(() => {
-    getSession()
-      .then((session) => setStaffEmail(session?.user?.email ?? ""))
-      .catch(() => {});
-  }, []);
+  // From the lock's own session (DashboardLock.tsx), not a second request:
+  // a second request answered late would put an older "last used" moment
+  // back into the sign-in cookie.
+  const staffEmail = useSession().data?.user?.email ?? "";
 
   // The four panels stay in the page, hidden or shown; each brings its own
   // surfaces (the page behind them is a photograph). No display class
@@ -149,10 +148,7 @@ export default function AdminDashboard() {
                 <Timer aria-hidden className="size-4" />
                 Rooms board
               </Link>
-              <Button
-                variant="quiet"
-                onClick={() => signOut({ callbackUrl: "/admin/login" })}
-              >
+              <Button variant="quiet" onClick={() => void signOutOfDashboard()}>
                 <LogOut aria-hidden className="size-4" />
                 Sign out
               </Button>

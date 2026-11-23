@@ -97,15 +97,23 @@ export function locked(): Response {
 // under /api/admin must be a dashboardRoute unless it is listed there as
 // one the rooms board needs.
 export function dashboardRoute<Params = Record<string, never>>(
-  handler: StaffHandler<Params>
+  handler: StaffHandler<Params>,
+  options: {
+    // For a route a browser navigates to (connecting Spotify): where to
+    // send the person instead of answering JSON.
+    whenNotStaff?: (req: NextRequest) => Response;
+    whenLocked?: (req: NextRequest) => Response;
+  } = {}
 ) {
   return async (
     req: NextRequest,
     context: RouteContext<Params>
   ): Promise<Response> => {
     const staff = await getStaffSession();
-    if (!staff) return unauthorized();
-    if (dashboardLocked(staff.dashAt, Date.now())) return locked();
+    if (!staff) return options.whenNotStaff?.(req) ?? unauthorized();
+    if (dashboardLocked(staff.dashAt, Date.now())) {
+      return neverCached(options.whenLocked?.(req) ?? locked());
+    }
     return neverCached(await handler(req, { email: staff.email }, context));
   };
 }

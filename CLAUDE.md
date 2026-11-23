@@ -284,12 +284,14 @@ behaviour is exactly Vercel + Supabase.
   no password — nothing to brute-force; Google supplies MFA and account
   security. NextAuth v4, JWT sessions (config: src/lib/auth.ts).
 - A sign-in ends at the clinic's next 3 am (src/lib/staff-session.ts,
-  pure, tested), not 24 h after the button was pressed: NextAuth never
-  refreshes the cookie here, so a plain 24 h session signed in at 8:10
-  dropped the kiosk and the boards to the login screen at 8:10 the next
-  day, mid-clinic. The end is stamped into the token at sign-in (`dayEnd`)
-  and checked wherever the allowlist is. Staff still sign in once at the
-  start of each day. (24 h maxAge remains as the cookie's outer limit.)
+  pure, tested), not 24 h after the button was pressed: a plain 24 h
+  session signed in at 8:10 dropped the kiosk and the boards to the login
+  screen at 8:10 the next day, mid-clinic. The end is stamped into the
+  token at sign-in (`dayEnd`) and checked wherever the allowlist is; no
+  later request can move it. Staff still sign in once at the start of
+  each day. (The cookie itself is re-issued, for 24 h more, by every
+  /api/auth/session request — the dashboard makes those — so the cookie's
+  own age ends nothing: `dayEnd` does.)
 - Every staff API route (/api/admin/*) is written as
   `export const POST = staffRoute(async (req, staff, { params }) => …)`
   (src/lib/staff-route.ts). The wrapper is the sign-in check — Google
@@ -764,6 +766,24 @@ src/app/admin/dashboard/DashboardLock.tsx.
   sign-in, so it shows in the Log as "Signed in".
 - Opening the dashboard after 30 minutes on the rooms board meets the
   lock screen too: the rule is "since the dashboard was last used".
+- Whether it is locked is what the SERVER says (`session.dashLocked`,
+  set in the session callback on the server's clock). The page never
+  compares `dashAt` with the computer's own clock (do not regress): a
+  computer running a minute slow found every fresh sign-in "in the
+  future" and locked the dashboard for good, in a loop with Google. The
+  page's own clock only measures how long nobody has touched it.
+- Signing out of the dashboard goes through signOutOfDashboard()
+  (DashboardLock.tsx → src/lib/dashboard-leave.ts, tested), never
+  NextAuth's signOut directly (do not regress): the press is itself an
+  input, and a "still here" report answered after the sign-out put a
+  working cookie back — the browser sat on the login page, signed in.
+  Leaving stops the reports and waits for one already on its way. The
+  lock screen has Sign out too.
+- One failed session request looks like "nobody signed in": the page asks
+  once more and, if the person is signed in, loads itself afresh once
+  (never twice within a minute) instead of going to the login page.
+- Connecting Spotify (step 1) locks with the dashboard and sends a locked
+  browser back to it; the way back from Spotify (step 2) does not lock.
 
 ## Staff check-in
 

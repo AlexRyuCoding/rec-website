@@ -367,6 +367,10 @@ export default function MusicPanel() {
     setMessage(null);
     try {
       const res = await fetch("/api/admin/spotify", { method: "DELETE" });
+      if (res.status === 401 || res.status === 423) {
+        leaveDashboard(res.status);
+        return;
+      }
       if (!res.ok) throw new Error("disconnect failed");
       await refresh();
       setMessage({ ok: true, text: "Spotify is disconnected." });
