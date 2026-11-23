@@ -92,10 +92,12 @@ switch (Part 4) was done that night, not on the Tuesday first planned.
   Until then the OLD Supabase project still holds a copy of every
   patient, and the Vercel project still exists (no longer connected to
   the repository, no longer serving any address).
-- **Still to do: stamp the PIN fingerprints** ("Everyday"), on an
-  evening after the clinic has closed. Until that is done a wrong PIN
-  keeps the kiosk on "Checking…" for about ten seconds. When it is done,
-  write the date here.
+- **The PIN fingerprints were stamped on 2026-11-23** ("Everyday", "Stamp
+  the PIN fingerprints"), over the clinic's lunch break: 20 of 20 tasks
+  succeeded in 32 minutes, and the count afterwards said `without=0` —
+  every patient with a PIN has their fingerprint. No two patients turned
+  out to share a PIN (`same_pin=0`). Before it, a wrong PIN kept the
+  kiosk on "Checking…" for about ten seconds.
 
 Each finished step below says "done" and keeps the command that was used.
 
@@ -948,8 +950,9 @@ permissions and tells the database layer to look again).
 
 ### Stamp the PIN fingerprints
 
-Done once. If `nextauth-secret` is ever replaced it is done again, all
-of it, with one word different in step 4 (see the end of this section).
+Done once, on 2026-11-23. If `nextauth-secret` is ever replaced it is
+done again, all of it, with one word different in step 4 (see the end of
+this section).
 
 **What it is.** The kiosk finds a patient by a fingerprint of their PIN,
 stored beside it. A patient only gets that fingerprint the next time
