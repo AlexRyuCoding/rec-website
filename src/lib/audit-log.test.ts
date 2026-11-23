@@ -123,16 +123,18 @@ describe("signInAddress — an address a stranger chose", () => {
   });
 
   it("loses line breaks, blanks and invisible characters", () => {
-    expect(signInAddress(" a\n b\t@\u0000ex​ample‮.com\r\n")).toBe(
+    expect(signInAddress(" a\n b\t@\u0000ex\u200Bample\u202E.com\r\n")).toBe(
       "ab@example.com"
     );
   });
 
   it("stays text: markup and SQL are kept as the characters they are", () => {
-    expect(signInAddress("<script>alert(1)</script>@x.com")).toBe(
-      "<script>alert(1)</script>@x.com"
+    expect(signInAddress("<script>alert(1)</script>@example.com")).toBe(
+      "<script>alert(1)</script>@example.com"
     );
-    expect(signInAddress("x';drop--@x.com")).toBe("x';drop--@x.com");
+    expect(signInAddress("x';drop--@example.com")).toBe(
+      "x';drop--@example.com"
+    );
   });
 
   it("says so when there is no address at all", () => {
