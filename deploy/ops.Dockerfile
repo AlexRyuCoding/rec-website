@@ -12,7 +12,7 @@
 # Build, from the repository root (cloudbuild.yaml does this):
 #   . deploy/versions.env
 #   docker build --platform linux/amd64 -f deploy/ops.Dockerfile \
-#     --build-arg POSTGRES_MAJOR="$POSTGRES_MAJOR" -t rac-ops .
+#     --build-arg POSTGRES_MAJOR="${POSTGRES_MAJOR}" -t rac-ops .
 ARG POSTGRES_MAJOR
 FROM postgres:${POSTGRES_MAJOR}
 

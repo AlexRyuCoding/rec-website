@@ -452,3 +452,23 @@ if out="$(IMAGE='x|y' render 2>&1)"; then
   fail "render-service.sh must refuse a value with unexpected characters"
 fi
 ok "render-service.sh fills in every name, and refuses a missing or odd value"
+
+# ---------------------------------------------------------------- runbook
+# deploy/RUNBOOK.md is pasted into zsh, command by command. Two things
+# that are fine in bash are not there, and each has already broken a
+# command once:
+#  - a name without braces followed by ":r…" — zsh takes ":r" for a
+#    modifier and rewrites the text ("<project>:<region>:rac-db" lost
+#    two letters, and gcloud refused the result). So every name the
+#    shell fills in is written ${NAME};
+#  - a "#" note inside a command block — zsh does not treat it as a
+#    comment when pasted: a note after a command becomes arguments.
+bare="$(grep -nE '\$[A-Za-z_]' deploy/RUNBOOK.md || true)"
+[ -z "$bare" ] || fail "deploy/RUNBOOK.md: write every name the shell fills in as \${NAME}:
+$bare"
+notes="$(awk '/^ *```sh/ { inside = 1; next } /^ *```/ { inside = 0 } inside && /(^|[ \t])#/ { print NR ": " $0 }' deploy/RUNBOOK.md)"
+[ -z "$notes" ] || fail "deploy/RUNBOOK.md: a # note inside a command block (zsh would run it):
+$notes"
+same "the runbook still has command blocks to check" \
+  "$([ "$(grep -c '^ *```sh' deploy/RUNBOOK.md)" -ge 10 ] && echo yes)" "yes"
+ok "the runbook's commands are written for zsh: \${NAME} everywhere, no notes inside command blocks"

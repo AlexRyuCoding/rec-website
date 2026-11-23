@@ -20,7 +20,7 @@
 # service. It is left out unless asked for (profile "app"), and needs the
 # token PostgREST accepts:
 #
-#   export DB_REST_JWT="$(printf '%s' "$PGRST_JWT_SECRET" | node scripts/mint-db-jwt.js)"
+#   export DB_REST_JWT="$(printf '%s' "${PGRST_JWT_SECRET}" | node scripts/mint-db-jwt.js)"
 #   docker compose --env-file deploy/versions.env -f deploy/local/docker-compose.yml \
 #     --profile app up -d --build --wait app
 #   open http://localhost:8080
