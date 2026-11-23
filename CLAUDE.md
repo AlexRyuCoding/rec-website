@@ -9,7 +9,7 @@ patients use it unassisted; it needs no staff sign-in.
 
 ## Tech Stack
 
-- Framework: Next.js (App Router)
+- Framework: Next.js 15.5 (App Router) — see "Hosting" for why that line
 - Database: PostgreSQL through PostgREST, via @supabase/supabase-js
   (service-role client, server-side only). The site runs on Google
   Cloud since 2026-11-22 — Cloud Run + Cloud SQL (Postgres 17), with a
@@ -103,13 +103,27 @@ behaviour is exactly Vercel + Supabase.
   (http://0.0.0.0:8080). Reading the query of `req.url` is fine, and the
   middleware's redirects leave as paths.
 - Google's load balancer removes the request header
-  `x-middleware-subrequest` (deploy/RUNBOOK.md 1.8.6, checked by 1.10.5):
-  on next 15.1.11 that header skips src/middleware.ts (CVE-2025-29927) —
-  the staff pages' empty shells would open; every staff API still
-  answers 401 by itself. Vercel protects its own sites. The lasting fix
-  is next 15.2.3 or later (a follow-up): until then never drop the
-  `headerAction` from the URL map, and keep the service reachable only
-  through the load balancer.
+  `x-middleware-subrequest` (deploy/RUNBOOK.md 1.8.6). It is a second
+  lock, no longer the only one: before next 15.2.3 that header skipped
+  src/middleware.ts (CVE-2025-29927) — on 15.1.11, which the site ran
+  until November 2026, the staff pages' empty shells opened (every staff
+  API still answered 401 by itself). next 15.5.29 refuses the header by
+  itself: the same request against the built image went from 200 to 307.
+  Keep the `headerAction` in the URL map all the same, and keep the
+  service reachable only through the load balancer — other ways around
+  middleware were found in Next.js afterwards (fixed in 15.5.16). Check
+  1.10.5 still has to say 307, but it no longer shows WHICH of the two
+  stopped the request.
+- next stays on the newest 15.5.x: the only 15 line still given security
+  fixes (15.1–15.4 had their last in January 2026), and only until
+  2027-01-31 (nextjs.org/support-policy). `npm view next dist-tags.backport`
+  names the newest. Next 16 is its own piece of work: React 19,
+  `middleware.ts` becomes `proxy.ts`, `next lint` is gone. When moving
+  next, generate package-lock.json with the npm of the image
+  (node:22-bookworm-slim, npm 10) or check that every `@next/swc-*` and
+  `@img/sharp-*` platform package is still in it — the image is built on
+  linux/amd64 with `npm ci`. next brings its own `sharp` (0.35 now),
+  which is what resizes images in the container.
 - On Google Cloud one Cloud Run instance is three containers sharing
   localhost (deploy/service.template.yaml, filled in by
   deploy/render-service.sh): the app (the only one receiving requests),
@@ -1231,9 +1245,11 @@ Input rules (do not regress these — each fixes a way presses were lost):
   table, for the app's role alone; the service is reachable only through
   the load balancer; every secret is in Secret Manager
 - The staff pages' redirect to the login page (src/middleware.ts) is a
-  convenience, not the protection: on next 15.1.11 a crafted header
-  skips it unless the host removes that header (see "Hosting"). What
-  protects staff data is the check inside every staff route (staffRoute)
+  convenience, not the protection: Next.js has had more than one way
+  around middleware (a crafted header skipped it on the version this
+  site ran until November 2026 — fixed since, and the load balancer
+  still removes that header; see "Hosting"). What protects staff data is
+  the check inside every staff route (staffRoute)
 - Staff auth = Google sign-in (NextAuth) restricted to ALLOWED_ADMIN_EMAILS;
   no shared password exists
 - Patient API routes require a paired kiosk or the staff session (401

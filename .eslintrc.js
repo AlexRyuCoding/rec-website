@@ -1,5 +1,9 @@
 module.exports = {
   root: true,
+  // Written by Next.js itself on every build and `next dev` ("this file
+  // should not be edited"). Since 15.5 it points at the generated route
+  // types with a `/// <reference path>`, which the rules below refuse.
+  ignorePatterns: ["next-env.d.ts"],
   env: {
     browser: true,
     node: true,

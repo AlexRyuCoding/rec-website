@@ -465,10 +465,11 @@ Google's documentation and have not been run. A command that says
 6. Build the load balancer. The first file is the map of what goes
    where: the bare domain is sent on to `www`; everything else goes to
    the site — and on the way **the header `x-middleware-subrequest` is
-   taken off every request**. That header lets a caller skip the site's
-   own "are you signed in?" page check (a known fault of the Next.js
-   version in use; see "Everyday → The header the load balancer
-   removes"). The second file sends `http://` to `https://`.
+   taken off every request**. That header used to let a caller skip the
+   site's own "are you signed in?" page check (a fault of older Next.js
+   versions; the one the site runs now refuses the header by itself, and
+   the removal stays as a second lock — see "Everyday → The header the
+   load balancer removes"). The second file sends `http://` to `https://`.
 
    ```sh
    gcloud certificate-manager maps create rac-cert-map
@@ -576,10 +577,17 @@ gcloud scheduler jobs run rac-keepalive --location "${REGION}" >/dev/null 2>&1 &
    ```
 
    - It must say `307 https://new.ryuacupuncture.com/admin/login?next=%2Fadmin%2Fdashboard`.
-   - **`200`: stop. Do not go on to Part 3.** The load balancer is not
-     removing the header (step 1.8.6); tell Claude. (Against the
-     container alone, with no load balancer in front, this same command
-     answers 200 — that is how it is known to detect the problem.)
+   - **`200`: stop. Do not go on to Part 3.** Neither the site nor the
+     load balancer stopped the request; tell Claude.
+   - What `307` proves changed with the Next.js version. Up to 15.1.11
+     the container alone, with no load balancer in front, answered 200
+     to this command, so 307 proved the load balancer's rule (1.8.6).
+     From 15.5.29 the container answers 307 by itself, so 307 no longer
+     says which of the two did it. To see the load balancer's rule, look
+     at the map as Google holds it —
+     `gcloud compute url-maps describe rac-web-map --global` — it must
+     list `x-middleware-subrequest` under `headerAction` →
+     `requestHeadersToRemove`.
 6. Three containers started, in order: Cloud Run → `rac-web` → Logs,
    newest revision: lines from `cloud-sql-proxy` ("ready for new
    connections"), then `postgrest` ("Schema cache loaded"), then `app`
@@ -972,20 +980,28 @@ clinic hours, and deploy straight away.**
 
 ### The header the load balancer removes
 
-The Next.js version this site runs (15.1.11) has a known fault,
-CVE-2025-29927: a request carrying the header `x-middleware-subrequest`
-skips the step that sends a signed-out visitor from a staff page to the
-login page. The staff *data* is not behind that step — every staff
-address checks the sign-in again by itself and answers 401 — but the
-empty staff pages would open. Vercel itself protects every site
-it hosts; on Google Cloud the load balancer removes the header
-(1.8.6), and the service cannot be reached except through it (1.10.4).
-Check 1.10.5 proves it.
+Next.js before 15.2.3 has a known fault, CVE-2025-29927: a request
+carrying the header `x-middleware-subrequest` skips the step that sends
+a signed-out visitor from a staff page to the login page. The site ran
+such a version (15.1.11) until it moved to 15.5.29, which refuses the
+header by itself — tried by request against the built image, before and
+after: 200 became 307. The staff *data* was never behind that step:
+every staff address checks the sign-in again by itself and answers 401.
 
-- Do not remove `headerAction` from the load balancer's map while this
-  version is in use.
-- The lasting fix is a newer Next.js: for the 15 line, 15.2.3 or later
-  contains the correction. That upgrade is its own piece of work.
+The load balancer still removes the header (1.8.6), and the service
+cannot be reached except through it (1.10.4). That is a second lock now,
+not the only one:
+
+- Do not remove `headerAction` from the load balancer's map. More ways
+  around that same page check were found in Next.js after this one
+  (corrected in 15.5.16), and the removal costs nothing.
+- Keep Next.js on the newest 15.5.x. It is the only 15 line that still
+  gets security corrections (15.1 to 15.4 stopped in January 2026), and
+  Next.js has said it gets them only until 2027-01-31. After that the
+  site has to be on Next.js 16, which is its own piece of work (it needs
+  React 19, among other things). To see whether a newer 15.5 exists:
+  `npm view next dist-tags.backport`. Tell Claude when it shows a number
+  above the one in `package.json`.
 
 ## When something is wrong
 
@@ -1017,12 +1033,15 @@ Check 1.10.5 proves it.
   - their start-up checks are plain HTTP on ports 3002 and 9090; if
     Cloud Run cannot reach the proxy's, its check becomes
     `tcpSocket: { port: 5432 }` with `--address=0.0.0.0`.
-- **Check 1.10.5 says 200.** The map was imported without `headerAction`,
-  or Google does not apply it where it stands. See the map as Google
-  holds it: `gcloud compute url-maps describe rac-web-map --global`. If
-  `headerAction` is there and the check still says 200, tell Claude: the
-  same removal can be written on a route rule instead (the form Google's
-  own example uses).
+- **Check 1.10.5 says 200.** Two things failed together. The site is
+  running a build older than the move to Next.js 15.5.29 (Cloud Run →
+  `rac-web` → Revisions: which build is serving?), and the load balancer
+  is not removing the header: the map was imported without
+  `headerAction`, or Google does not apply it where it stands. See the
+  map as Google holds it:
+  `gcloud compute url-maps describe rac-web-map --global`. If
+  `headerAction` is there, tell Claude: the same removal can be written
+  on a route rule instead (the form Google's own example uses).
 - **`rac-migrate` or `rac-copy-data` cannot connect, or says "Malformed
   CloudSQL instance string".** Make the job again with the command of
   1.7.3 exactly as written, braces included, and check step 1.5.2 was done.
@@ -1038,8 +1057,9 @@ Checked on a computer, with made-up data (see the pull request):
 
 - the app, PostgREST and Postgres 17 together, in Docker, from the same
   images; every kind of query the app makes; the copy and migrate
-  scripts; the secret helper; that check 1.10.5 detects a missing header
-  removal.
+  scripts; the secret helper; that the request of check 1.10.5 is
+  answered 200 by the container on Next.js 15.1.11 and 307 by the
+  container on 15.5.29.
 
 Done in the real project by 2026-11-22: 1.1 to 1.5, and 1.7.1 to 1.7.4.
 
@@ -1048,7 +1068,9 @@ settled, and each has a check above:
 
 - that the three containers start in order on Cloud Run (1.10.6);
 - that Google accepts the service definition as written (1.7.5);
-- that the load balancer removes the header where the map says (1.10.5);
+- that the load balancer removes the header where the map says. Since
+  Next.js 15.5.29 no request can show it (the site refuses the header
+  either way — 1.10.5); what can be seen is that the map holds the rule;
 - which place in `x-forwarded-for` holds the caller's address (1.10.7);
 - the load balancer and certificate commands of 1.8, which were written
   from Google's documentation and not run;
