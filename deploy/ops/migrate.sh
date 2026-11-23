@@ -8,6 +8,9 @@
 #                       those not yet recorded in ops.schema_migrations
 #   4. grants           supabase/cloud-sql/grants.sql — every time, so a
 #                       table added by a new migration works for the app
+#   5. tells PostgREST to look at the database again (it keeps its own
+#      picture of the tables and functions; without this a new table is
+#      "not found" until PostgREST restarts)
 #
 # The database is found through libpq's own variables: PGHOST, PGPORT,
 # PGUSER, PGPASSWORD, PGDATABASE. Connect as the role that owns the tables
@@ -18,7 +21,8 @@
 # applied in one transaction together with its record: it is either
 # recorded and whole, or not there at all.
 #
-# Tested by scripts/test-ops.sh (npm run test:ops).
+# Tested by scripts/test-ops.sh (npm run test:ops) and, against a running
+# PostgREST, by scripts/test-rest.sh (npm run test:rest).
 set -euo pipefail
 
 : "${AUTHENTICATOR_PASSWORD:?AUTHENTICATOR_PASSWORD is not set}"
@@ -85,3 +89,9 @@ if [ "$applied" -eq 0 ]; then
 fi
 
 run -f "$ROOT/supabase/cloud-sql/grants.sql" >/dev/null
+
+# Every PostgREST connected to this database listens on the "pgrst"
+# channel and reloads its picture of the schema when told to. (Supabase
+# does this by itself after every change; a plain Postgres does not.)
+# Harmless when nobody is listening.
+run -c "notify pgrst, 'reload schema'" >/dev/null

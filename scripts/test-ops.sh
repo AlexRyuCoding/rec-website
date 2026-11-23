@@ -8,6 +8,15 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+
+# POSTGRES_IMAGE=postgres:17 npm run test:ops — the same test inside that
+# Docker image instead of this computer's Postgres: the way to run it on
+# the version pinned in deploy/versions.env (what Cloud SQL runs).
+if [ -n "${POSTGRES_IMAGE:-}" ]; then
+  exec docker run --rm -u postgres -v "$PWD":/repo:ro -w /repo \
+    "$POSTGRES_IMAGE" bash scripts/test-ops.sh
+fi
+
 PORT="${TEST_OPS_PORT:-54328}"
 DIR="$(mktemp -d)"
 
