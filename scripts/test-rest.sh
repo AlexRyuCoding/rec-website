@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Runs the app's own queries against a real PostgREST and Postgres — the
 # versions pinned in deploy/versions.env, in Docker, built the way the
-# Google Cloud side is built (deploy/ops/migrate.sh). Made-up rows only;
+# Google Cloud side is built (deploy/ops/migrate.sh) — and the job that
+# stamps PIN fingerprints, from the ops image. Made-up rows only;
 # nothing leaves this computer, and the stack is thrown away afterwards.
 # Needs Docker running. Usage: npm run test:rest
 set -euo pipefail
@@ -21,8 +22,12 @@ export AUTHENTICATOR_PASSWORD="$(random)"
 export PGRST_JWT_SECRET="$(random)"
 
 REST=http://127.0.0.1:54331
+# Named for src/lib/stamp-pins.integration.test.ts, which runs the
+# stamping job from the ops image beside this database.
+export TEST_REST_COMPOSE_PROJECT=rac-test-rest
+export TEST_REST_COMPOSE_FILE=deploy/local/docker-compose.yml
 compose() {
-  docker compose -p rac-test-rest -f deploy/local/docker-compose.yml "$@"
+  docker compose -p "$TEST_REST_COMPOSE_PROJECT" -f "$TEST_REST_COMPOSE_FILE" "$@"
 }
 cleanup() {
   status=$?
@@ -90,6 +95,13 @@ done
 admin_sql "drop table public.later_table"
 migrate >/dev/null 2>&1
 ok "a table added later is served after migrate.sh, with no restart"
+
+# The ops image, built as Cloud Build builds it (its build also checks
+# that the stamping job makes the app's fingerprint).
+out="$(compose --profile ops build ops 2>&1)" || fail "the ops image did not build: $out"
+[ "$(compose --profile ops run --rm -T ops node --version 2>/dev/null)" = "v$OPS_NODE_VERSION" ] \
+  || fail "the ops image does not hold Node $OPS_NODE_VERSION"
+ok "the ops image is built, with Node $OPS_NODE_VERSION"
 
 DB_REST_URL="$REST" DB_REST_JWT="$DB_REST_JWT" \
   npx vitest run --config vitest.integration.config.ts

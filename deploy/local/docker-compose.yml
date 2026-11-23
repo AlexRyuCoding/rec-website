@@ -27,6 +27,14 @@
 #
 # Staff sign-in does not work here (no Google keys); the public pages,
 # the kiosk shell and the pairing routes do.
+#
+# The ops image, as Cloud Build makes it, is the fourth (profile "ops").
+# It runs one command against this database and ends — here the job that
+# stamps PIN fingerprints, which `npm run test:rest` uses:
+#
+#   export NEXTAUTH_SECRET=<anything made up>
+#   docker compose --env-file deploy/versions.env -f deploy/local/docker-compose.yml \
+#     --profile ops run --rm -e NEXTAUTH_SECRET ops /app/deploy/ops/stamp-pins.sh count
 name: rac-local
 
 services:
@@ -112,3 +120,23 @@ services:
       interval: 1s
       timeout: 5s
       retries: 60
+
+  ops:
+    profiles: ["ops"]
+    build:
+      context: ../..
+      dockerfile: deploy/ops.Dockerfile
+      args:
+        POSTGRES_MAJOR: ${POSTGRES_MAJOR}
+        OPS_NODE_VERSION: ${OPS_NODE_VERSION:?set by deploy/versions.env}
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Over the network, with the administrator's password — as the jobs
+      # reach Cloud SQL, and unlike migrate.sh above, which runs inside
+      # the database's own container.
+      PGHOST: db
+      PGUSER: postgres
+      PGPASSWORD: ${AUTHENTICATOR_PASSWORD}
+      PGDATABASE: rac

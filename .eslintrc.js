@@ -61,5 +61,15 @@ module.exports = {
         "no-constant-condition": ["error", { checkLoops: false }],
       },
     },
+    {
+      // The Node half of deploy/ops/stamp-pins.sh, run inside the ops
+      // image — not part of the Next.js app. Its counts are printed with
+      // console.log by design. (Naming *.mjs here is also what makes
+      // `eslint .` look at these files at all.)
+      files: ["deploy/ops/**/*.mjs"],
+      rules: {
+        "no-console": "off",
+      },
+    },
   ],
 };

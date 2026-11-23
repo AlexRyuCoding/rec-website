@@ -4,12 +4,12 @@
 #   1. builds the site's image and the ops image, and keeps the project's
 #      own copy of the PostgREST image (so starting an instance never
 #      depends on Docker Hub being up);
-#   2. points the two jobs (rac-migrate, rac-copy-data) at the new ops
-#      image — whichever of them exist;
+#   2. points the jobs (rac-migrate, rac-copy-data, rac-stamp-pins) at
+#      the new ops image — whichever of them exist;
 #   3. deploys the service rac-web from deploy/service.template.yaml.
 #
-# It does NOT run rac-migrate: applying a migration stays a deliberate
-# act (the runbook says when and how).
+# It does NOT run a job: applying a migration, or stamping the PIN
+# fingerprints, stays a deliberate act (the runbook says when and how).
 #
 # Nothing here is secret and nothing names the real project: $PROJECT_ID
 # and $BUILD_ID are filled in by Cloud Build, and the "_NAMES" below are
@@ -63,6 +63,7 @@ steps:
         image="$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/ops"
         docker build -f deploy/ops.Dockerfile \
           --build-arg POSTGRES_MAJOR="$$POSTGRES_MAJOR" \
+          --build-arg OPS_NODE_VERSION="$$OPS_NODE_VERSION" \
           -t "$$image:$BUILD_ID" -t "$$image:latest" .
         docker push "$$image:$BUILD_ID"
         docker push "$$image:latest"
@@ -88,7 +89,7 @@ steps:
       - |
         set -euo pipefail
         image="$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/ops:$BUILD_ID"
-        for job in rac-migrate rac-copy-data; do
+        for job in rac-migrate rac-copy-data rac-stamp-pins; do
           if gcloud run jobs describe "$$job" --region "$_REGION" >/dev/null 2>&1; then
             gcloud run jobs update "$$job" --region "$_REGION" --image "$$image"
           else
