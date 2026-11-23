@@ -1,0 +1,117 @@
+# Deploy on merge: what Cloud Build does for every push to `main` (the
+# trigger is made once — deploy/RUNBOOK.md). Vercel does not use this file.
+#
+#   1. builds the site's image and the ops image, and keeps the project's
+#      own copy of the PostgREST image (so starting an instance never
+#      depends on Docker Hub being up);
+#   2. points the two jobs (rac-migrate, rac-copy-data) at the new ops
+#      image — whichever of them exist;
+#   3. deploys the service rac-web from deploy/service.template.yaml.
+#
+# It does NOT run rac-migrate: applying a migration stays a deliberate
+# act (the runbook says when and how).
+#
+# Nothing here is secret and nothing names the real project: $PROJECT_ID
+# and $BUILD_ID are filled in by Cloud Build, and the "_NAMES" below are
+# set on the trigger (or with --substitutions on `gcloud builds submit`).
+# In the scripts, "$$NAME" is the shell's own variable.
+substitutions:
+  _REGION: us-west1
+  # Artifact Registry repository holding the images.
+  _REPO: rac
+  # Where live updates connect — the Realtime project's address and its
+  # PUBLISHABLE key. Public values, fixed into the pages at build time.
+  # The build stops if either is empty.
+  _REALTIME_URL: ""
+  _REALTIME_ANON_KEY: ""
+  # https://new.ryuacupuncture.com while testing; this from the switch on.
+  _NEXTAUTH_URL: https://www.ryuacupuncture.com
+  # "false" = build and push the images, leave the service as it is.
+  # (The very first build: the database must exist before the service.)
+  _DEPLOY_SERVICE: "true"
+
+options:
+  # Required when the build runs as a service account of our own.
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1800s
+
+steps:
+  - id: app-image
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        image="$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/web"
+        docker build \
+          --build-arg NEXT_PUBLIC_REALTIME_URL="$_REALTIME_URL" \
+          --build-arg NEXT_PUBLIC_REALTIME_ANON_KEY="$_REALTIME_ANON_KEY" \
+          -t "$$image:$BUILD_ID" -t "$$image:latest" .
+        docker push "$$image:$BUILD_ID"
+        docker push "$$image:latest"
+
+  - id: ops-image
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        . deploy/versions.env
+        image="$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/ops"
+        docker build -f deploy/ops.Dockerfile \
+          --build-arg POSTGRES_MAJOR="$$POSTGRES_MAJOR" \
+          -t "$$image:$BUILD_ID" -t "$$image:latest" .
+        docker push "$$image:$BUILD_ID"
+        docker push "$$image:latest"
+
+  - id: postgrest-image
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        . deploy/versions.env
+        image="$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/postgrest:$$POSTGREST_VERSION"
+        docker pull --platform linux/amd64 "postgrest/postgrest:$$POSTGREST_VERSION"
+        docker tag "postgrest/postgrest:$$POSTGREST_VERSION" "$$image"
+        docker push "$$image"
+
+  - id: jobs
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        image="$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/ops:$BUILD_ID"
+        for job in rac-migrate rac-copy-data; do
+          if gcloud run jobs describe "$$job" --region "$_REGION" >/dev/null 2>&1; then
+            gcloud run jobs update "$$job" --region "$_REGION" --image "$$image"
+          else
+            echo "job $$job does not exist: left alone"
+          fi
+        done
+
+  - id: service
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        if [ "$_DEPLOY_SERVICE" != "true" ]; then
+          echo "_DEPLOY_SERVICE is not \"true\": images built, service left as it is"
+          exit 0
+        fi
+        . deploy/versions.env
+        PROJECT_ID="$PROJECT_ID" \
+        REGION="$_REGION" \
+        IMAGE="$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/web:$BUILD_ID" \
+        POSTGREST_IMAGE="$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/postgrest:$$POSTGREST_VERSION" \
+        NEXTAUTH_URL="$_NEXTAUTH_URL" \
+          bash deploy/render-service.sh > /workspace/rac-web.yaml
+        gcloud run services replace /workspace/rac-web.yaml --region "$_REGION"

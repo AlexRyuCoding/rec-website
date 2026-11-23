@@ -1,9 +1,13 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { dbTarget } from "./db-rest";
 
+// Supabase, or a PostgREST of our own when DB_REST_URL is set (db-rest.ts).
 export function createServiceClient() {
+  const t = dbTarget(process.env);
   return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    t.url,
+    t.key,
+    t.fetch ? { global: { fetch: t.fetch } } : undefined
   );
 }
 

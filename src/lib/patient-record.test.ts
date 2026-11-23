@@ -1,13 +1,10 @@
 import { describe, expect, it } from "vitest";
 import * as app from "./patient-record";
-// The terminal script keeps its own copy of these rules; the same tests
-// run against both so they cannot drift apart.
-import script from "../../scripts/sync-patients.js";
 
-const copies = [
-  ["the app (patient-record.ts)", app],
-  ["the script (scripts/sync-patients.js)", script as typeof app],
-] as const;
+// There used to be a second copy of these rules, in a terminal script
+// (scripts/sync-patients.js); the same tests ran against both. The
+// script is gone — the dashboard's "Full sync" does its job.
+const copies = [["the app (patient-record.ts)", app]] as const;
 
 describe.each(copies)("cleanText in %s", (_name, { cleanText }) => {
   it("removes spaces around the text", () => {

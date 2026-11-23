@@ -1,0 +1,27 @@
+# What `gcloud builds submit .` does NOT upload from this folder
+# (deploy/RUNBOOK.md, step 1.7). Without this file gcloud would send
+# everything git does not ignore — including notes and tool folders that
+# have no business in a build.
+#
+# The build itself needs: Dockerfile, .dockerignore, cloudbuild.yaml,
+# package.json, package-lock.json, next.config.js and the other config
+# files at the top, src/, public/, deploy/, supabase/ and scripts/.
+# Nothing below may ever match one of those.
+.gcloudignore
+.git
+.gitignore
+
+# Everything .gitignore names: node_modules, .next, .env*, credentials…
+#!include:.gitignore
+
+# Said again in so many words, in case the line above is ever not
+# understood: these must never leave this computer.
+.env*
+node_modules/
+.next/
+credentials/
+*.pem
+
+# Not ignored by git, and not for uploading.
+.claude/
+docs/

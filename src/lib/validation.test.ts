@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { grievanceFormSchema, requestFormSchema } from "./validation";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  getClientIp,
+  grievanceFormSchema,
+  requestFormSchema,
+} from "./validation";
 
 const validRequest = {
   name: "Jane Doe",
@@ -84,5 +88,59 @@ describe("grievanceFormSchema", () => {
       grievanceFormSchema.safeParse({ ...validGrievance, email: "nope" })
         .success
     ).toBe(false);
+  });
+});
+
+describe("getClientIp behind Google's load balancer", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  const req = (headers: Record<string, string>) =>
+    new Request("https://x.test/", { headers });
+
+  it("keeps Vercel's rule when CLIENT_IP_FROM_RIGHT is not set", () => {
+    expect(
+      getClientIp(
+        req({ "x-real-ip": "203.0.113.7", "x-forwarded-for": "1.1.1.1" })
+      )
+    ).toBe("203.0.113.7");
+  });
+  it("takes the address the load balancer wrote, counted from the right", () => {
+    vi.stubEnv("CLIENT_IP_FROM_RIGHT", "2");
+    expect(
+      getClientIp(req({ "x-forwarded-for": "203.0.113.7, 34.1.1.1" }))
+    ).toBe("203.0.113.7");
+    expect(
+      getClientIp(
+        req({ "x-forwarded-for": "9.9.9.9, 8.8.8.8, 203.0.113.7, 34.1.1.1" })
+      )
+    ).toBe("203.0.113.7");
+  });
+  it("ignores a forged x-real-ip", () => {
+    vi.stubEnv("CLIENT_IP_FROM_RIGHT", "2");
+    expect(
+      getClientIp(
+        req({
+          "x-real-ip": "9.9.9.9",
+          "x-forwarded-for": "203.0.113.7, 34.1.1.1",
+        })
+      )
+    ).toBe("203.0.113.7");
+    expect(getClientIp(req({ "x-real-ip": "9.9.9.9" }))).toBe("unknown");
+  });
+  it("is unknown when the header is shorter than expected", () => {
+    vi.stubEnv("CLIENT_IP_FROM_RIGHT", "2");
+    expect(getClientIp(req({ "x-forwarded-for": "34.1.1.1" }))).toBe("unknown");
+  });
+  it("is unknown, never Vercel's rule, when the setting is not a positive whole number", () => {
+    for (const bad of ["0", "-1", "two", "1.5"]) {
+      vi.stubEnv("CLIENT_IP_FROM_RIGHT", bad);
+      expect(
+        getClientIp(
+          req({
+            "x-real-ip": "9.9.9.9",
+            "x-forwarded-for": "203.0.113.7, 34.1.1.1",
+          })
+        )
+      ).toBe("unknown");
+    }
   });
 });

@@ -9,6 +9,8 @@
     "lint": "next lint",
     "test": "vitest run",
     "test:db": "bash scripts/test-db.sh",
+    "test:ops": "bash scripts/test-ops.sh",
+    "test:rest": "bash scripts/test-rest.sh",
     "lint:fix": "eslint . --fix",
     "lint:strict": "eslint . --max-warnings 0",
     "lint:check": "eslint ."

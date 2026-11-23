@@ -1,4 +1,5 @@
 import { fetchWithTimeout } from "./fetch-timeout";
+import { realtimeServerConfig } from "./realtime-config";
 import type { RoomRow } from "@/lib/room-status";
 
 // Cross-device sync for the room timer board. After any rooms mutation the
@@ -28,15 +29,17 @@ const BROADCAST_TIMEOUT_MS = 2000;
 
 async function postBroadcast(event: string, payload: object): Promise<void> {
   try {
+    // Realtime's own address and key — not the database's.
+    const { url, serviceKey } = realtimeServerConfig();
     // Routes await this (including the kiosk check-in), so it is capped:
     // a stalled Realtime endpoint costs at most BROADCAST_TIMEOUT_MS.
     await fetchWithTimeout(
-      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/realtime/v1/api/broadcast`,
+      `${url}/realtime/v1/api/broadcast`,
       {
         method: "POST",
         headers: {
-          apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
-          Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
+          apikey: serviceKey,
+          Authorization: `Bearer ${serviceKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({

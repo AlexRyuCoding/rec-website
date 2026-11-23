@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
+import { siteUrl } from "@/lib/site-url";
 import { staffRoute } from "@/lib/staff-route";
 import { broadcastFlowUpdated } from "@/lib/rooms-realtime";
 import {
@@ -20,7 +21,7 @@ function sameState(a: string, b: string): boolean {
 // A person's browser comes here by navigation, not a script: someone who
 // is not signed in is sent to the login page rather than shown JSON.
 const toLogin = (req: NextRequest) =>
-  NextResponse.redirect(new URL("/admin/login", req.url));
+  NextResponse.redirect(siteUrl("/admin/login", req));
 
 // Step 2: Spotify sends the staff member back here with a one-time code.
 // Only a signed-in staff member whose `state` matches the cookie set in
@@ -29,7 +30,7 @@ export const GET = staffRoute(
   async (req) => {
     const back = (result: string) => {
       const res = NextResponse.redirect(
-        new URL(`/admin/dashboard?spotify=${result}#music`, req.url)
+        siteUrl(`/admin/dashboard?spotify=${result}#music`, req)
       );
       res.cookies.set({
         name: SPOTIFY_STATE_COOKIE,
