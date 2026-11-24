@@ -133,6 +133,12 @@ export default function Footer() {
               Privacy Policy & Terms
             </a>
             <Link
+              href="/privacy-practices"
+              className="underline-link w-fit text-cream/60"
+            >
+              Notice of Privacy Practices
+            </Link>
+            <Link
               href="/report-a-grievance"
               className="underline-link w-fit text-cream/60"
             >
