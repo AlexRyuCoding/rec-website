@@ -31,7 +31,22 @@ patients use it unassisted; it needs no staff sign-in.
   (form_submission_events table, migration 0006 — must be applied).
   Both are delivered to FORMS_INBOX (src/lib/site.ts); patients are shown
   SITE.email. Both are on the clinic's Google Workspace (covered by its
-  HIPAA agreement) — never a free mailbox (site.test.ts)
+  HIPAA agreement) — never a free mailbox (site.test.ts).
+  They are PLACED into that mailbox's Inbox through the Gmail API
+  (messages.insert; src/lib/forms-mail.ts, tested), not sent by a
+  mail-sending company: a form holds a patient's name and words. The
+  site has no password, key or stored token for the mailbox — Google
+  signs an hour-long statement for the site's own account (IAM signJwt +
+  domain-wide delegation, the gmail.insert scope only), so the site can
+  add a message and nothing else: it cannot read the clinic's mail or
+  send in its name. Not gmail.send: Gmail files what a mailbox sends to
+  its own address under Sent only (tried 2026-11-24 — the request never
+  showed in the Inbox). The From address is the forms alias, never the
+  mailbox's sign-in address (that too would be filed as Sent). What a
+  visitor types never becomes a mail header of its own. Set-up and what
+  each failure in the log means: deploy/RUNBOOK.md, "How the forms are
+  sent". Do not swap this for an app password or SMTP login: that would
+  hand the website a key to read the clinic's mail
 
 ## Environment Variables (.env.local)
 
@@ -60,8 +75,7 @@ patients use it unassisted; it needs no staff sign-in.
 - ALLOWED_ADMIN_EMAILS= (comma-separated staff Google accounts allowed to unlock the kiosk)
 - CRON_SECRET= (self-generated; auths the daily keepalive ping — Vercel
   Cron on Vercel, Cloud Scheduler on Google Cloud)
-- RESEND_API_KEY= (Resend API key; sends appointment-request + grievance form emails)
-- RESEND_FROM_EMAIL= (sender on the Resend-verified domain, e.g. forms@ryuacupuncture.com; falls back to onboarding@resend.dev which only delivers to the Resend account owner)
+- FORMS_MAILBOX= (the Google Workspace mailbox the website's two forms are sent from and land in; an address, not a credential. Only works on Cloud Run — see "Public forms" above; locally a form answers "Failed to send email")
 - SPOTIFY_CLIENT_ID= / SPOTIFY_CLIENT_SECRET= (optional; a Spotify developer app, only needed for Spotify as the waiting-room music source. Its Redirect URI must be https://www.ryuacupuncture.com/api/admin/spotify/callback)
 - SPOTIFY_REDIRECT_URI= (optional; local dev only — Spotify refuses "localhost", so use http://127.0.0.1:3000/api/admin/spotify/callback)
 
