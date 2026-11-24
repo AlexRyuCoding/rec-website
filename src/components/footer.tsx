@@ -124,14 +124,12 @@ export default function Footer() {
 
           <div className="flex flex-col gap-3 text-sm">
             <p className="font-bold text-cream">Legal</p>
-            <a
+            <Link
               href={SITE.legalUrl}
-              target="_blank"
-              rel="noopener noreferrer"
               className="underline-link w-fit text-cream/60"
             >
-              Privacy Policy & Terms
-            </a>
+              Privacy Policy
+            </Link>
             <Link
               href="/privacy-practices"
               className="underline-link w-fit text-cream/60"
