@@ -900,9 +900,7 @@ and is not fixed that day, go back.
      no address.
    - With the project gone the account only holds DNS records, which the
      free plan does too.
-4. Delete the keys that are no longer used: at Resend every key, and
-   then the account (the site stopped using Resend on 2026-11-24; see
-   "How the forms are sent" for what else goes with it); at
+4. Delete the keys that are no longer used: at
    Practice Better the old key and the read-only one made on the 22nd
    (keep the read-and-write one in use); Spotify's if there was one; the
    old Google sign-in client if you can find it.
@@ -1254,10 +1252,10 @@ anything the visitor typed. What the code means:
   mailbox has no Gmail, or step 3 names another scope. `status=429`:
   Google's limit on requests; it lifts by itself.
 
-**Left over from the mail-sending company (Resend), to remove once the
-forms have worked this way for a few days:** its two secrets
-(`gcloud secrets delete resend-api-key`, then `resend-from-email`), its
-account, and its DNS record at Vercel (`resend._domainkey`, type TXT).
+**The mail-sending company (Resend) is gone** (2026-11-24, the day the
+first real form arrived this way): its two secrets were deleted, and the
+owner removed its API key, its domain, its account and its DNS record at
+Vercel (`resend._domainkey`, type TXT).
 
 ### Who may read a secret
 
