@@ -259,8 +259,7 @@ and never the value. If you see anything else, stop.
    | `allowed-admin-emails` | the staff Google accounts, separated by commas |
    | `google-client-id`, `google-client-secret` | from step 1.6 |
    | `pb-client-id`, `pb-client-secret` | Practice Better, a newly added key |
-   | `resend-api-key` | Resend, a newly added key |
-   | `resend-from-email` | the sender, e.g. `forms@ryuacupuncture.com` |
+   | `forms-mailbox` | the Workspace mailbox the website's forms are sent from (since 2026-11-24; before that `resend-api-key` and `resend-from-email`, for the mail-sending company used until then) |
    | `realtime-service-key` | the Realtime project's **secret** key (`sb_secret_…`) |
 
    ```sh
@@ -269,8 +268,7 @@ and never the value. If you see anything else, stop.
    bash deploy/ops/set-secret.sh ask google-client-secret
    bash deploy/ops/set-secret.sh ask pb-client-id
    bash deploy/ops/set-secret.sh ask pb-client-secret
-   bash deploy/ops/set-secret.sh ask resend-api-key
-   bash deploy/ops/set-secret.sh ask resend-from-email
+   bash deploy/ops/set-secret.sh ask forms-mailbox
    bash deploy/ops/set-secret.sh ask realtime-service-key
    ```
 
@@ -299,7 +297,7 @@ and never the value. If you see anything else, stop.
    `deploy/service.template.yaml` have to be switched on.
 
 7. Check: `gcloud secrets list --format="value(name)" | sort`
-   - You should see the 18 names above (20 with Spotify). Names only.
+   - You should see the 17 names above (19 with Spotify). Names only.
 
 ### 1.6 Google sign-in
 
@@ -902,7 +900,9 @@ and is not fixed that day, go back.
      no address.
    - With the project gone the account only holds DNS records, which the
      free plan does too.
-4. Delete the keys that are no longer used: the old Resend key; at
+4. Delete the keys that are no longer used: at Resend every key, and
+   then the account (the site stopped using Resend on 2026-11-24; see
+   "How the forms are sent" for what else goes with it); at
    Practice Better the old key and the read-only one made on the 22nd
    (keep the read-and-write one in use); Spotify's if there was one; the
    old Google sign-in client if you can find it.
@@ -1176,6 +1176,76 @@ SQL → `rac-db` → Backups. Prefer **cloning to a new instance** at a
 point in time (Overview → Clone → "Clone from an earlier point in time"),
 looking at the clone, and deciding with Claude — restoring over `rac-db`
 itself replaces everything written since the backup.
+
+### How the forms are sent
+
+The website's two forms (appointment request, grievance) are sent by the
+clinic's own Google Workspace mailbox, through the Gmail API
+(`src/lib/forms-mail.ts`). They land in that same mailbox, addressed to
+the forms address. No company outside the clinic's HIPAA agreements
+handles them.
+
+The site has **no password, key or token** for the mailbox. Google lets
+the site's account (`rac-app`) act for the mailbox, for sending only.
+Four things make that work; all were set up on 2026-11-24:
+
+1. Two Google services are switched on in the project:
+
+   ```sh
+   gcloud services enable gmail.googleapis.com iamcredentials.googleapis.com
+   ```
+
+2. `rac-app` may ask Google to sign statements in its own name:
+
+   ```sh
+   gcloud iam service-accounts add-iam-policy-binding \
+     "rac-app@${PROJECT_ID}.iam.gserviceaccount.com" \
+     --member="serviceAccount:rac-app@${PROJECT_ID}.iam.gserviceaccount.com" \
+     --role=roles/iam.serviceAccountTokenCreator
+   ```
+
+3. The Workspace administrator allowed `rac-app` to send mail for the
+   clinic's users, and nothing else. In the Google Admin console, signed
+   in as the administrator account: **Security** → **Access and data
+   control** → **API controls** → **Manage Domain Wide Delegation** →
+   **Add new**.
+   - **Client ID**: the number printed by
+     `gcloud iam service-accounts describe "rac-app@${PROJECT_ID}.iam.gserviceaccount.com" --format="value(uniqueId)"`
+   - **OAuth scopes**: `https://www.googleapis.com/auth/gmail.send`
+     — that one only. Never `https://mail.google.com/` or a scope with
+     `readonly` or `modify` in it: those would let the website read the
+     clinic's mail.
+   - **Authorize**. It usually works within minutes; Google says it can
+     take up to a day.
+
+4. The secret `forms-mailbox` holds the mailbox's address, and `rac-app`
+   may read it ("Who may read a secret").
+
+**To check it:** fill in the appointment-request form on the site. It
+should arrive in the mailbox within a few seconds, from "Appointment
+Request", and "Reply" should answer the visitor.
+
+**When a form fails** the visitor is told to call, and the log has one
+line, `Email sending failed: FormsMailError code=… status=…` — never
+anything the visitor typed. What the code means:
+
+- `config`: `forms-mailbox` is missing or is not an address.
+- `metadata`: the site could not learn who it is. Not on Cloud Run, or
+  a passing fault; try again.
+- `sign` with `status=403`: step 2 is missing, or the service of step 1
+  is off.
+- `token` with `status=400` or `401`: step 3 is missing, has another
+  number or scope, or the address in `forms-mailbox` is not a user of
+  the Workspace (an alias will not do — it must be the mailbox's own
+  sign-in address).
+- `send` with `status=403`: the Gmail service of step 1 is off, or the
+  mailbox has no Gmail. `status=429`: Google's sending limit; it lifts
+  by itself.
+
+**Left over from the mail-sending company (Resend), to remove once the
+forms have worked this way for a few days:** its two secrets
+(`gcloud secrets delete resend-api-key`, then `resend-from-email`), its
+account, and its DNS record at Vercel (`resend._domainkey`, type TXT).
 
 ### Who may read a secret
 

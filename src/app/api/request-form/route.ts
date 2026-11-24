@@ -1,29 +1,18 @@
 import { NextResponse } from "next/server";
-import { Resend } from "resend";
 import { getClientIp, requestFormSchema } from "@/lib/validation";
 import {
   formSubmissionsExhausted,
   recordFormSubmission,
 } from "@/lib/form-rate-limit";
 import { errorLabel } from "@/lib/error-label";
+import { sendFormMail } from "@/lib/forms-mail";
 import { FORMS_INBOX } from "@/lib/site";
 
-// Sender must be on a Resend-verified domain in production.
-// onboarding@resend.dev only delivers to the Resend account owner's inbox.
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
 const RATE_LIMIT_MSG =
   "Too many requests. Please call us at (818) 841-9790 instead.";
 
 export async function POST(req: Request) {
   try {
-    if (!process.env.RESEND_API_KEY) {
-      console.error("RESEND_API_KEY is not set");
-      return NextResponse.json(
-        { error: "Server configuration error" },
-        { status: 500 }
-      );
-    }
-
     let body: unknown;
     try {
       body = await req.json();
@@ -54,9 +43,11 @@ export async function POST(req: Request) {
     }
     await recordFormSubmission(ip);
 
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    const { error } = await resend.emails.send({
-      from: `Appointment Request <${FROM_EMAIL}>`,
+    // Through the clinic's own mailbox (src/lib/forms-mail.ts); it throws
+    // if the message could not be handed over, which the catch below
+    // turns into "Failed to send email".
+    await sendFormMail({
+      fromName: "Appointment Request",
       to: FORMS_INBOX,
       replyTo: email,
       subject: `☎️📞New Appointment Request from ${name}⚠️`,
@@ -70,14 +61,6 @@ Message:
 ${message}
       `,
     });
-
-    if (error) {
-      console.error("Email sending failed:", errorLabel(error));
-      return NextResponse.json(
-        { error: "Failed to send email" },
-        { status: 500 }
-      );
-    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

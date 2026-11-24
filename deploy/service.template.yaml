@@ -104,10 +104,11 @@ spec:
               valueFrom: { secretKeyRef: { name: pb-webhook-verification-token, key: latest } }
             - name: PB_WEBHOOK_SIGNING_SECRET
               valueFrom: { secretKeyRef: { name: pb-webhook-signing-secret, key: latest } }
-            - name: RESEND_API_KEY
-              valueFrom: { secretKeyRef: { name: resend-api-key, key: latest } }
-            - name: RESEND_FROM_EMAIL
-              valueFrom: { secretKeyRef: { name: resend-from-email, key: latest } }
+            # The Workspace mailbox the website's forms are sent from, and
+            # land in (src/lib/forms-mail.ts). An address, not a password:
+            # the site holds no credential for that mailbox.
+            - name: FORMS_MAILBOX
+              valueFrom: { secretKeyRef: { name: forms-mailbox, key: latest } }
             # Spotify as a waiting-room music source: only if the clinic
             # uses it. A secret named here must exist or no instance
             # starts — so create both secrets first, then remove the "#"s.

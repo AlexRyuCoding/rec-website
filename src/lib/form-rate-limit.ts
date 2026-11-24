@@ -1,7 +1,7 @@
 import { createServiceClient } from "@/lib/supabase";
 
-// The public forms send email via Resend; without a cap anyone can script
-// unlimited sends. 5 submissions per hour per IP is generous for humans.
+// The public forms send email from the clinic's own mailbox
+// (forms-mail.ts); without a cap anyone can script unlimited sends. 5 submissions per hour per IP is generous for humans.
 // Counters live in Supabase so the cap survives serverless cold starts.
 // Fails closed, matching src/lib/pin-rate-limit.ts.
 const MAX_PER_WINDOW = 5;

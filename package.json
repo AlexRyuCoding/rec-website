@@ -28,7 +28,6 @@
     "next-auth": "^4.24.11",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "resend": "^6.17.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
