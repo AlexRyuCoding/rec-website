@@ -88,6 +88,14 @@ switch (Part 4) was done that night, not on the Tuesday first planned.
 - **The site is watched.** Google checks the home page every minute and
   emails the clinic if it stops answering ("Everyday", "Is it up?").
 - **`new.ryuacupuncture.com` now only redirects** to the real address.
+- **Each robot account reads only its own secrets** (since 2026-11-24;
+  "Everyday", "Who may read a secret"). The site can no longer read the
+  database's administrator password.
+- **Administration is a separate login** (since 2026-11-24): an account
+  without a mailbox, used by the owner alone, holds every administrator
+  right in Google Workspace and Google Cloud. The mailbox the clinic
+  shares has none. Run the commands in this file signed in as that
+  administrator account.
 - **Still to do: Part 5**, the clean-up, after two normal clinic days.
   Until then the OLD Supabase project still holds a copy of every
   patient, and the Vercel project still exists (no longer connected to
@@ -119,14 +127,16 @@ gcloud services enable run.googleapis.com sqladmin.googleapis.com \
 for account in rac-app rac-ops; do
   gcloud iam service-accounts describe "${account}@${PROJECT_ID}.iam.gserviceaccount.com" >/dev/null 2>&1 \
     || gcloud iam service-accounts create "${account}"
-  for role in roles/cloudsql.client roles/secretmanager.secretAccessor; do
-    gcloud projects add-iam-policy-binding "${PROJECT_ID}" --condition=None \
-      --member="serviceAccount:${account}@${PROJECT_ID}.iam.gserviceaccount.com" --role="${role}" >/dev/null
-  done
+  gcloud projects add-iam-policy-binding "${PROJECT_ID}" --condition=None \
+    --member="serviceAccount:${account}@${PROJECT_ID}.iam.gserviceaccount.com" --role=roles/cloudsql.client >/dev/null
 done
 ```
 
-- `rac-app` is what the site runs as; `rac-ops` is what the two jobs run as.
+- `rac-app` is what the site runs as; `rac-ops` is what the jobs run as.
+- Neither may read secrets in general. Each is allowed the secrets it
+  uses, one by one ("Everyday", "Who may read a secret"). On 2026-11-22
+  this step gave both the right to read every secret; that was taken
+  away on 2026-11-24.
 
 ### 1.2 The database — done on 2026-11-22
 
@@ -993,9 +1003,15 @@ twenty that run side by side: roughly a dollar or two.
    that build made; an older image does not contain it.
 
 2. Make the job. It runs nothing yet (safe to run again; it then
-   updates the job):
+   updates the job). The first command lets the jobs' account read the
+   site's `nextauth-secret` for as long as this job exists (step 7 takes
+   it away again):
 
    ```sh
+   gcloud secrets add-iam-policy-binding nextauth-secret --condition=None \
+     --member="serviceAccount:rac-ops@${PROJECT_ID}.iam.gserviceaccount.com" \
+     --role=roles/secretmanager.secretAccessor
+
    gcloud run jobs deploy rac-stamp-pins --region "${REGION}" \
      --image "${REGION}-docker.pkg.dev/${PROJECT_ID}/rac/ops:latest" \
      --service-account "rac-ops@${PROJECT_ID}.iam.gserviceaccount.com" \
@@ -1113,6 +1129,10 @@ twenty that run side by side: roughly a dollar or two.
 
    ```sh
    gcloud run jobs delete rac-stamp-pins --region "${REGION}"
+
+   gcloud secrets remove-iam-policy-binding nextauth-secret --condition=None \
+     --member="serviceAccount:rac-ops@${PROJECT_ID}.iam.gserviceaccount.com" \
+     --role=roles/secretmanager.secretAccessor
    ```
 
    - Then write the date under "Where things stand".
@@ -1156,6 +1176,33 @@ SQL → `rac-db` → Backups. Prefer **cloning to a new instance** at a
 point in time (Overview → Clone → "Clone from an earlier point in time"),
 looking at the clone, and deciding with Claude — restoring over `rac-db`
 itself replaces everything written since the backup.
+
+### Who may read a secret
+
+The site (`rac-app`) and the jobs (`rac-ops`) may each read only the
+secrets they use. Nothing gives either of them all secrets: if the site
+were ever broken into, the database's administrator password would not
+be within its reach.
+
+- `rac-app`: every secret named in `deploy/service.template.yaml`.
+- `rac-ops`: `db-postgres-password` and `db-authenticator-password`.
+
+**A new secret is readable by nobody.** After storing it, allow the
+account that uses it, before the deploy that needs it:
+
+```sh
+gcloud secrets add-iam-policy-binding NAME-OF-THE-SECRET --condition=None \
+  --member="serviceAccount:rac-app@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role=roles/secretmanager.secretAccessor
+```
+
+- Forgotten, the deploy fails with a message about a permission on that
+  secret, and the site goes on running as it was: Cloud Run keeps the
+  last version that started.
+- Who may read one secret:
+  `gcloud secrets get-iam-policy NAME-OF-THE-SECRET --format="value(bindings.members)"`
+- Do not give either account the role on the whole project again, even
+  to get past an error: allow the one secret.
 
 ### Changing a secret
 
@@ -1263,7 +1310,7 @@ not the only one:
     line. Nothing is half-done; whatever was stamped stays stamped.
   - The execution fails before any line is logged, with a message about
     a permission on a secret: `rac-ops` cannot read `nextauth-secret`
-    (step 1.1 gives it the right for every secret).
+    (the first command of step 2 allows it).
 - **The certificate stays `PROVISIONING` or says `FAILED`.** Step 1.8.5
   says how to read the reason.
 - **Vercel shows a certificate warning for the domain before Part 4.**
