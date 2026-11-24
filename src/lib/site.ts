@@ -23,8 +23,9 @@ export const SITE = {
     instagram: "https://www.instagram.com/ryuacupuncture",
     yelp: "https://www.yelp.com/biz/ryu-acupuncture-clinic-burbank",
   },
-  legalUrl:
-    "https://www.termsfeed.com/live/ea661088-687f-4c39-a92a-7a6acf1bdbc8",
+  // The website's own privacy policy (src/app/privacy-policy). Until
+  // 2026-11-24 this was a generated page hosted at TermsFeed.
+  legalUrl: "/privacy-policy",
 } as const;
 
 // Where the website's forms (appointment request, grievance) are
