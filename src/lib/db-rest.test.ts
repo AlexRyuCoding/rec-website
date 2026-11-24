@@ -4,7 +4,7 @@ import { dbTarget, stripRestPrefix } from "./db-rest";
 afterEach(() => vi.unstubAllGlobals());
 
 describe("stripRestPrefix", () => {
-  it("drops Supabase's /rest/v1 from the start of the path", () => {
+  it("drops supabase-js's /rest/v1 from the start of the path", () => {
     expect(
       stripRestPrefix("http://127.0.0.1:3001/rest/v1/patients?select=id")
     ).toBe("http://127.0.0.1:3001/patients?select=id");
@@ -23,19 +23,8 @@ describe("stripRestPrefix", () => {
 });
 
 describe("dbTarget", () => {
-  const supabase = {
-    NEXT_PUBLIC_SUPABASE_URL: "https://x.supabase.co",
-    SUPABASE_SERVICE_ROLE_KEY: "svc",
-  };
-  it("is Supabase, untouched, when DB_REST_URL is not set", () => {
-    expect(dbTarget(supabase)).toEqual({
-      url: "https://x.supabase.co",
-      key: "svc",
-    });
-  });
-  it("is PostgREST when DB_REST_URL is set, even if Supabase's are too", async () => {
+  it("is our PostgREST, with the prefix taken off each request", async () => {
     const t = dbTarget({
-      ...supabase,
       DB_REST_URL: "http://127.0.0.1:3001",
       DB_REST_JWT: "jwt",
     });
@@ -46,12 +35,27 @@ describe("dbTarget", () => {
       seen.push(u);
       return new Response("[]");
     });
-    await t.fetch!("http://127.0.0.1:3001/rest/v1/rooms");
+    await t.fetch("http://127.0.0.1:3001/rest/v1/rooms");
     expect(seen).toEqual(["http://127.0.0.1:3001/rooms"]);
   });
-  it("refuses a half-configured Google side instead of falling back to Supabase", () => {
+
+  // There is no other database to fall back to: a missing setting is an
+  // error to be seen, never a quiet empty site.
+  it("refuses to point anywhere without both settings", () => {
+    expect(() => dbTarget({ DB_REST_JWT: "jwt" })).toThrow(
+      "DB_REST_URL is not set"
+    );
+    expect(() => dbTarget({ DB_REST_URL: "http://127.0.0.1:3001" })).toThrow(
+      "DB_REST_JWT is not set"
+    );
+  });
+
+  it("ignores the settings of the old host entirely", () => {
     expect(() =>
-      dbTarget({ ...supabase, DB_REST_URL: "http://127.0.0.1:3001" })
-    ).toThrow("DB_REST_JWT is not set");
+      dbTarget({
+        NEXT_PUBLIC_SUPABASE_URL: "https://x.supabase.co",
+        SUPABASE_SERVICE_ROLE_KEY: "svc",
+      })
+    ).toThrow("DB_REST_URL is not set");
   });
 });

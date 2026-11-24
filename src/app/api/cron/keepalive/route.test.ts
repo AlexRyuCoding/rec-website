@@ -3,10 +3,8 @@ import { GET } from "./route";
 
 beforeEach(() => {
   vi.stubEnv("CRON_SECRET", "s3");
-  vi.stubEnv("NEXT_PUBLIC_REALTIME_URL", "https://new.supabase.co");
-  vi.stubEnv("REALTIME_SERVICE_KEY", "new-svc");
-  vi.stubEnv("DB_REST_URL", "");
-  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+  vi.stubEnv("NEXT_PUBLIC_REALTIME_URL", "https://rt.supabase.co");
+  vi.stubEnv("REALTIME_SERVICE_KEY", "svc");
 });
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -33,8 +31,8 @@ it("pings the Realtime project's keepalive table and nothing else", async () => 
   expect(await res.json()).toEqual({ ok: true });
   expect(seen).toEqual([
     {
-      url: "https://new.supabase.co/rest/v1/keepalive?select=id&limit=1",
-      auth: "Bearer new-svc",
+      url: "https://rt.supabase.co/rest/v1/keepalive?select=id&limit=1",
+      auth: "Bearer svc",
     },
   ]);
 });

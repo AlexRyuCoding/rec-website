@@ -1,20 +1,20 @@
 // Where the server's database client points. Pure: the caller hands in
 // the environment, nothing here imports supabase-js.
 //
-// Two hosts run the same build:
-//  - Supabase (nothing new set): the project's address and its
-//    service-role key, exactly as before.
-//  - A PostgREST of our own (DB_REST_URL + DB_REST_JWT): the same REST
-//    layer Supabase runs, so every query stays as written. supabase-js
-//    always asks for `<address>/rest/v1/<table>`; a bare PostgREST serves
-//    `<address>/<table>`, so the prefix is taken off each request.
+// The database is Cloud SQL, reached through a PostgREST of our own
+// (DB_REST_URL + DB_REST_JWT) — the same REST layer Supabase ran, so
+// every query stays as it was written for Supabase. supabase-js always
+// asks for `<address>/rest/v1/<table>`; a bare PostgREST serves
+// `<address>/<table>`, so the prefix is taken off each request.
 //
 // DB_REST_URL is an address without a path (http://127.0.0.1:3001).
+// Both must be set: there is no other database to fall back to, and a
+// missing setting is an error to be seen, never a quiet empty site.
 
 export interface DbTarget {
   url: string;
   key: string;
-  fetch?: typeof fetch;
+  fetch: typeof fetch;
 }
 
 // Only at the very start of the path: a "/rest/v1" further along, or in
@@ -27,14 +27,7 @@ export function stripRestPrefix(url: string): string {
 
 export function dbTarget(env: Record<string, string | undefined>): DbTarget {
   const url = env.DB_REST_URL;
-  if (!url) {
-    return {
-      url: env.NEXT_PUBLIC_SUPABASE_URL as string,
-      key: env.SUPABASE_SERVICE_ROLE_KEY as string,
-    };
-  }
-  // Never "PostgREST's address with Supabase's key", and never a quiet
-  // return to Supabase: a half-set Google side is a mistake to be seen.
+  if (!url) throw new Error("DB_REST_URL is not set");
   const key = env.DB_REST_JWT;
   if (!key) throw new Error("DB_REST_JWT is not set");
   return {
