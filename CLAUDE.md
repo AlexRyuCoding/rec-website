@@ -28,7 +28,10 @@ patients use it unassisted; it needs no staff sign-in.
   Instrument Serif + Inter Tight via next/font
 - Public forms (/api/request-form, /api/grievance-form): zod-validated,
   honeypot field `company`, per-IP rate limit (5/hour) in Supabase
-  (form_submission_events table, migration 0006 — must be applied)
+  (form_submission_events table, migration 0006 — must be applied).
+  Both are delivered to FORMS_INBOX (src/lib/site.ts); patients are shown
+  SITE.email. Both are on the clinic's Google Workspace (covered by its
+  HIPAA agreement) — never a free mailbox (site.test.ts)
 
 ## Environment Variables (.env.local)
 

@@ -6,11 +6,11 @@ import {
   recordFormSubmission,
 } from "@/lib/form-rate-limit";
 import { errorLabel } from "@/lib/error-label";
+import { FORMS_INBOX } from "@/lib/site";
 
 // Sender must be on a Resend-verified domain in production.
 // onboarding@resend.dev only delivers to the Resend account owner's inbox.
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
-const TO_EMAIL = "ryuacupuncture@yahoo.com";
 const RATE_LIMIT_MSG =
   "Too many requests. Please call us at (818) 841-9790 instead.";
 
@@ -72,7 +72,7 @@ ${phone ? `Phone: ${phone}` : "Phone: Not provided"}
     const resend = new Resend(process.env.RESEND_API_KEY);
     const { error } = await resend.emails.send({
       from: `Grievance Form <${FROM_EMAIL}>`,
-      to: TO_EMAIL,
+      to: FORMS_INBOX,
       ...(email ? { replyTo: email } : {}),
       subject: `‼️⚠️New Grievance: ${subject}`,
       text: emailContent,
