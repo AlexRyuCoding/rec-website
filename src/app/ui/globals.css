@@ -148,3 +148,29 @@ html.kiosk-locked body {
     }
   }
 }
+
+/* The Notice of Privacy Practices (src/app/privacy-practices) is printed
+   for the front desk: black on white, no header or footer, and the text
+   shown whole whatever state the scroll animations left it in. */
+@media print {
+  header,
+  footer {
+    display: none !important;
+  }
+  .print-notice,
+  .print-notice * {
+    background: #fff !important;
+    color: #000 !important;
+    opacity: 1 !important;
+    transform: none !important;
+    clip-path: none !important;
+  }
+  .print-notice section {
+    min-height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+  .print-notice h1 {
+    font-size: 2rem !important;
+  }
+}
