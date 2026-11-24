@@ -59,7 +59,9 @@ export function useStaffTheme(fallback: ThemeChoice = "system"): {
 } {
   const [choice, setChoiceState] = useState<ThemeChoice>(fallback);
   const choiceRef = useRef<ThemeChoice>(fallback);
-  const fadeTimer = useRef<ReturnType<typeof setTimeout>>();
+  const fadeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined
+  );
 
   // Put the resolved theme on <html>; `fade` cross-fades the change.
   const apply = useCallback((fade: boolean) => {

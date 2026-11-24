@@ -593,6 +593,9 @@ gcloud scheduler jobs run rac-keepalive --location "${REGION}" >/dev/null 2>&1 &
    - It must say `307 https://new.ryuacupuncture.com/admin/login?next=%2Fadmin%2Fdashboard`.
    - **`200`: stop. Do not go on to Part 3.** Neither the site nor the
      load balancer stopped the request; tell Claude.
+   - Since Next.js 16 the file is `src/proxy.ts`; the same command with
+     `src/proxy` in place of each `src/middleware` must say `307` too
+     (both were tried against the 16.4.6 build on 2026-11-24).
    - What `307` proves changed with the Next.js version. Up to 15.1.11
      the container alone, with no load balancer in front, answered 200
      to this command, so 307 proved the load balancer's rule (1.8.6).

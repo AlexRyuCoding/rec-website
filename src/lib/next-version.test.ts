@@ -3,7 +3,7 @@ import { join } from "path";
 import { describe, expect, it } from "vitest";
 
 // The staff pages' "are you signed in?" check is Next.js middleware
-// (src/middleware.ts), and Next.js has had ways around middleware:
+// (src/proxy.ts since Next.js 16), and Next.js has had ways around it:
 //
 //  - CVE-2025-29927 (GHSA-f82v-jwr5-mffw): the request header
 //    `x-middleware-subrequest` skipped it. Fixed in 15.2.3. The site ran

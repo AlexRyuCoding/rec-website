@@ -214,6 +214,9 @@ export default function KioskGate() {
             <TapButton
               onTap={() => {
                 if (kioskTapGuard.blocked()) return;
+                // A full page load on purpose: the login page sets its look
+                // before it paints, from a script only a fresh load runs.
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination
                 window.location.href = "/admin/login";
               }}
               className="rounded-full px-4 py-2 text-[clamp(0.95rem,2.2dvh,1.15rem)] text-cream/60 underline data-[pressed=true]:text-cream"
