@@ -9,6 +9,10 @@ import {
 import { errorLabel } from "./error-label";
 
 const MAILBOX = "desk@clinic.example";
+const STAMP = {
+  at: new Date("2026-11-24T18:03:07Z"),
+  id: "3f2b8c1e-0000-4000-8000-aabbccddeeff",
+};
 
 const mail = {
   fromName: "Appointment Request",
@@ -44,9 +48,18 @@ function decodeWords(value: string) {
 
 describe("buildFormMessage", () => {
   it("writes who it is from, to, the subject and the text", () => {
-    const m = parse(buildFormMessage({ ...mail, mailbox: MAILBOX }));
-    expect(m.headers.get("from")).toBe(`Appointment Request <${MAILBOX}>`);
+    const m = parse(buildFormMessage(mail, STAMP));
+    // Sender and recipient are both the clinic's forms address — never
+    // the mailbox's own sign-in address, which Gmail would file as Sent.
+    expect(m.headers.get("from")).toBe(
+      "Appointment Request <forms@clinic.example>"
+    );
     expect(m.headers.get("to")).toBe("forms@clinic.example");
+    expect(m.head).not.toContain(MAILBOX);
+    expect(m.headers.get("date")).toBe("Tue, 24 Nov 2026 18:03:07 +0000");
+    expect(m.headers.get("message-id")).toBe(
+      "<3f2b8c1e-0000-4000-8000-aabbccddeeff@clinic.example>"
+    );
     expect(m.headers.get("reply-to")).toBe("ann@example.com");
     expect(m.headers.get("subject")).toBe("New Appointment Request from Ann");
     expect(m.headers.get("mime-version")).toBe("1.0");
@@ -55,32 +68,32 @@ describe("buildFormMessage", () => {
   });
 
   it("leaves Reply-To out when there is nobody to answer", () => {
-    const m = parse(
-      buildFormMessage({ ...mail, replyTo: undefined, mailbox: MAILBOX })
-    );
+    const m = parse(buildFormMessage({ ...mail, replyTo: undefined }, STAMP));
     expect(m.headers.has("reply-to")).toBe(false);
   });
 
   it("keeps accents and emoji in the subject readable", () => {
     const subject = "☎️📞New Appointment Request from Zoë Müller-Çelik⚠️";
-    const m = parse(buildFormMessage({ ...mail, subject, mailbox: MAILBOX }));
+    const m = parse(buildFormMessage({ ...mail, subject }, STAMP));
     expect(m.headers.get("subject")).toMatch(/^=\?UTF-8\?B\?/);
     expect(decodeWords(m.headers.get("subject")!)).toBe(subject);
   });
 
   it("keeps accents and emoji in the text", () => {
     const text = "Señora Núñez — 你好 🙂\nsecond line";
-    const m = parse(buildFormMessage({ ...mail, text, mailbox: MAILBOX }));
+    const m = parse(buildFormMessage({ ...mail, text }, STAMP));
     expect(m.text).toBe(text);
   });
 
   it("no line of the message is longer than mail allows", () => {
-    const m = buildFormMessage({
-      ...mail,
-      subject: "⚠️".repeat(60) + "x".repeat(300),
-      text: "long ".repeat(2000),
-      mailbox: MAILBOX,
-    });
+    const m = buildFormMessage(
+      {
+        ...mail,
+        subject: "⚠️".repeat(60) + "x".repeat(300),
+        text: "long ".repeat(2000),
+      },
+      STAMP
+    );
     for (const line of m.split("\r\n")) {
       expect(line.length).toBeLessThanOrEqual(78);
     }
@@ -94,18 +107,22 @@ describe("buildFormMessage", () => {
     ["a bare carriage return", "Ann\rBcc: thief@example.com"],
     ["a line break with accents", "Zoë\r\nBcc: thief@example.com"],
   ])("a subject holding %s stays one subject", (_what, name) => {
-    const built = buildFormMessage({
-      ...mail,
-      subject: `New Appointment Request from ${name}`,
-      mailbox: MAILBOX,
-    });
+    const built = buildFormMessage(
+      {
+        ...mail,
+        subject: `New Appointment Request from ${name}`,
+      },
+      STAMP
+    );
     const m = parse(built);
     expect(m.headers.has("bcc")).toBe(false);
     expect([...m.headers.keys()].sort()).toEqual(
       [
         "content-transfer-encoding",
         "content-type",
+        "date",
         "from",
+        "message-id",
         "mime-version",
         "reply-to",
         "subject",
@@ -122,21 +139,26 @@ describe("buildFormMessage", () => {
     "not an address",
     "",
   ])("a Reply-To that is not one plain address is left out: %j", (replyTo) => {
-    const m = parse(buildFormMessage({ ...mail, replyTo, mailbox: MAILBOX }));
+    const m = parse(buildFormMessage({ ...mail, replyTo }, STAMP));
     expect(m.headers.has("reply-to")).toBe(false);
     expect(m.headers.has("bcc")).toBe(false);
   });
 
-  it("refuses a sender or a recipient that is not one plain address", () => {
+  it("refuses a forms address that is not one plain address", () => {
     expect(() =>
-      buildFormMessage({
-        ...mail,
-        to: "a@b.example\r\nBcc: x@y.example",
-        mailbox: MAILBOX,
-      })
+      buildFormMessage(
+        { ...mail, to: "a@b.example\r\nBcc: x@y.example" },
+        STAMP
+      )
     ).toThrow(FormsMailError);
     expect(() =>
-      buildFormMessage({ ...mail, mailbox: "desk@clinic.example, x@y.example" })
+      buildFormMessage({ ...mail, to: "a@b.example, x@y.example" }, STAMP)
+    ).toThrow(FormsMailError);
+  });
+
+  it("refuses a message name that could break out of its header", () => {
+    expect(() =>
+      buildFormMessage(mail, { ...STAMP, id: "x>\r\nBcc: x@y.example" })
     ).toThrow(FormsMailError);
   });
 });
@@ -196,7 +218,7 @@ function google(
       if (url === "https://oauth2.googleapis.com/token") {
         return json({ access_token: "mailbox-token", expires_in: 3600 });
       }
-      if (url.includes("/messages/send")) return json({ id: "m1" });
+      if (url.includes("gmail.googleapis.com")) return json({ id: "m1" });
       throw new Error(`unexpected request to ${url}`);
     }
   );
@@ -210,12 +232,13 @@ const urls = (calls: Call[]) =>
 beforeEach(() => resetFormsMailForTests());
 
 describe("sendFormMail", () => {
-  it("signs in as the site, asks to act for the mailbox, then sends", async () => {
+  it("signs in as the site, asks to act for the mailbox, then adds the message to its Inbox", async () => {
     const g = google();
     await sendFormMail(mail, {
       fetchImpl: g.fetchImpl,
       env,
       nowMs: () => 1_700_000_000_000,
+      newId: () => "11111111-2222-4333-8444-555555555555",
     });
 
     expect(urls(g.calls)).toEqual([
@@ -223,7 +246,7 @@ describe("sendFormMail", () => {
       "metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
       "iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/site%40project.example:signJwt",
       "oauth2.googleapis.com/token",
-      "gmail.googleapis.com/gmail/v1/users/me/messages/send",
+      "gmail.googleapis.com/gmail/v1/users/me/messages?internalDateSource=receivedTime",
     ]);
 
     // The metadata server answers only requests that carry this header.
@@ -232,7 +255,8 @@ describe("sendFormMail", () => {
     );
 
     // What the site asks to be signed: itself, for this one mailbox, to
-    // SEND only, for no longer than an hour.
+    // ADD messages only — not to read, not to send — for no longer than
+    // an hour.
     const sign = g.calls[2];
     expect(new Headers(sign.init.headers).get("authorization")).toBe(
       "Bearer site-token"
@@ -241,7 +265,7 @@ describe("sendFormMail", () => {
     expect(claims).toEqual({
       iss: "site@project.example",
       sub: MAILBOX,
-      scope: "https://www.googleapis.com/auth/gmail.send",
+      scope: "https://www.googleapis.com/auth/gmail.insert",
       aud: "https://oauth2.googleapis.com/token",
       iat: 1_700_000_000,
       exp: 1_700_003_600,
@@ -258,12 +282,23 @@ describe("sendFormMail", () => {
     expect(new Headers(send.init.headers).get("authorization")).toBe(
       "Bearer mailbox-token"
     );
-    const raw = JSON.parse(String(send.init.body)).raw as string;
-    expect(raw).toMatch(/^[A-Za-z0-9_-]+$/);
-    const sent = parse(Buffer.from(raw, "base64url").toString("utf8"));
-    expect(sent.headers.get("from")).toBe(`Appointment Request <${MAILBOX}>`);
-    expect(sent.headers.get("to")).toBe("forms@clinic.example");
-    expect(sent.text).toBe(mail.text);
+    const handed = JSON.parse(String(send.init.body)) as {
+      raw: string;
+      labelIds: string[];
+    };
+    // Into the Inbox, as new mail, in the main tab.
+    expect(handed.labelIds).toEqual(["INBOX", "UNREAD", "CATEGORY_PERSONAL"]);
+    expect(handed.raw).toMatch(/^[A-Za-z0-9_-]+$/);
+    const added = parse(Buffer.from(handed.raw, "base64url").toString("utf8"));
+    expect(added.headers.get("from")).toBe(
+      "Appointment Request <forms@clinic.example>"
+    );
+    expect(added.headers.get("to")).toBe("forms@clinic.example");
+    expect(added.headers.get("date")).toBe("Tue, 14 Nov 2023 22:13:20 +0000");
+    expect(added.headers.get("message-id")).toBe(
+      "<11111111-2222-4333-8444-555555555555@clinic.example>"
+    );
+    expect(added.text).toBe(mail.text);
   });
 
   it("signs in once for several messages", async () => {
@@ -277,7 +312,7 @@ describe("sendFormMail", () => {
     await sendFormMail(mail, deps);
     expect(urls(g.calls).filter((u) => u.includes("signJwt"))).toHaveLength(1);
     expect(
-      urls(g.calls).filter((u) => u.includes("/messages/send"))
+      urls(g.calls).filter((u) => u.includes("gmail.googleapis.com"))
     ).toHaveLength(2);
   });
 
@@ -307,7 +342,7 @@ describe("sendFormMail", () => {
     ["service-accounts/default/token", "metadata", 503],
     [":signJwt", "sign", 403],
     ["oauth2.googleapis.com/token", "token", 401],
-    ["/messages/send", "send", 400],
+    ["gmail.googleapis.com", "deliver", 400],
   ])("a refusal at %s is a failure named %s", async (part, step, status) => {
     const g = google({
       [part]: () =>
@@ -328,7 +363,8 @@ describe("sendFormMail", () => {
   it("a refused message is not remembered as a sign-in: the next one starts over", async () => {
     let refuse = true;
     const g = google({
-      "/messages/send": () => (refuse ? json({}, 401) : json({ id: "m2" })),
+      "gmail.googleapis.com": () =>
+        refuse ? json({}, 401) : json({ id: "m2" }),
     });
     const deps = { fetchImpl: g.fetchImpl, env };
     await expect(sendFormMail(mail, deps)).rejects.toBeInstanceOf(
@@ -357,13 +393,15 @@ describe("sendFormMail", () => {
     expect(errorLabel(failure)).toBe("FormsMailError code=metadata");
   });
 
-  it("an answer without what was asked for is a failure, not a blank send", async () => {
+  it("an answer without what was asked for is a failure, and nothing is added", async () => {
     const g = google({ ":signJwt": () => json({}) });
     const failure = await sendFormMail(mail, {
       fetchImpl: g.fetchImpl,
       env,
     }).catch((e) => e);
     expect(errorLabel(failure)).toBe("FormsMailError code=sign");
-    expect(urls(g.calls).some((u) => u.includes("/messages/send"))).toBe(false);
+    expect(urls(g.calls).some((u) => u.includes("gmail.googleapis.com"))).toBe(
+      false
+    );
   });
 });

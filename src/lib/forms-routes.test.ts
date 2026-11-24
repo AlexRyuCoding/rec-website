@@ -126,11 +126,11 @@ describe("the grievance form", () => {
   });
 
   it("tells the visitor when it could not be sent, and logs only what kind of failure", async () => {
-    sent.fail = new FormsMailError("send", 403);
+    sent.fail = new FormsMailError("deliver", 403);
     const res = await grievanceForm(post(grievance));
     expect(res.status).toBe(500);
     expect(logged).toEqual([
-      ["Error processing grievance:", "FormsMailError code=send status=403"],
+      ["Error processing grievance:", "FormsMailError code=deliver status=403"],
     ]);
     expect(JSON.stringify(logged)).not.toMatch(/Parking|lot was full/);
   });

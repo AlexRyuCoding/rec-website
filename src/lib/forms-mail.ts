@@ -1,18 +1,30 @@
-// The website's forms (appointment request, grievance) are delivered by
-// the clinic's own Google Workspace mailbox, through the Gmail API. A
-// form carries a patient's name, contact details and words, so it travels
-// only through services the clinic's HIPAA agreement covers — it used to
-// pass through a mail-sending company that the agreement does not.
+// The website's forms (appointment request, grievance) are placed straight
+// into the clinic's own Google Workspace mailbox, through the Gmail API. A
+// form carries a patient's name, contact details and words, so it is
+// handled only by services the clinic's HIPAA agreement covers — it used
+// to pass through a mail-sending company that the agreement does not.
 //
-// How the site may send as the mailbox, with nothing to steal:
+// Placed, not sent: the message is added to the mailbox's Inbox, unread
+// (Gmail's messages.insert). Nothing travels as mail. It was first built
+// to SEND as the mailbox, to its own forms address — and Gmail files what
+// a mailbox sends to itself under Sent only, where nobody would see a
+// new request (tried on the real mailbox, 2026-11-24).
+//
+// How the site may do that, with nothing to steal:
 //  - There is no password, no key file and no stored token. The site runs
 //    as a Google Cloud service account; Google signs, on its behalf and
 //    for one hour, a statement "I am the site, acting for this mailbox,
-//    to SEND mail only" (IAM Credentials signJwt), and trades it for a
-//    Gmail token (domain-wide delegation, authorised once by the
-//    Workspace administrator for the gmail.send scope alone).
+//    to ADD messages only" (IAM Credentials signJwt), and trades it for
+//    a Gmail token (domain-wide delegation, authorised once by the
+//    Workspace administrator for the gmail.insert scope alone).
 //  - So the most this code — or anyone who broke into the site — can do
-//    with the mailbox is send from it. It cannot read a single message.
+//    with the mailbox is add a message to it. It cannot read one, and it
+//    cannot send mail in the clinic's name.
+//
+// An added message skips Gmail's spam and virus checks. What goes in is
+// plain text only, from a form that is validated, trapped for robots and
+// limited per address; a link in it is exactly as trustworthy as the
+// stranger who typed it.
 //
 // What the visitor typed never becomes a header of its own (a second
 // recipient, another sender): header text is flattened to one line and
@@ -22,17 +34,19 @@ import { fetchWithTimeout } from "./fetch-timeout";
 
 export const FORMS_MAIL_TIMEOUT_MS = 8_000;
 
-const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
+const GMAIL_INSERT_SCOPE = "https://www.googleapis.com/auth/gmail.insert";
+// Where an added form shows: the Inbox, as new mail, in the main tab.
+const INBOX_LABELS = ["INBOX", "UNREAD", "CATEGORY_PERSONAL"];
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const METADATA =
   "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default";
 // How long before its end a sign-in is no longer used.
 const TOKEN_MARGIN_MS = 60_000;
 
-type Step = "config" | "message" | "metadata" | "sign" | "token" | "send";
+type Step = "config" | "message" | "metadata" | "sign" | "token" | "deliver";
 
 /**
- * Why a form could not be sent. It carries the step and Google's status
+ * Why a form could not be delivered. It carries the step and Google's status
  * and nothing else: Google's own words can quote the message, and
  * errorLabel() prints `code` and `status` to the log.
  */
@@ -52,6 +66,7 @@ export class FormsMailError extends Error {
 export type FormMail = {
   /** Shown as the sender's name, e.g. "Appointment Request". */
   fromName: string;
+  /** The clinic's forms address: shown as both sender and recipient. */
   to: string;
   /** The visitor's address, if they gave one: "Reply" then answers them. */
   replyTo?: string;
@@ -103,14 +118,49 @@ export function encodeHeaderText(text: string): string {
   return words.join("\r\n ");
 }
 
-/** The message as mail programs exchange it (RFC 5322), ready to send. */
-export function buildFormMessage(mail: FormMail & { mailbox: string }): string {
-  if (!isAddress(mail.mailbox) || !isAddress(mail.to)) {
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+const two = (n: number) => String(n).padStart(2, "0");
+
+/** A moment the way a mail header writes it (RFC 5322), in UTC. */
+function mailDate(at: Date): string {
+  return (
+    `${DAYS[at.getUTCDay()]}, ${two(at.getUTCDate())} ` +
+    `${MONTHS[at.getUTCMonth()]} ${at.getUTCFullYear()} ` +
+    `${two(at.getUTCHours())}:${two(at.getUTCMinutes())}:` +
+    `${two(at.getUTCSeconds())} +0000`
+  );
+}
+
+/**
+ * The message as mail programs exchange it (RFC 5322).
+ * `stamp` is when it was made and a name that no other message has.
+ */
+export function buildFormMessage(
+  mail: FormMail,
+  stamp: { at: Date; id: string }
+): string {
+  if (!isAddress(mail.to) || !/^[A-Za-z0-9-]{8,64}$/.test(stamp.id)) {
     throw new FormsMailError("message");
   }
   const fromName = mail.fromName.replace(/[^A-Za-z0-9 ._-]+/g, " ").trim();
   const headers = [
-    `From: ${fromName} <${mail.mailbox}>`,
+    `Date: ${mailDate(stamp.at)}`,
+    `Message-ID: <${stamp.id}@${mail.to.slice(mail.to.indexOf("@") + 1)}>`,
+    `From: ${fromName} <${mail.to}>`,
     `To: ${mail.to}`,
     ...(isAddress(mail.replyTo) ? [`Reply-To: ${mail.replyTo}`] : []),
     `Subject: ${encodeHeaderText(mail.subject)}`,
@@ -126,13 +176,15 @@ export function buildFormMessage(mail: FormMail & { mailbox: string }): string {
   return `${headers.join("\r\n")}\r\n\r\n${body}\r\n`;
 }
 
-// ----------------------------------------------------------------- sending
+// -------------------------------------------------------------- delivering
 
 export type FormsMailDeps = {
   fetchImpl?: typeof fetch;
   env?: Record<string, string | undefined>;
   nowMs?: () => number;
   timeoutMs?: number;
+  /** A name no other message has; a random one unless a test gives it. */
+  newId?: () => string;
 };
 
 type Ready = Required<Omit<FormsMailDeps, "env">> & {
@@ -198,7 +250,7 @@ async function gmailToken(mailbox: string, deps: Ready): Promise<string> {
     "access_token"
   );
 
-  // "I am the site, acting for this mailbox, to send mail, for an hour" —
+  // "I am the site, acting for this mailbox, to add messages, for an hour" —
   // signed by Google with the site account's own key, which never leaves
   // Google.
   const issued = Math.floor(now / 1000);
@@ -217,7 +269,7 @@ async function gmailToken(mailbox: string, deps: Ready): Promise<string> {
           payload: JSON.stringify({
             iss: siteAccount,
             sub: mailbox,
-            scope: GMAIL_SEND_SCOPE,
+            scope: GMAIL_INSERT_SCOPE,
             aud: TOKEN_URL,
             iat: issued,
             exp: issued + 3600,
@@ -264,8 +316,8 @@ async function gmailToken(mailbox: string, deps: Ready): Promise<string> {
 }
 
 /**
- * Sends one form to the clinic. Throws FormsMailError; the caller logs
- * errorLabel(error) and tells the visitor to call instead.
+ * Puts one form into the clinic's Inbox. Throws FormsMailError; the
+ * caller logs errorLabel(error) and tells the visitor to call instead.
  */
 export async function sendFormMail(
   mail: FormMail,
@@ -276,18 +328,24 @@ export async function sendFormMail(
     env: deps.env ?? process.env,
     nowMs: deps.nowMs ?? Date.now,
     timeoutMs: deps.timeoutMs ?? FORMS_MAIL_TIMEOUT_MS,
+    newId: deps.newId ?? (() => crypto.randomUUID()),
   };
-  // The mailbox the forms are sent from (and land in): the Workspace
-  // user that owns the forms address. Set per deployment, not here.
+  // The mailbox the forms land in: the Workspace user that owns the
+  // forms address (its own sign-in address, not an alias). Set per
+  // deployment, not here.
   const mailbox = (ready.env.FORMS_MAILBOX ?? "").trim();
   if (!isAddress(mailbox)) throw new FormsMailError("config");
 
-  const message = buildFormMessage({ ...mail, mailbox });
+  const message = buildFormMessage(mail, {
+    at: new Date(ready.nowMs()),
+    id: ready.newId(),
+  });
   const token = await gmailToken(mailbox, ready);
   try {
     await ask(
-      "send",
-      "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+      "deliver",
+      // receivedTime: the Inbox orders it by when it arrived here.
+      "https://gmail.googleapis.com/gmail/v1/users/me/messages?internalDateSource=receivedTime",
       {
         method: "POST",
         headers: {
@@ -296,6 +354,7 @@ export async function sendFormMail(
         },
         body: JSON.stringify({
           raw: Buffer.from(message, "utf8").toString("base64url"),
+          labelIds: INBOX_LABELS,
         }),
       },
       ready

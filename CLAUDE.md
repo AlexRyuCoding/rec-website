@@ -32,16 +32,21 @@ patients use it unassisted; it needs no staff sign-in.
   Both are delivered to FORMS_INBOX (src/lib/site.ts); patients are shown
   SITE.email. Both are on the clinic's Google Workspace (covered by its
   HIPAA agreement) — never a free mailbox (site.test.ts).
-  They are sent by that mailbox itself through the Gmail API
-  (src/lib/forms-mail.ts, tested), not by a mail-sending company: a form
-  holds a patient's name and words. The site has no password, key or
-  stored token for the mailbox — Google signs an hour-long statement for
-  the site's own account (IAM signJwt + domain-wide delegation, the
-  gmail.send scope only), so the site can send from the mailbox and read
-  nothing in it. What a visitor types never becomes a mail header of its
-  own. Set-up and what each failure in the log means: deploy/RUNBOOK.md,
-  "How the forms are sent". Do not swap this for an app password or SMTP
-  login: that would hand the website a key to read the clinic's mail
+  They are PLACED into that mailbox's Inbox through the Gmail API
+  (messages.insert; src/lib/forms-mail.ts, tested), not sent by a
+  mail-sending company: a form holds a patient's name and words. The
+  site has no password, key or stored token for the mailbox — Google
+  signs an hour-long statement for the site's own account (IAM signJwt +
+  domain-wide delegation, the gmail.insert scope only), so the site can
+  add a message and nothing else: it cannot read the clinic's mail or
+  send in its name. Not gmail.send: Gmail files what a mailbox sends to
+  its own address under Sent only (tried 2026-11-24 — the request never
+  showed in the Inbox). The From address is the forms alias, never the
+  mailbox's sign-in address (that too would be filed as Sent). What a
+  visitor types never becomes a mail header of its own. Set-up and what
+  each failure in the log means: deploy/RUNBOOK.md, "How the forms are
+  sent". Do not swap this for an app password or SMTP login: that would
+  hand the website a key to read the clinic's mail
 
 ## Environment Variables (.env.local)
 

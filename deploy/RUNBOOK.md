@@ -1179,15 +1179,18 @@ itself replaces everything written since the backup.
 
 ### How the forms are sent
 
-The website's two forms (appointment request, grievance) are sent by the
-clinic's own Google Workspace mailbox, through the Gmail API
-(`src/lib/forms-mail.ts`). They land in that same mailbox, addressed to
-the forms address. No company outside the clinic's HIPAA agreements
-handles them.
+The website's two forms (appointment request, grievance) are placed
+straight into the clinic's own Google Workspace mailbox, through the
+Gmail API (`src/lib/forms-mail.ts`): each arrives in the Inbox, unread,
+from "Appointment Request" or "Grievance Form" at the forms address.
+Nothing is sent as mail, and no company outside the clinic's HIPAA
+agreements handles a form.
 
 The site has **no password, key or token** for the mailbox. Google lets
-the site's account (`rac-app`) act for the mailbox, for sending only.
-Four things make that work; all were set up on 2026-11-24:
+the site's account (`rac-app`) act for the mailbox, to **add a message
+and nothing else**: it cannot read the clinic's mail and cannot send
+mail in the clinic's name. Four things make that work; all were set up
+on 2026-11-24:
 
 1. Two Google services are switched on in the project:
 
@@ -1204,17 +1207,19 @@ Four things make that work; all were set up on 2026-11-24:
      --role=roles/iam.serviceAccountTokenCreator
    ```
 
-3. The Workspace administrator allowed `rac-app` to send mail for the
-   clinic's users, and nothing else. In the Google Admin console, signed
+3. The Workspace administrator allowed `rac-app` to add messages to
+   the clinic's mailboxes, and nothing else. In the Google Admin console, signed
    in as the administrator account: **Security** → **Access and data
    control** → **API controls** → **Manage Domain Wide Delegation** →
    **Add new**.
    - **Client ID**: the number printed by
      `gcloud iam service-accounts describe "rac-app@${PROJECT_ID}.iam.gserviceaccount.com" --format="value(uniqueId)"`
-   - **OAuth scopes**: `https://www.googleapis.com/auth/gmail.send`
+   - **OAuth scopes**: `https://www.googleapis.com/auth/gmail.insert`
      — that one only. Never `https://mail.google.com/` or a scope with
      `readonly` or `modify` in it: those would let the website read the
      clinic's mail.
+   - To change the scope of an entry that exists, tick **Overwrite
+     existing client ID**.
    - **Authorize**. It usually works within minutes; Google says it can
      take up to a day.
 
@@ -1222,8 +1227,15 @@ Four things make that work; all were set up on 2026-11-24:
    may read it ("Who may read a secret").
 
 **To check it:** fill in the appointment-request form on the site. It
-should arrive in the mailbox within a few seconds, from "Appointment
+should be in the Inbox within a few seconds, unread, from "Appointment
 Request", and "Reply" should answer the visitor.
+
+**Why it is placed and not sent.** It was first built to send, as the
+mailbox, to the mailbox's own forms address. Gmail files what a mailbox
+sends to itself under Sent only: tried on the real mailbox on
+2026-11-24, the test never showed in the Inbox. Do not go back to
+sending. A message that is placed skips Gmail's spam and virus checks;
+what goes in is plain text only.
 
 **When a form fails** the visitor is told to call, and the log has one
 line, `Email sending failed: FormsMailError code=… status=…` — never
@@ -1238,9 +1250,9 @@ anything the visitor typed. What the code means:
   number or scope, or the address in `forms-mailbox` is not a user of
   the Workspace (an alias will not do — it must be the mailbox's own
   sign-in address).
-- `send` with `status=403`: the Gmail service of step 1 is off, or the
-  mailbox has no Gmail. `status=429`: Google's sending limit; it lifts
-  by itself.
+- `deliver` with `status=403`: the Gmail service of step 1 is off, the
+  mailbox has no Gmail, or step 3 names another scope. `status=429`:
+  Google's limit on requests; it lifts by itself.
 
 **Left over from the mail-sending company (Resend), to remove once the
 forms have worked this way for a few days:** its two secrets
