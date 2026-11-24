@@ -1,7 +1,8 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { dbTarget } from "./db-rest";
 
-// Supabase, or a PostgREST of our own when DB_REST_URL is set (db-rest.ts).
+// supabase-js pointed at our own PostgREST (db-rest.ts): the queries were
+// written for Supabase and run unchanged against Cloud SQL.
 export function createServiceClient() {
   const t = dbTarget(process.env);
   return createClient(

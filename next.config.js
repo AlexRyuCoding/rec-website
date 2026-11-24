@@ -4,16 +4,10 @@
 // synchronously from the blocked WebSocket constructor and crashes the
 // page, while Chromium just silently loses realtime.
 //
-// Which host that is follows the browser's rule in
-// src/lib/realtime-config.ts — Realtime's own address once it has one
-// AND its anon key, otherwise Supabase's. The policy must name the host
-// the browser really connects to, so keep the two in step. Browsers never
-// talk to the database, so its host is not allowed for its own sake.
-const realtimeHttp =
-  (process.env.NEXT_PUBLIC_REALTIME_URL &&
-  process.env.NEXT_PUBLIC_REALTIME_ANON_KEY
-    ? process.env.NEXT_PUBLIC_REALTIME_URL
-    : process.env.NEXT_PUBLIC_SUPABASE_URL) || "";
+// The host is the one src/lib/realtime-config.ts connects to — keep the
+// two in step. Browsers never talk to the database, so its host is not
+// allowed for its own sake.
+const realtimeHttp = process.env.NEXT_PUBLIC_REALTIME_URL || "";
 const realtimeWs = realtimeHttp.replace(/^https:/, "wss:");
 // One policy for the whole site, with the few extra allowances the
 // waiting-room TV needs for background music (see src/lib/music.ts).

@@ -2,48 +2,41 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { realtimeBrowserConfig, realtimeServerConfig } from "./realtime-config";
 
 afterEach(() => vi.unstubAllEnvs());
-const old = () => {
-  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://old.supabase.co");
-  vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "old-anon");
-  vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "old-svc");
-};
 
 describe("realtime settings", () => {
-  it("are Supabase's when no new ones are set", () => {
-    old();
+  it("are the Realtime project's, browser and server", () => {
+    vi.stubEnv("NEXT_PUBLIC_REALTIME_URL", "https://rt.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_REALTIME_ANON_KEY", "anon");
+    vi.stubEnv("REALTIME_SERVICE_KEY", "svc");
     expect(realtimeBrowserConfig()).toEqual({
-      url: "https://old.supabase.co",
-      anonKey: "old-anon",
+      url: "https://rt.supabase.co",
+      anonKey: "anon",
     });
     expect(realtimeServerConfig()).toEqual({
-      url: "https://old.supabase.co",
-      serviceKey: "old-svc",
-      separate: false,
+      url: "https://rt.supabase.co",
+      serviceKey: "svc",
     });
   });
-  it("are the new project's when the new set is complete", () => {
-    old();
-    vi.stubEnv("NEXT_PUBLIC_REALTIME_URL", "https://new.supabase.co");
-    vi.stubEnv("NEXT_PUBLIC_REALTIME_ANON_KEY", "new-anon");
-    vi.stubEnv("REALTIME_SERVICE_KEY", "new-svc");
-    expect(realtimeBrowserConfig()).toEqual({
-      url: "https://new.supabase.co",
-      anonKey: "new-anon",
-    });
-    expect(realtimeServerConfig()).toEqual({
-      url: "https://new.supabase.co",
-      serviceKey: "new-svc",
-      separate: true,
-    });
+
+  it("name the setting that is missing instead of connecting to nothing", () => {
+    vi.stubEnv("NEXT_PUBLIC_REALTIME_URL", "https://rt.supabase.co");
+    expect(() => realtimeBrowserConfig()).toThrow(
+      "NEXT_PUBLIC_REALTIME_ANON_KEY is not set"
+    );
+    expect(() => realtimeServerConfig()).toThrow(
+      "REALTIME_SERVICE_KEY is not set"
+    );
+    vi.stubEnv("NEXT_PUBLIC_REALTIME_URL", "");
+    expect(() => realtimeBrowserConfig()).toThrow(
+      "NEXT_PUBLIC_REALTIME_URL is not set"
+    );
   });
-  it("never pair a new address with an old key", () => {
-    old();
-    vi.stubEnv("NEXT_PUBLIC_REALTIME_URL", "https://new.supabase.co");
-    expect(realtimeBrowserConfig().url).toBe("https://old.supabase.co");
-    expect(realtimeServerConfig()).toMatchObject({
-      url: "https://old.supabase.co",
-      serviceKey: "old-svc",
-      separate: false,
-    });
+
+  it("never read the old host's settings", () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://old.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "old-anon");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "old-svc");
+    expect(() => realtimeBrowserConfig()).toThrow("is not set");
+    expect(() => realtimeServerConfig()).toThrow("is not set");
   });
 });

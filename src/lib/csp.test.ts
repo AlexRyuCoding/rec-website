@@ -13,29 +13,17 @@ async function csp(): Promise<string> {
   )!.value;
 }
 
-it("allows the Realtime host, and not the database's old host, once Realtime has its own", async () => {
-  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://old.supabase.co");
-  vi.stubEnv("NEXT_PUBLIC_REALTIME_URL", "https://new.supabase.co");
-  vi.stubEnv("NEXT_PUBLIC_REALTIME_ANON_KEY", "new-anon");
-  const value = await csp();
-  expect(value).toContain("https://new.supabase.co wss://new.supabase.co");
-  expect(value).not.toContain("old.supabase.co");
-});
-
-// The browser then still connects to the old host (realtime-config.ts):
-// a policy naming only the new one would block the board's websocket,
+// The rooms board connects from the browser to the Realtime project
+// (realtime-config.ts). A policy without that host blocks the websocket,
 // which crashes the page on an iPad.
-it("allows the host the browser really uses when the new settings are half set", async () => {
-  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://old.supabase.co");
-  vi.stubEnv("NEXT_PUBLIC_REALTIME_URL", "https://new.supabase.co");
+it("allows the Realtime host, https and wss", async () => {
+  vi.stubEnv("NEXT_PUBLIC_REALTIME_URL", "https://rt.supabase.co");
   const value = await csp();
-  expect(value).toContain("https://old.supabase.co wss://old.supabase.co");
-  expect(value).not.toContain("new.supabase.co");
+  expect(value).toContain("https://rt.supabase.co wss://rt.supabase.co");
 });
 
-it("still allows Supabase's host when Realtime has no address of its own", async () => {
+it("names no host of the old database, whatever is left in the environment", async () => {
+  vi.stubEnv("NEXT_PUBLIC_REALTIME_URL", "https://rt.supabase.co");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://old.supabase.co");
-  expect(await csp()).toContain(
-    "https://old.supabase.co wss://old.supabase.co"
-  );
+  expect(await csp()).not.toContain("old.supabase.co");
 });

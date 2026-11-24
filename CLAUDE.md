@@ -10,14 +10,13 @@ patients use it unassisted; it needs no staff sign-in.
 ## Tech Stack
 
 - Framework: Next.js 15.5 (App Router) — see "Hosting" for why that line
-- Database: PostgreSQL through PostgREST, via @supabase/supabase-js
-  (service-role client, server-side only). The site runs on Google
-  Cloud since 2026-11-22 — Cloud Run + Cloud SQL (Postgres 17), with a
-  PostgREST container beside the app — see "Hosting". The same build
-  still runs on Vercel + Supabase (Supabase's own PostgREST) until the
-  clean-up removes that side
+- Database: Cloud SQL (Postgres 17) through a PostgREST container
+  beside the app, via @supabase/supabase-js (service-role client,
+  server-side only) — the queries were written for Supabase and run
+  unchanged. On Google Cloud (Cloud Run) since 2026-11-22 — see
+  "Hosting"; the Vercel + Supabase side was removed on 2026-11-24
 - Live updates: Supabase Realtime (broadcast only, never patient data),
-  in a Supabase project of its own once the Realtime settings are set
+  in a free Supabase project of its own
 - EHR: Practice Better API (REST, OAuth2)
 - PIN hashing: bcryptjs
 - All secrets in .env.local — never hardcoded
@@ -50,21 +49,18 @@ patients use it unassisted; it needs no staff sign-in.
 
 ## Environment Variables (.env.local)
 
-- NEXT_PUBLIC_SUPABASE_URL= / NEXT_PUBLIC_SUPABASE_ANON_KEY= /
-  SUPABASE_SERVICE_ROLE_KEY= (the Vercel + Supabase side only: database
-  and — unless the Realtime three below are set — live updates. Not set on
-  Google Cloud; they go away after the switch)
-- DB_REST_URL= / DB_REST_JWT= (Google Cloud side: PostgREST's address,
-  http://127.0.0.1:3001, and the token it accepts. Set together: the URL
-  without the token is an error, never a quiet return to Supabase)
+- DB_REST_URL= / DB_REST_JWT= (PostgREST's address,
+  http://127.0.0.1:3001, and the token it accepts. Both required: a
+  missing one is an error, never a quiet empty site. The old
+  NEXT_PUBLIC_SUPABASE_* / SUPABASE_SERVICE_ROLE_KEY settings are not
+  read anywhere since 2026-11-24)
 - NEXT_PUBLIC_REALTIME_URL= / NEXT_PUBLIC_REALTIME_ANON_KEY= /
   REALTIME_SERVICE_KEY= (live updates' own Supabase project: its address,
-  its publishable key, its secret key. All three or none — half a set is
-  ignored and Supabase's are used whole. The two NEXT_PUBLIC ones are
-  fixed into the pages at build time)
-- CLIENT_IP_FROM_RIGHT= (Google Cloud side: 2. Which entry of
-  x-forwarded-for, counted from the right, is the caller's address —
-  see getClientIp. Not set on Vercel)
+  its publishable key, its secret key. All three required. The two
+  NEXT_PUBLIC ones are fixed into the pages at build time)
+- CLIENT_IP_FROM_RIGHT= (2. Which entry of x-forwarded-for, counted
+  from the right, is the caller's address behind Google's load balancer —
+  see getClientIp)
 - PB_CLIENT_ID=
 - PB_CLIENT_SECRET=
 - PB_WEBHOOK_VERIFICATION_TOKEN= (self-generated; validates the one-time webhook handshake)
@@ -73,49 +69,41 @@ patients use it unassisted; it needs no staff sign-in.
 - NEXTAUTH_URL= (http://localhost:3000 in dev; https://www.ryuacupuncture.com in prod)
 - GOOGLE_CLIENT_ID= / GOOGLE_CLIENT_SECRET= (Google Cloud OAuth client)
 - ALLOWED_ADMIN_EMAILS= (comma-separated staff Google accounts allowed to unlock the kiosk)
-- CRON_SECRET= (self-generated; auths the daily keepalive ping — Vercel
-  Cron on Vercel, Cloud Scheduler on Google Cloud)
+- CRON_SECRET= (self-generated; auths the daily keepalive ping from
+  Cloud Scheduler)
 - FORMS_MAILBOX= (the Google Workspace mailbox the website's two forms are sent from and land in; an address, not a credential. Only works on Cloud Run — see "Public forms" above; locally a form answers "Failed to send email")
 - SPOTIFY_CLIENT_ID= / SPOTIFY_CLIENT_SECRET= (optional; a Spotify developer app, only needed for Spotify as the waiting-room music source. Its Redirect URI must be https://www.ryuacupuncture.com/api/admin/spotify/callback)
 - SPOTIFY_REDIRECT_URI= (optional; local dev only — Spotify refuses "localhost", so use http://127.0.0.1:3000/api/admin/spotify/callback)
 
-## Hosting (Google Cloud; Vercel + Supabase until the clean-up)
+## Hosting (Google Cloud)
 
 The owner's step-by-step: deploy/RUNBOOK.md. The switch to Google Cloud
-was made on 2026-11-22. A merge to `main` is built and deployed to the
-LIVE site by Cloud Build (trigger `rac-deploy-main`) in about six
-minutes: merge on a day the clinic is closed, or after hours. Until the
-clean-up, the build must still work on both hosts, chosen only by
-environment variables: with none of the Google-side variables set,
-behaviour is exactly Vercel + Supabase.
+was made on 2026-11-22; the Vercel + Supabase side was removed from the
+code on 2026-11-24. A merge to `main` is built and deployed to the LIVE
+site by Cloud Build (trigger `rac-deploy-main`) in about six minutes:
+merge on a day the clinic is closed, or after hours.
 
 - No query was rewritten. `createServiceClient()` (src/lib/supabase.ts)
   asks `dbTarget(process.env)` (src/lib/db-rest.ts, pure, tested) where
-  to point: Supabase, or — with DB_REST_URL — a PostgREST of our own,
-  the same REST layer Supabase runs. supabase-js always asks for
-  `/rest/v1/<table>`; a bare PostgREST serves `/<table>`, so the prefix
-  is taken off each request. Do not change `.from()` / `.rpc()` call
-  sites or fake-supabase.ts for the sake of the host.
+  to point: a PostgREST of our own (DB_REST_URL + DB_REST_JWT, both
+  required), the same REST layer Supabase ran. supabase-js always asks
+  for `/rest/v1/<table>`; a bare PostgREST serves `/<table>`, so the
+  prefix is taken off each request. Do not change `.from()` / `.rpc()`
+  call sites or fake-supabase.ts for the sake of the host.
 - Live updates read their own settings (src/lib/realtime-config.ts,
-  tested): the Realtime three as a complete set, otherwise Supabase's,
-  never a mix. next.config.js applies the browser's half of that rule to
-  the content-security policy (csp.test.ts) — keep the two in step, or
-  the policy blocks the board's websocket, which crashes the page on an
-  iPad.
+  tested): the three Realtime settings, all required. next.config.js
+  puts the same address into the content-security policy (csp.test.ts) —
+  keep the two in step, or the policy blocks the board's websocket,
+  which crashes the page on an iPad.
 - The caller's address (getClientIp, src/lib/validation.ts, tested):
   behind Google's load balancer it is counted from the RIGHT of
   x-forwarded-for (CLIENT_IP_FROM_RIGHT) and x-real-ip is never read —
   a caller can forge everything to the left of what the load balancer
   wrote. The per-address limits (forms, TV and kiosk pairing) depend on it.
-- NEXTAUTH_SECRET is the SAME value on both hosts (carried across
-  sealed on 2026-11-22; deploy/RUNBOOK.md, "What the rehearsal found").
-  Do not issue a new one for the switch: the PIN fingerprints are keyed
-  with it, and under a new key the rehearsal measured 7 to 8 seconds
-  per PIN. A wrong PIN took about 10 seconds on either host at the
-  switch — fingerprints only exist since migration 0017, so most PIN
-  holders were still compared the slow way. The stamping job (see "PIN
-  lookup") is what ends that; deploy/RUNBOOK.md, "Where things stand",
-  says whether it has been run.
+- NEXTAUTH_SECRET was carried over from the old host unchanged (sealed,
+  2026-11-22; deploy/RUNBOOK.md, "What the rehearsal found"): the PIN
+  fingerprints are keyed with it. Replacing it makes every PIN slow
+  again until the stamping job (see "PIN lookup") has been run again.
 - A route that sends a redirect builds the address with siteUrl()
   (src/lib/site-url.ts, tested — on NEXTAUTH_URL), never from `req.url`:
   on Cloud Run that is the server's own listening address
@@ -290,11 +278,10 @@ behaviour is exactly Vercel + Supabase.
   until done. {quick:true} = newest 100 only (catches recently created
   patients, e.g. a missed webhook; PB orders by creation, so it can't see
   edits to old records) and reports how many were genuinely new
-- /api/cron/keepalive — daily ping (Bearer CRON_SECRET; Vercel Cron or
-  Cloud Scheduler) so a free-tier Supabase project never pauses for
-  inactivity. With live updates in a project of their own it reads one
-  row of THAT project's `keepalive` table and does not touch the
-  database; otherwise it counts patients in the one Supabase project
+- /api/cron/keepalive — daily ping from Cloud Scheduler (Bearer
+  CRON_SECRET) so the free Supabase project that carries live updates
+  never pauses for inactivity: it reads one row of that project's
+  `keepalive` table and does not touch the database
 - /api/patients/lookup — matches PIN, returns patient record
 - /api/patients/setup-pin — creates PIN for new patient
   (both through src/lib/pin-server.ts — see "PIN lookup" below)

@@ -1,40 +1,45 @@
-// Where live updates (Supabase Realtime) connect — settings of their own,
-// so the database and Realtime can live in different places. Realtime
-// carries no patient data (see rooms-realtime.ts), which is why it may
-// stay in a Supabase project of its own while the database is elsewhere.
+// Where live updates (Supabase Realtime) connect. Realtime carries no
+// patient data (see rooms-realtime.ts), which is why it lives in a free
+// Supabase project of its own while the database is on Cloud SQL.
 //
-// The rule: the new settings are used only as a complete set, otherwise
-// Supabase's are used whole. A new address is never paired with an old
-// key. The browser's set is address + anon key; the server's is address +
-// service key. next.config.js applies the browser's rule to the
-// content-security policy — keep the two in step.
+// The browser's set is address + anon key; the server's is address +
+// service key. next.config.js puts the same address into the
+// content-security policy — keep the two in step, or the policy blocks
+// the board's websocket, which crashes the page on an iPad.
 //
 // Both functions read process.env when called. The NEXT_PUBLIC_ names
 // must stay written out in full: Next.js puts their values into the
-// browser's code by finding exactly these expressions at build time.
+// browser's code by finding exactly these expressions at build time (the
+// Dockerfile refuses to build without them).
+
+function required(name: string, value: string | undefined): string {
+  if (!value) throw new Error(`${name} is not set`);
+  return value;
+}
 
 export function realtimeBrowserConfig(): { url: string; anonKey: string } {
-  const url = process.env.NEXT_PUBLIC_REALTIME_URL;
-  const anonKey = process.env.NEXT_PUBLIC_REALTIME_ANON_KEY;
-  if (url && anonKey) return { url, anonKey };
   return {
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-    anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
+    url: required(
+      "NEXT_PUBLIC_REALTIME_URL",
+      process.env.NEXT_PUBLIC_REALTIME_URL
+    ),
+    anonKey: required(
+      "NEXT_PUBLIC_REALTIME_ANON_KEY",
+      process.env.NEXT_PUBLIC_REALTIME_ANON_KEY
+    ),
   };
 }
 
-// Server only. `separate` = the new settings are in use.
-export function realtimeServerConfig(): {
-  url: string;
-  serviceKey: string;
-  separate: boolean;
-} {
-  const url = process.env.NEXT_PUBLIC_REALTIME_URL;
-  const serviceKey = process.env.REALTIME_SERVICE_KEY;
-  if (url && serviceKey) return { url, serviceKey, separate: true };
+// Server only.
+export function realtimeServerConfig(): { url: string; serviceKey: string } {
   return {
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY as string,
-    separate: false,
+    url: required(
+      "NEXT_PUBLIC_REALTIME_URL",
+      process.env.NEXT_PUBLIC_REALTIME_URL
+    ),
+    serviceKey: required(
+      "REALTIME_SERVICE_KEY",
+      process.env.REALTIME_SERVICE_KEY
+    ),
   };
 }

@@ -57,7 +57,7 @@ The project follows Next.js 13+ App Router structure:
 - TypeScript
 - Tailwind CSS
 - Lucide Icons
-- Vercel (Deployment)
+- Google Cloud Run + Cloud SQL (hosting; see deploy/RUNBOOK.md)
 
 ## Development Guidelines
 
@@ -69,7 +69,7 @@ The project follows Next.js 13+ App Router structure:
 
 ## Deployment
 
-The website is deployed on Vercel. Any push to the main branch will trigger an automatic deployment.
+The website runs on Google Cloud Run. Any merge to the main branch is built and deployed to the live site by Cloud Build in about six minutes (see deploy/RUNBOOK.md).
 
 ## Resources
 

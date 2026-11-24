@@ -907,8 +907,9 @@ and is not fixed that day, go back.
 5. Check: `gcloud run jobs list --region "${REGION}" --format="value(name)"`
    shows `rac-migrate` only (and `rac-stamp-pins`, if the stamping under
    "Everyday" has been started and not yet finished).
-6. Claude: remove the three Supabase database variables and the "both
-   hosts" wording from `CLAUDE.md`, delete `vercel.json`, pull request.
+6. **Done on 2026-11-24.** The three Supabase database variables, the
+   "both hosts" code paths and `vercel.json` are gone; DB_REST_URL and
+   DB_REST_JWT and the three Realtime settings are simply required.
 
 ## Everyday
 

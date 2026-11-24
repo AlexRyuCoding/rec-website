@@ -1,7 +1,13 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { broadcastFlowUpdated, FLOW_EVENT } from "./rooms-realtime";
 
+// The Realtime project's settings are required (realtime-config.ts).
+beforeEach(() => {
+  vi.stubEnv("NEXT_PUBLIC_REALTIME_URL", "https://rt.supabase.co");
+  vi.stubEnv("REALTIME_SERVICE_KEY", "svc");
+});
 afterEach(() => {
+  vi.unstubAllEnvs();
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
