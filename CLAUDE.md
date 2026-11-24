@@ -1490,7 +1490,11 @@ Input rules (do not regress these — each fixes a way presses were lost):
   has no anonymous role, so only the app's token (DB_REST_JWT,
   server-side only) gets anything; RLS stays on with one policy per
   table, for the app's role alone; the service is reachable only through
-  the load balancer; every secret is in Secret Manager
+  the load balancer; every secret is in Secret Manager, and the site's
+  account (rac-app) may read only the secrets it uses — not the
+  database's administrator password. A NEW secret must be allowed for
+  rac-app before the deploy that needs it (deploy/RUNBOOK.md, "Who may
+  read a secret"); never give the role on the whole project back
 - The staff pages' redirect to the login page (src/middleware.ts) is a
   convenience, not the protection: Next.js has had more than one way
   around middleware (a crafted header skipped it on the version this
