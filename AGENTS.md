@@ -32,7 +32,7 @@ throughout the day unassisted.
 
 ## Route Structure
 
-- /admin/patient-signin — the kiosk page (protected by middleware)
+- /admin/patient-signin — the kiosk page (protected by src/proxy.ts)
 - /admin/dashboard — staff dashboard: check-ins viewer (Today/Yesterday/
   week/month/custom + CSV export) and patient search with Reset PIN
 - /api/auth/[...nextauth] — NextAuth (Google sign-in, session, callbacks)
@@ -54,9 +54,9 @@ throughout the day unassisted.
   security. NextAuth v4, JWT sessions, 24h maxAge (config: src/lib/auth.ts).
 - Only Google accounts listed in ALLOWED_ADMIN_EMAILS may sign in
   (src/lib/admin-allowlist.ts). The allowlist is enforced in the signIn
-  callback AND re-checked on every request (middleware + API guard), so
+  callback AND re-checked on every request (proxy + API guard), so
   removing an email revokes access immediately.
-- src/middleware.ts protects /admin/\* via getToken() from next-auth/jwt.
+- src/proxy.ts (Next.js 16's middleware) protects /admin/\* via getToken() from next-auth/jwt.
 - The patient API routes (lookup, setup-pin, appointments/today, checkins)
   require the session via isAdminAuthorized() (src/lib/admin-auth.ts) —
   401 without it. The webhook route is public but HMAC-signature verified.
@@ -175,4 +175,4 @@ never written to the log — they already live in Practice Better.
   PIN uniqueness across patients
 - Failed PIN lookups rate limited durably in Supabase (fails closed)
 - No patient data logged to console
-- /admin/\* routes protected by middleware.ts
+- /admin/\* routes protected by src/proxy.ts

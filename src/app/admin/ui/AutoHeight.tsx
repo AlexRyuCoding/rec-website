@@ -39,7 +39,9 @@ export default function AutoHeight({
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const lastHeight = useRef<number | null>(null);
-  const letGoTimer = useRef<ReturnType<typeof setTimeout>>();
+  const letGoTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined
+  );
 
   const letGo = useCallback(() => {
     clearTimeout(letGoTimer.current);

@@ -33,7 +33,7 @@ export const authOptions: NextAuthOptions = {
     },
     // `account` is only present at the moment of signing in: that is when
     // the day's end is stamped into the token. It is checked wherever the
-    // allowlist is — middleware.ts and admin-auth.ts.
+    // allowlist is — proxy.ts and admin-auth.ts.
     //
     // The same moment opens the dashboard (dashAt, dashboard-lock.ts).
     // After that only the dashboard page moves it forward, by asking for

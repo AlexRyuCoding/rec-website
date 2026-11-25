@@ -5,7 +5,10 @@ import { adminPageGate } from "@/lib/admin-gate";
 import { carriesKioskCookie, KIOSK_COOKIE } from "@/lib/device-cookie";
 
 // Staff pages. The rules are in src/lib/admin-gate.ts (pure, tested).
-export async function middleware(request: NextRequest) {
+// Next.js 16 calls this file the proxy (it was src/middleware.ts) and
+// runs it on Node.js. It is a convenience that sends a browser to the
+// login page; the protection is the check inside every staff route.
+export async function proxy(request: NextRequest) {
   const token = await getToken({ req: request });
   const email = typeof token?.email === "string" ? token.email : null;
 

@@ -9,7 +9,7 @@ patients use it unassisted; it needs no staff sign-in.
 
 ## Tech Stack
 
-- Framework: Next.js 15.5 (App Router) — see "Hosting" for why that line
+- Framework: Next.js 16 (App Router), React 19 — see "Hosting"
 - Database: Cloud SQL (Postgres 17) through a PostgREST container
   beside the app, via @supabase/supabase-js (service-role client,
   server-side only) — the queries were written for Supabase and run
@@ -108,25 +108,31 @@ merge on a day the clinic is closed, or after hours.
   (src/lib/site-url.ts, tested — on NEXTAUTH_URL), never from `req.url`:
   on Cloud Run that is the server's own listening address
   (http://0.0.0.0:8080). Reading the query of `req.url` is fine, and the
-  middleware's redirects leave as paths.
+  proxy's redirects leave as paths.
 - Google's load balancer removes the request header
   `x-middleware-subrequest` (deploy/RUNBOOK.md 1.8.6). It is a second
   lock, no longer the only one: before next 15.2.3 that header skipped
-  src/middleware.ts (CVE-2025-29927) — on 15.1.11, which the site ran
-  until November 2026, the staff pages' empty shells opened (every staff
-  API still answered 401 by itself). next 15.5.29 refuses the header by
-  itself: the same request against the built image went from 200 to 307.
-  Keep the `headerAction` in the URL map all the same, and keep the
-  service reachable only through the load balancer — other ways around
-  middleware were found in Next.js afterwards (fixed in 15.5.16). Check
-  1.10.5 still has to say 307, but it no longer shows WHICH of the two
-  stopped the request.
-- next stays on the newest 15.5.x: the only 15 line still given security
-  fixes (15.1–15.4 had their last in January 2026), and only until
-  2027-01-31 (nextjs.org/support-policy). `npm view next dist-tags.backport`
-  names the newest. Next 16 is its own piece of work: React 19,
-  `middleware.ts` becomes `proxy.ts`, `next lint` is gone. When moving
-  next, generate package-lock.json with the npm of the image
+  what is now src/proxy.ts (CVE-2025-29927) — on 15.1.11, which the site
+  ran until November 2026, the staff pages' empty shells opened (every
+  staff API still answered 401 by itself). Since 15.5.29 Next.js refuses
+  the header by itself; on 16.4.6 the same request against the built
+  site answers 307. Keep the `headerAction` in the URL map all the same,
+  and keep the service reachable only through the load balancer — other
+  ways around middleware were found in Next.js afterwards (fixed in
+  15.5.16). Check 1.10.5 still has to say 307, but it no longer shows
+  WHICH of the two stopped the request.
+- next is pinned to an exact 16.x (next-version.test.ts holds it). Moved
+  from 15.5 on 2026-11-24, before 15's security support ended
+  (2027-01-31). What 16 changed here: src/middleware.ts became
+  src/proxy.ts (the export is `proxy`; it runs on Node.js, not Edge);
+  `next lint` is gone — `npm run lint` is `eslint .` with the flat config
+  eslint.config.mjs (ESLint 9); `next build` uses Turbopack (there is no
+  custom webpack config, keep it so); React 19 (a `useRef` needs an
+  initial value). eslint-config-next 16 brings React-Compiler rules; two
+  of them (react-hooks/refs, react-hooks/set-state-in-effect) are off in
+  eslint.config.mjs, with the reason — the project does not use the
+  compiler and the kiosk's input handling relies on those patterns.
+  When moving next, generate package-lock.json with the npm of the image
   (node:22-bookworm-slim, npm 10) or check that every `@next/swc-*` and
   `@img/sharp-*` platform package is still in it — the image is built on
   linux/amd64 with `npm ci`. next brings its own `sharp` (0.35 now),
@@ -333,7 +339,7 @@ merge on a day the clinic is closed, or after hours.
   use goToStaffLogin() (src/lib/staff-login-redirect.ts).
 - Only Google accounts listed in ALLOWED_ADMIN_EMAILS may sign in
   (src/lib/admin-allowlist.ts). The allowlist is enforced in the signIn
-  callback AND re-checked on every request (middleware + API guard), so
+  callback AND re-checked on every request (proxy + API guard), so
   removing an email revokes access immediately.
 - Sign-ins are recorded in the staff audit log (migration 0022): a row
   when a staff member signs in, when Sign out is pressed, and when an
@@ -343,7 +349,8 @@ merge on a day the clinic is closed, or after hours.
   rows". A sign-in that ends by itself at 3 am writes nothing. A
   kiosk-paired browser is still never staff: these rows change nothing
   about who gets in.
-- src/middleware.ts protects /admin/\* via getToken() from next-auth/jwt;
+- src/proxy.ts (Next.js 16's name for middleware) protects /admin/\* via
+  getToken() from next-auth/jwt;
   the decision itself is adminPageGate (src/lib/admin-gate.ts, pure,
   tested). /admin/login and the kiosk page shell are open.
 - The patient API routes (lookup, setup-pin, appointments/today, checkins)
@@ -1496,7 +1503,7 @@ Input rules (do not regress these — each fixes a way presses were lost):
   database's administrator password. A NEW secret must be allowed for
   rac-app before the deploy that needs it (deploy/RUNBOOK.md, "Who may
   read a secret"); never give the role on the whole project back
-- The staff pages' redirect to the login page (src/middleware.ts) is a
+- The staff pages' redirect to the login page (src/proxy.ts) is a
   convenience, not the protection: Next.js has had more than one way
   around middleware (a crafted header skipped it on the version this
   site ran until November 2026 — fixed since, and the load balancer
@@ -1535,7 +1542,7 @@ Input rules (do not regress these — each fixes a way presses were lost):
 - Every answer of a staff route and of a kiosk route is `Cache-Control:
   no-store`: staffRoute and kioskRoute set it themselves (neverCached,
   staff-route.ts), so a route cannot forget.
-- /admin/\* routes protected by middleware.ts (the login page and the
+- /admin/\* routes protected by src/proxy.ts (the login page and the
   kiosk page shell are open; the kiosk shell holds no patient data)
 - Waiting-room screens authenticate with a staff-approved device cookie;
   they can read only "First L." + room name of patients being called,
