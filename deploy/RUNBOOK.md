@@ -1179,6 +1179,47 @@ point in time (Overview → Clone → "Clone from an earlier point in time"),
 looking at the clone, and deciding with Claude — restoring over `rac-db`
 itself replaces everything written since the backup.
 
+**Tested on 2026-11-25** (the yearly restore test; next one by November
+2027). `rac-db` was cloned as it stood at 06:00 UTC — the previous day's
+backup plus the change log after it — into `rac-db-restore-test`; the
+clone took 13 minutes. A temporary job counted rows in both databases
+from inside Google Cloud (counts and latest times only, nothing from a
+patient row): patients 5,601, PIN holders 300, fingerprints 300,
+check-ins 1,695, audit rows 130, rooms 5, migrations 22 — identical, with
+the same latest check-in and audit times. The job and the clone were then
+deleted. The commands, to repeat it:
+
+```sh
+gcloud sql instances clone rac-db rac-db-restore-test \
+  --point-in-time 'YYYY-MM-DDTHH:MM:00.000Z' --async
+# wait: gcloud sql operations wait <operation id> --timeout=1800
+
+# a job that prints row counts (psql in the ops image), pointed at the
+# clone; execute it again with
+#   --update-env-vars PGHOST=/cloudsql/${PROJECT_ID}:${REGION}:rac-db
+# to compare with the live database
+gcloud run jobs deploy rac-restore-check --region "${REGION}" \
+  --image "${REGION}-docker.pkg.dev/${PROJECT_ID}/rac/ops:latest" \
+  --service-account "rac-ops@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --set-cloudsql-instances "^@^${PROJECT_ID}:${REGION}:rac-db@${PROJECT_ID}:${REGION}:rac-db-restore-test" \
+  --set-env-vars "PGHOST=/cloudsql/${PROJECT_ID}:${REGION}:rac-db-restore-test,PGUSER=postgres,PGDATABASE=rac" \
+  --set-secrets "PGPASSWORD=db-postgres-password:latest" \
+  --command psql --args "^@^-X@-At@-F@ = @-v@ON_ERROR_STOP=1@-c@<the counting query>" \
+  --max-retries 0 --task-timeout 5m
+gcloud run jobs execute rac-restore-check --region "${REGION}" --wait
+
+# clean up — the clone inherits deletion protection from rac-db
+gcloud run jobs delete rac-restore-check --region "${REGION}" --quiet
+gcloud sql instances patch rac-db-restore-test --no-deletion-protection
+gcloud sql instances delete rac-db-restore-test
+```
+
+- The clone gets `rac-db`'s settings: no outside address may reach it
+  and it accepts encrypted connections only. It holds real patient data
+  for as long as it exists — delete it the same day.
+- Never connect to a clone from a laptop; read it with a job, as above.
+- Type the clone's name in the delete commands; never `rac-db`.
+
 ### How the forms are sent
 
 The website's two forms (appointment request, grievance) are placed
